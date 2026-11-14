@@ -1,5 +1,6 @@
 import { rowColToLonLat } from "./grid";
-import type { GridSpec, ReachField, ReachRing } from "./types";
+import { oxygenModelOn, oxygenUsedKg } from "./params";
+import type { GridSpec, ReachField, ReachRing, WalkParams } from "./types";
 
 type Pt = [x: number, y: number]; // x = col, y = row (cell-centre coordinates)
 
@@ -205,59 +206,118 @@ export interface ReachRingOptions {
   simplifyCells?: number;
 }
 
+/** The area where value(i) <= threshold, as GeoJSON MultiPolygon coordinates. */
+function ringCoordinates(
+  grid: GridSpec,
+  value: (i: number) => number,
+  threshold: number,
+  options: ReachRingOptions,
+): number[][][][] {
+  const minArea = (options.minRingAreaM2 ?? 16) / (grid.cellSizeM * grid.cellSizeM);
+  const tol = options.simplifyCells ?? 0.35;
+  const raw = isolines(grid.width, grid.height, value, threshold);
+  const rings = raw
+    .filter((r) => Math.abs(signedArea(r)) >= minArea)
+    .map((r) => simplifyRing(chaikin(r), tol))
+    .filter((r) => r.length >= 3);
+  // The largest ring is always an outer ring; its sign tells outer from hole.
+  let outerSign = 1, maxA = 0;
+  for (const r of rings) {
+    const a = signedArea(r);
+    if (Math.abs(a) > maxA) {
+      maxA = Math.abs(a);
+      outerSign = Math.sign(a);
+    }
+  }
+  const outers: { ring: Pt[]; area: number; holes: Pt[][] }[] = [];
+  const holes: Pt[][] = [];
+  for (const r of rings) {
+    const a = signedArea(r);
+    if (Math.sign(a) === outerSign) outers.push({ ring: r, area: Math.abs(a), holes: [] });
+    else holes.push(r);
+  }
+  outers.sort((a, b) => a.area - b.area);
+  for (const h of holes) {
+    const owner = outers.find((o) => pointInRing(h[0]!, o.ring));
+    if (owner) owner.holes.push(h);
+  }
+  const toLonLat = (r: Pt[], ccw: boolean): number[][] => {
+    const ll = r.map(([x, y]) => rowColToLonLat(grid, y, x) as number[]);
+    // Orientation in lon/lat (x east, y north): shoelace sign.
+    let a = 0;
+    for (let i = 0, j = ll.length - 1; i < ll.length; j = i++) a += (ll[j]![0]! - ll[i]![0]!) * (ll[j]![1]! + ll[i]![1]!);
+    const isCcw = a > 0; // sum (xj - xi)(yj + yi) is positive for counter-clockwise
+    if (isCcw !== ccw) ll.reverse();
+    ll.push([ll[0]![0]!, ll[0]![1]!]);
+    return ll;
+  };
+  const coordinates = outers.map((o) => [toLonLat(o.ring, true), ...o.holes.map((h) => toLonLat(h, false))]);
+  return coordinates;
+}
+
 export function reachRings(
   grid: GridSpec,
   reach: ReachField,
   budgetsS: number[],
   options: ReachRingOptions = {},
 ): ReachRing[] {
-  const minArea = (options.minRingAreaM2 ?? 16) / (grid.cellSizeM * grid.cellSizeM);
-  const tol = options.simplifyCells ?? 0.35;
   const { outTimeS, backTimeS } = reach;
   const value = (i: number) => outTimeS[i]! + backTimeS[i]!;
-  return budgetsS.map((budgetS) => {
-    const raw = isolines(grid.width, grid.height, value, budgetS);
-    const rings = raw
-      .filter((r) => Math.abs(signedArea(r)) >= minArea)
-      .map((r) => simplifyRing(chaikin(r), tol))
-      .filter((r) => r.length >= 3);
-    // The largest ring is always an outer ring; its sign tells outer from hole.
-    let outerSign = 1, maxA = 0;
-    for (const r of rings) {
-      const a = signedArea(r);
-      if (Math.abs(a) > maxA) {
-        maxA = Math.abs(a);
-        outerSign = Math.sign(a);
-      }
-    }
-    const outers: { ring: Pt[]; area: number; holes: Pt[][] }[] = [];
-    const holes: Pt[][] = [];
-    for (const r of rings) {
-      const a = signedArea(r);
-      if (Math.sign(a) === outerSign) outers.push({ ring: r, area: Math.abs(a), holes: [] });
-      else holes.push(r);
-    }
-    outers.sort((a, b) => a.area - b.area);
-    for (const h of holes) {
-      const owner = outers.find((o) => pointInRing(h[0]!, o.ring));
-      if (owner) owner.holes.push(h);
-    }
-    const toLonLat = (r: Pt[], ccw: boolean): number[][] => {
-      const ll = r.map(([x, y]) => rowColToLonLat(grid, y, x) as number[]);
-      // Orientation in lon/lat (x east, y north): shoelace sign.
-      let a = 0;
-      for (let i = 0, j = ll.length - 1; i < ll.length; j = i++) a += (ll[j]![0]! - ll[i]![0]!) * (ll[j]![1]! + ll[i]![1]!);
-      const isCcw = a > 0; // sum (xj - xi)(yj + yi) is positive for counter-clockwise
-      if (isCcw !== ccw) ll.reverse();
-      ll.push([ll[0]![0]!, ll[0]![1]!]);
-      return ll;
-    };
-    const coordinates = outers.map((o) => [toLonLat(o.ring, true), ...o.holes.map((h) => toLonLat(h, false))]);
-    return {
-      id: `reach-${Math.round(budgetS)}`,
-      label: `${formatBudget(budgetS)} round trip`,
-      budgetS,
-      coordinates,
-    };
-  });
+  return budgetsS.map((budgetS) => ({
+    id: `reach-${Math.round(budgetS)}`,
+    label: `${formatBudget(budgetS)} round trip`,
+    budgetS,
+    coordinates: ringCoordinates(grid, value, budgetS, options),
+  }));
+}
+
+/**
+ * The walk limit: everywhere a crew can walk to, work for `dwellS` and walk home from without
+ * any budget (time, energy, oxygen) going past its usable share (budget x (1 - reserveFraction)).
+ * `limitedBy` is the budget that runs out first along most of the ring. `budgetS` is the
+ * round-trip walking time left by the time limit alone, for labelling.
+ */
+export function walkLimitRing(
+  grid: GridSpec,
+  reach: ReachField,
+  params: WalkParams,
+  dwellS: number = params.stopDwellS,
+  options: ReachRingOptions = {},
+): ReachRing {
+  const keep = 1 - params.reserveFraction;
+  const tLim = params.evaLimitS * keep;
+  const eLim = params.energyBudgetKJ * keep;
+  const o2On = oxygenModelOn(params);
+  const oLim = o2On ? params.o2BudgetKg! * keep : Infinity;
+  const dwellE = (dwellS * (params.dwellMetabolicW ?? 0)) / 1000;
+  const { outTimeS, backTimeS, outEnergyKJ, backEnergyKJ } = reach;
+  const fractions = (i: number): [number, number, number] => {
+    const t = outTimeS[i]! + backTimeS[i]! + dwellS;
+    const e = outEnergyKJ[i]! + backEnergyKJ[i]! + dwellE;
+    return [t / tLim, e / eLim, o2On ? oxygenUsedKg(params, t, e) / oLim : 0];
+  };
+  const value = (i: number) => {
+    const f = fractions(i);
+    const m = Math.max(f[0], f[1], f[2]);
+    return Number.isNaN(m) ? Infinity : m;
+  };
+  // Tally the largest fraction over the cells just inside the limit.
+  const votes = [0, 0, 0];
+  const n = grid.width * grid.height;
+  for (let i = 0; i < n; i++) {
+    const f = fractions(i);
+    const m = Math.max(f[0], f[1], f[2]);
+    if (m > 0.9 && m <= 1) votes[f[0] >= m ? 0 : f[1] >= m ? 1 : 2]!++;
+  }
+  const names = ["time", "energy", "oxygen"] as const;
+  const limitedBy = names[votes.indexOf(Math.max(...votes))]!;
+  const budgetS = Math.max(0, tLim - dwellS);
+  return {
+    id: "reach-limit",
+    label: `walk limit (${limitedBy})`,
+    budgetS,
+    coordinates: ringCoordinates(grid, value, 1, options),
+    kind: "limit",
+    limitedBy,
+  };
 }

@@ -15,6 +15,8 @@ import {
   planRoute,
   planRouteAlternatives,
   reachRings,
+  walkLimitRing,
+  oxygenUsedKg,
   samplePoint,
   type CostFactor,
   type GridSpec,
@@ -52,22 +54,25 @@ describe("params", () => {
 
 describe("grid", () => {
   it("lonLat <-> cell round trip", () => {
-    for (const idx of [0, 1, 1499, 1500, 1125750, 1500 * 1500 - 1, 777777]) {
+    const cells = gale.width * gale.height;
+    for (const idx of [0, 1, gale.width - 1, gale.width, cells / 2 + gale.width / 2, cells - 1, 777777]) {
       const ll = cellToLonLat(gale, idx);
       expect(lonLatToCell(gale, ll)?.index).toBe(idx);
     }
     const nw = lonLatToCell(gale, [gale.west, gale.north]);
     expect(nw).toEqual({ row: 0, col: 0, index: 0 });
     const se = lonLatToCell(gale, [gale.east, gale.south]);
-    expect(se?.index).toBe(1500 * 1500 - 1);
+    expect(se?.index).toBe(cells - 1);
     expect(lonLatToCell(gale, [gale.west - 1e-6, gale.north])).toBeNull();
     expect(lonLatToCell(gale, [NaN, 0])).toBeNull();
   });
 
-  it("distanceM matches the 3 km demo square", () => {
+  it("distanceM matches the configured demo square", () => {
+    const sideM = gale.width * gale.cellSizeM;
+    expect(gale.height).toBe(gale.width);
     const lat = (gale.north + gale.south) / 2;
-    expect(distanceM(gale, [gale.west, gale.south], [gale.west, gale.north])).toBeCloseTo(3000, -1);
-    expect(distanceM(gale, [gale.west, lat], [gale.east, lat])).toBeCloseTo(3000, -1);
+    expect(distanceM(gale, [gale.west, gale.south], [gale.west, gale.north])).toBeCloseTo(sideM, -1);
+    expect(distanceM(gale, [gale.west, lat], [gale.east, lat])).toBeCloseTo(sideM, -1);
     // Neighbouring cell centres are one cell apart.
     expect(distanceM(gale, cellToLonLat(gale, 0), cellToLonLat(gale, 1))).toBeCloseTo(2, 1);
   });
@@ -268,6 +273,55 @@ describe("routing", () => {
     const fine = planRoute(L, P, EFFORT, pts, dwell);
     expect(fine.totals.withinLimits).toBe(true);
     expect(fine.totals.firstSegmentOverLimit).toBeNull();
+  });
+});
+
+describe("oxygen", () => {
+  it("is charged for metabolic energy plus leakage, and can be the limiting budget", () => {
+    expect(oxygenUsedKg(P, 3600, 1000)).toBeCloseTo(1000 * P.o2KgPerKJ! + P.o2LeakKgPerH!, 9);
+    expect(oxygenUsedKg({ ...P, o2BudgetKg: undefined }, 3600, 1000)).toBe(0);
+    const L = makeLayers(300, 20);
+    const pts = [at(L, 10, 5), at(L, 10, 150), at(L, 10, 295)];
+    const base = planRoute(L, P, FASTEST, pts, [0, 0, 0]);
+    expect(base.totals.o2Kg).toBeCloseTo(oxygenUsedKg(P, base.totals.totalTimeS, base.totals.energyKJ), 9);
+    expect(base.totals.withinLimits).toBe(true);
+    // A tank that only covers half of the first leg.
+    const first = oxygenUsedKg(P, base.segments[0]!.timeS, base.segments[0]!.energyKJ);
+    const small: WalkParams = { ...P, o2BudgetKg: (first * 0.5) / (1 - P.reserveFraction) };
+    const r = planRoute(L, small, FASTEST, pts, [0, 0, 0]);
+    expect(r.totals.withinLimits).toBe(false);
+    expect(r.totals.firstSegmentOverLimit).toBe(0);
+    expect(r.totals.limitingFactor).toBe("oxygen");
+    expect(r.totals.o2UsedFraction).toBeGreaterThan(1);
+    // With the model off there is no oxygen figure and no oxygen limit.
+    const off = planRoute(L, { ...small, o2KgPerKJ: undefined }, FASTEST, pts, [0, 0, 0]);
+    expect(off.totals.o2Kg).toBeUndefined();
+    expect(off.totals.withinLimits).toBe(true);
+  });
+
+  it("walk-limit ring shrinks to whichever budget runs out first", () => {
+    const L = makeLayers(161, 161);
+    const start = at(L, 80, 80);
+    const reach = computeReach(L, P, FASTEST, start);
+    const area = (ring: { coordinates: number[][][][] }) => {
+      const xy = ring.coordinates[0]![0]!.map((p) => toMetres(L.grid, start, p as [number, number]));
+      let a = 0;
+      for (let i = 0; i + 1 < xy.length; i++) a += xy[i]![0] * xy[i + 1]![1] - xy[i + 1]![0] * xy[i]![1];
+      return Math.abs(a / 2);
+    };
+    // 200 s of round-trip walking allowed by time, no dwell: same ring as reachRings(200).
+    const timeOnly: WalkParams = { ...P, evaLimitS: 200 / (1 - P.reserveFraction), o2BudgetKg: undefined };
+    const t = walkLimitRing(L.grid, reach, timeOnly, 0);
+    expect(t.kind).toBe("limit");
+    expect(t.limitedBy).toBe("time");
+    expect(area(t)).toBeCloseTo(area(reachRings(L.grid, reach, [200])[0]!), 0);
+    // Oxygen for only 100 s of that walk: the ring is smaller and oxygen-limited.
+    const i = 80 * 161 + 105; // 25 cells (50 m) east: 100 s round trip
+    const o2For100s = oxygenUsedKg(P, 100, reach.outEnergyKJ[i]! + reach.backEnergyKJ[i]!);
+    const o = walkLimitRing(L.grid, reach, { ...timeOnly, o2BudgetKg: o2For100s / (1 - P.reserveFraction), o2KgPerKJ: P.o2KgPerKJ }, 0);
+    expect(o.limitedBy).toBe("oxygen");
+    expect(area(o)).toBeLessThan(area(t) * 0.35);
+    expect(area(o)).toBeGreaterThan(area(t) * 0.15);
   });
 });
 

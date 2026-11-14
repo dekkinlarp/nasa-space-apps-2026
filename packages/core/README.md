@@ -30,6 +30,8 @@ The listed contract is implemented exactly. Additions are all optional.
   - `planRoute(..., dwellS?, { model?, extraFactors? })` and `planRouteAlternatives(...)` accept the same options.
   - `computeReach(..., { model?, extraFactors?, maxCost? })`.
   - `reachRings(grid, reach, budgets, { minRingAreaM2 = 16, simplifyCells = 0.35 })`.
+  - `walkLimitRing(grid, reach, params, dwellS?)`: one ring where a crew can walk out, work `dwellS` and walk home with time, energy and oxygen all inside their usable share. `limitedBy` names the budget that runs out first.
+  - `oxygenUsedKg(params, timeS, energyKJ)`: oxygen = energy x `o2KgPerKJ` + hours x `o2LeakKgPerH`. Route totals carry `o2Kg` and `o2UsedFraction`, and `limitingFactor` can be `"oxygen"`. The model is off when `o2BudgetKg` or `o2KgPerKJ` is missing.
   - If you call routing many times with the same layers and params, pass a prebuilt model: `const model = createCostModel(layers, params)`.
 - **`createCostModel(layers, params, extraFactors?)`** returns a `MarsCostModel`. That is a `CostModel` plus:
   - `stepInto`, an allocation-free fast path;
@@ -168,6 +170,9 @@ Every value in `config/walk-params.json` is listed below. The **Source** column 
 | `evaLimitS` | 21600 s (6 h) | Beaton et al. 2019, "Using Science-Driven Analog Research to Investigate EVA Science Operations Concepts...", Astrobiology 19(3) (BASALT) https://pmc.ncbi.nlm.nih.gov/articles/PMC6442238/ | Flight rule EM6: "A single EVA shall not exceed 6 h". Artemis conops gives a nominal "6±2 hours" (up to 8). |
 | `reserveFraction` | 0.1667 | BASALT (same), rule EM7 | EVAs are planned to a 5 h timeline plus a 30-min margin inside the 6 h cap, so 1 h in 6 is held back. The same fraction is applied to energy (assumption). |
 | `energyBudgetKJ` | 10130 kJ | ICES-2026-127 (sizing rate) + Artemis conops (8 h) | Exploration suits are sized for an average of 1200 BTU/hr (352 W). Over an 8 h EVA capability that is 352 W x 28800 s = 10130 kJ of metabolic load. The Apollo PLSS was designed for 4 h at 1200 Btu/hr (Carson, "Apollo PLSS performance report", https://ntrs.nasa.gov/api/citations/19720019460/downloads/19720019460.pdf). The real PLSS limit is O2, CO2 scrubbing and cooling, not "energy". This is a proxy. |
+| `o2BudgetKg` | 0.55 kg | Placeholder | 1.2 lb of usable primary oxygen, the size of the Shuttle/ISS EMU primary charge. No Mars suit tank is defined, so the app exposes it as a slider. With the default 352 W sizing rate this lasts about 5.5 h, so oxygen and the 6 h time limit bind at similar distances. |
+| `o2KgPerKJ` | 0.000071 kg/kJ | Physiology | About 20.1 kJ is released per litre of oxygen consumed (mixed diet), and a litre of O2 weighs 1.429 g at 0 °C and 1 atm: 1.429 / 20.1 = 0.071 g per kJ. |
+| `o2LeakKgPerH` | 0.005 kg/h | Assumption | Suit leakage charged for every hour outside. Small next to breathing (about 90 g/h at 352 W). |
 | `stopDwellS` | 1800 s | BASALT (Table 2) | The planned time was 30 min per sample location. The other planned blocks were 15 min approach, 5 min context survey and 30 min candidate search. |
 | `radiationMSvPerDay` | 0.67 mSv/day | SwRI press release on Hassler et al. 2013, Science https://www.swri.org/press-release/swri-scientists-publish-first-radiation-measurements-surface-mars | MSL RAD measured an average GCR dose-equivalent rate in Gale from Aug 2012 to Jun 2013. The suit is assumed to give no shielding, and SPEs are not included. |
 | `dwellMetabolicW` | 249 W | ICES-2026-127 | "ISS EVA profile has an average metabolic rate of 850 BTU/hr", built from Apollo, Skylab and Shuttle data. Used for time spent working at stops. |
