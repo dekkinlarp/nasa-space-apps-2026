@@ -4,12 +4,12 @@
   "type": "module",
   "scripts": {
     "data": "pnpm --filter @marsmap/scripts run all",
-    "dev": "pnpm -r --parallel --filter @marsmap/web --filter @marsmap/server run dev",
+    "dev": "pnpm --filter @marsmap/web run dev",
     "test": "pnpm -r run test",
     "typecheck": "pnpm -r run typecheck",
     "data:pack": "node scripts/pack-data.mjs",
     "data:fetch": "node scripts/fetch-data.mjs",
-    "build": "node scripts/fetch-data.mjs && pnpm --filter @marsmap/web run build && node scripts/assemble-assets.mjs",
+    "build": "node scripts/fetch-data.mjs && pnpm --filter @marsmap/web run build",
     "deploy": "pnpm run build && wrangler deploy",
     "preview:deploy": "pnpm run build && wrangler preview"
   },

@@ -17,18 +17,19 @@ the network in one six-hour walk.
 ```bash
 pnpm install
 pnpm data      # one-time: downloads ~300 MB from NASA/USGS, keeps ~81 MB in data/ (gitignored)
-pnpm dev       # web on http://localhost:5173, API/data server on :8787
+pnpm dev       # one Vite dev server on http://localhost:5173 (app, API Worker and map data)
 pnpm test      # routing core unit tests
 pnpm typecheck
 ```
 
-The server port can be changed with `MARSMAP_API_PORT`. `http://localhost:5173/?area=fixture` runs on
+`http://localhost:5173/?area=fixture` runs on
 synthetic test data (`pnpm --filter @marsmap/web fixture`).
 
 ## Deploy (Cloudflare)
 
 One Worker named `marsmap` serves everything: the built web app and the map data are static assets,
-and Worker code only answers `/api/*`. No R2 is needed (about 56 MB, 137 files, largest 9 MB; the
+and Worker code only answers `/api/*`. Vite builds both (Cloudflare's Vite plugin), and Wrangler
+uploads the result without re-bundling. No R2 is needed (about 56 MB, 137 files, largest 9 MB; the
 limit is 25 MiB per file). Config is in `wrangler.jsonc`.
 
 ```bash
@@ -61,8 +62,8 @@ get a Preview URL. Add `GITHUB_TOKEN` as a build secret.
 | `config/` | Everything tunable: `area.json` (bounds), `walk-params.json`, `surface-classes.json`, `pois.json` |
 | `scripts/` | Data pipeline. Downloads and prepares everything so the app never calls NASA live. [Details and sources](scripts/README.md) |
 | `packages/core/` | Routing, walk model, walk-limit rings. Pure TypeScript, runs in a browser worker or on a server. [Equations and sources](packages/core/README.md) |
-| `apps/web/` | React + Vite + MapLibre GL app (2D and 3D) |
-| `apps/server/` | Hono API: `index.ts` is the local Node server (serves `data/` and `config/`), `worker.ts` is the Cloudflare Worker entry |
+| `apps/web/` | React + MapLibre GL app (2D and 3D). Its `vite.config.ts` also runs the Worker and serves `data/` |
+| `apps/server/` | Hono API as a Cloudflare Worker (`worker.ts`). Vite runs it in dev and builds it for deploy |
 | `data/` | Generated, not in git |
 
 ## Where each piece of data comes from

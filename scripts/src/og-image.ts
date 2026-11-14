@@ -1,6 +1,6 @@
 /**
  * Builds the 1200x630 link-preview image (apps/web/public/og.jpg) from the HiRISE mosaic,
- * Curiosity's track and the drill sites. Run: pnpm --filter @marsmap/scripts exec tsx src/og-image.ts
+ * Curiosity's track and the drill sites. Run: pnpm --filter @marsmap/scripts exec vite-node src/og-image.ts
  */
 import { readFileSync } from "node:fs";
 import { dirname, join, resolve } from "node:path";

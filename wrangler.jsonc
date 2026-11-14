@@ -8,8 +8,7 @@
   "workers_dev": true,
   "preview_urls": true,
   "assets": {
-    // Built web app plus data/<area>, assembled by `pnpm build` (scripts/assemble-assets.mjs).
-    "directory": "apps/web/dist",
+    // The directory is set by the Vite build (apps/web/vite.config.ts): client bundle plus data/<area>.
     "binding": "ASSETS",
     "not_found_handling": "single-page-application",
     // Only the API runs Worker code; the app and map data are served as free static assets.
