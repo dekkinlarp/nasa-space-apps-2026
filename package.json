@@ -6,7 +6,15 @@
     "data": "pnpm --filter @marsmap/scripts run all",
     "dev": "pnpm -r --parallel --filter @marsmap/web --filter @marsmap/server run dev",
     "test": "pnpm -r run test",
-    "typecheck": "pnpm -r run typecheck"
+    "typecheck": "pnpm -r run typecheck",
+    "data:pack": "node scripts/pack-data.mjs",
+    "data:fetch": "node scripts/fetch-data.mjs",
+    "build": "node scripts/fetch-data.mjs && pnpm --filter @marsmap/web run build && node scripts/assemble-assets.mjs",
+    "deploy": "pnpm run build && wrangler deploy",
+    "preview:deploy": "pnpm run build && wrangler preview"
   },
-  "packageManager": "pnpm@12.15.0"
+  "packageManager": "pnpm@12.15.0",
+  "devDependencies": {
+    "wrangler": "^4.162.0"
+  }
 }

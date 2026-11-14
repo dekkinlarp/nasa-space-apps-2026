@@ -25,6 +25,35 @@ pnpm typecheck
 The server port can be changed with `MARSMAP_API_PORT`. `http://localhost:5173/?area=fixture` runs on
 synthetic test data (`pnpm --filter @marsmap/web fixture`).
 
+## Deploy (Cloudflare)
+
+One Worker named `marsmap` serves everything: the built web app and the map data are static assets,
+and Worker code only answers `/api/*`. No R2 is needed (about 56 MB, 137 files, largest 9 MB; the
+limit is 25 MiB per file). Config is in `wrangler.jsonc`.
+
+```bash
+pnpm deploy            # build + wrangler deploy (production)
+pnpm preview:deploy    # build + wrangler preview (a Preview named after the current branch)
+```
+
+**Map data in builds.** `data/` is not in git. The build runs `scripts/fetch-data.mjs`, which downloads
+the tarball pinned in `config/data-release.json` from this repo's GitHub releases and checks its
+SHA-256, so builds never call NASA. It skips the download when `data/` is already present.
+While the repo is private the build needs a `GITHUB_TOKEN` (read-only access to this repo's contents).
+
+To publish new data after re-running `pnpm data`:
+
+```bash
+pnpm data:pack data-v2
+gh release create data-v2 data/marsmap-gale-boxwork-data-v2.tar.gz
+git commit -am "Pin map data data-v2"   # config/data-release.json changed
+```
+
+**GitHub integration (Workers Builds).** In the Cloudflare dashboard: Workers & Pages > marsmap >
+Settings > Builds > Connect, pick this repo, production branch `main`, build command `pnpm run build`,
+deploy command `npx wrangler deploy`, and enable builds for non-production branches so pull requests
+get a Preview URL. Add `GITHUB_TOKEN` as a build secret.
+
 ## Layout
 
 | Path | What |
@@ -33,7 +62,7 @@ synthetic test data (`pnpm --filter @marsmap/web fixture`).
 | `scripts/` | Data pipeline. Downloads and prepares everything so the app never calls NASA live. [Details and sources](scripts/README.md) |
 | `packages/core/` | Routing, walk model, walk-limit rings. Pure TypeScript, runs in a browser worker or on a server. [Equations and sources](packages/core/README.md) |
 | `apps/web/` | React + Vite + MapLibre GL app (2D and 3D) |
-| `apps/server/` | Hono server: serves `data/` and `config/` |
+| `apps/server/` | Hono API: `index.ts` is the local Node server (serves `data/` and `config/`), `worker.ts` is the Cloudflare Worker entry |
 | `data/` | Generated, not in git |
 
 ## Where each piece of data comes from
