@@ -67,7 +67,10 @@ export function runManifest(): LayerManifest {
     existsSync(join(dir, l.file)),
   );
   const overridden = new Set(imported.map((l) => l.id));
-  const layers = [...builtInLayers().filter((l) => !overridden.has(l.id) && existsSync(join(dir, l.file))), ...imported];
+  // Mineral indicator layers are described by the minerals step (their display range depends on the data).
+  const mineralFile = join(cacheDir(a.id), "mineral-layers.json");
+  const minerals = existsSync(mineralFile) ? (JSON.parse(readFileSync(mineralFile, "utf8")) as LayerEntry[]) : [];
+  const layers = [...[...builtInLayers(), ...minerals].filter((l) => !overridden.has(l.id) && existsSync(join(dir, l.file))), ...imported];
   const imgIndex = join(cacheDir(a.id), "imagery-entries.json");
   const imagery: ImageryEntry[] = existsSync(imgIndex)
     ? (JSON.parse(readFileSync(imgIndex, "utf8")) as ImageryEntry[]).filter((e) => existsSync(join(dir, e.file)))

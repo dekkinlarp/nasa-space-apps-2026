@@ -1,15 +1,15 @@
 {
   "id": "gale-boxwork",
   "name": "Gale Crater boxwork, Mount Sharp",
-  "note": "3 km square centred on Curiosity's boxwork campaign (centre inferred from rover waypoints, sols 4669-4741). Expand by editing the bounds and re-running `pnpm data`.",
+  "note": "8 km square centred on Curiosity's boxwork campaign (centre inferred from rover waypoints, sols 4669-4741). Change the size by editing the bounds, width and height and re-running `pnpm data`.",
   "centerLat": -4.808,
   "centerLon": 137.381,
-  "south": -4.833306,
-  "north": -4.782694,
-  "west": 137.355605,
-  "east": 137.406395,
+  "south": -4.875482,
+  "north": -4.740518,
+  "west": 137.313279,
+  "east": 137.448721,
   "cellSizeM": 2,
-  "width": 1500,
-  "height": 1500,
+  "width": 4000,
+  "height": 4000,
   "marsRadiusM": 3396190
 }

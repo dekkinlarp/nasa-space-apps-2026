@@ -8,6 +8,7 @@
     "all": "tsx src/all.ts",
     "elevation": "tsx src/elevation.ts",
     "derive": "tsx src/derive.ts",
+    "minerals": "tsx src/minerals.ts",
     "imagery": "tsx src/imagery.ts",
     "rover": "tsx src/rover.ts",
     "photos": "tsx src/photos.ts",

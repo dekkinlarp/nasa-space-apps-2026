@@ -19,7 +19,7 @@ interface LayerSpec {
   layer: string;
   preferZoom: number;
   source: string;
-  /** Also write a 2x2 full-resolution split when the crop exceeds MAX_SIDE. */
+  /** Also write an n x n full-resolution split (pieces of at most MAX_SIDE) when the crop exceeds MAX_SIDE. */
   split?: boolean;
   /** Write a grayscale copy resampled onto the grid (for the surface estimate). */
   gridCopy?: boolean;
@@ -229,10 +229,12 @@ export async function runImagery(): Promise<ImageryEntry[]> {
       metersPerPixel: Number(((mpp * crop.width) / w).toFixed(3)),
     });
     if (spec.split && Math.max(crop.width, crop.height) > MAX_SIDE) {
-      const xs = [0, Math.round(crop.width / 2), crop.width];
-      const ys = [0, Math.round(crop.height / 2), crop.height];
-      for (let r = 0; r < 2; r++)
-        for (let c = 0; c < 2; c++) {
+      // As many pieces per side as it takes to keep every piece at or under MAX_SIDE at full resolution.
+      const n = Math.ceil(Math.max(crop.width, crop.height) / MAX_SIDE);
+      const xs = Array.from({ length: n + 1 }, (_, i) => Math.round((crop!.width * i) / n));
+      const ys = Array.from({ length: n + 1 }, (_, i) => Math.round((crop!.height * i) / n));
+      for (let r = 0; r < n; r++)
+        for (let c = 0; c < n; c++) {
           const left = xs[c]!;
           const top = ys[r]!;
           const pw = xs[c + 1]! - left;
