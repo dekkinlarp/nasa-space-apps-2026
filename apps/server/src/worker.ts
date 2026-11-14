@@ -1,7 +1,7 @@
 /**
- * Cloudflare Worker entry. The web app and the map data are static assets; this Worker
- * only answers /api/* (see wrangler.jsonc `run_worker_first`). Config is bundled at build time.
- * The Node server in index.ts stays for local development.
+ * The API, as a Cloudflare Worker. Vite runs it in dev (via @cloudflare/vite-plugin) and
+ * builds it for deploy. The web app and the map data are static assets; this code only
+ * answers /api/* (see wrangler.jsonc `run_worker_first`). Config is bundled at build time.
  */
 import { Hono } from "hono";
 import area from "../../../config/area.json";
@@ -16,10 +16,15 @@ const app = new Hono<{ Bindings: Env }>();
 app.get("/api/health", (c) => c.json({ ok: true, time: new Date().toISOString() }));
 
 app.get("/api/areas", async (c) => {
-  // The deployed build ships exactly the area named in config/area.json.
-  const res = await c.env.ASSETS.fetch(new URL(`/data/${area.id}/layers.json`, c.req.url).toString());
-  const manifest = res.ok ? ((await res.json()) as { generatedAt?: string }) : null;
-  const areas = manifest ? [{ id: area.id, generatedAt: manifest.generatedAt ?? null, synthetic: false }] : [];
+  // A Worker cannot list folders, so probe the known areas. Deployed builds ship only
+  // the area in config/area.json; the synthetic fixture exists in local dev.
+  const areas = [];
+  for (const id of [area.id, "fixture"]) {
+    const res = await c.env.ASSETS.fetch(new URL(`/data/${id}/layers.json`, c.req.url).toString());
+    if (!res.ok || !(res.headers.get("content-type") ?? "").includes("json")) continue;
+    const manifest = (await res.json()) as { generatedAt?: string };
+    areas.push({ id, generatedAt: manifest.generatedAt ?? null, synthetic: id === "fixture" });
+  }
   return c.json({ areas, defaultArea: areas[0]?.id ?? null });
 });
 
