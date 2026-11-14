@@ -1,6 +1,8 @@
 {
   "$schema": "node_modules/wrangler/config-schema.json",
   "name": "marsmap",
+  // Pinned so a deploy can never land on whichever account the CLI happens to be logged into.
+  "account_id": "3b0a74fed3dfd4328a91e37aa941f1cb",
   "main": "apps/server/src/worker.ts",
   "compatibility_date": "2026-11-14",
   "workers_dev": true,
