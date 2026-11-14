@@ -39,7 +39,7 @@ export interface GoState {
   offRouteM: number | null;
 }
 
-export const OVERLAY_IDS = ["hillshade", "elevation", "slope", "surface", "cost", "rings", "track", "pois"] as const;
+export const OVERLAY_IDS = ["hillshade", "elevation", "slope", "surface", "confidence", "cost", "rings", "track", "pois"] as const;
 export type OverlayId = (typeof OVERLAY_IDS)[number];
 
 interface State {
@@ -50,6 +50,10 @@ interface State {
   baseImagery: string | null;
   baseOpacity: number;
   overlays: Record<OverlayId, LayerState>;
+  /** Science layers from the manifest (group "science"), keyed by layer id. */
+  sci: Record<string, LayerState>;
+  /** Their data, loaded the first time each is switched on. */
+  sciData: Record<string, Float32Array>;
   view3d: boolean;
   exaggeration: number;
 
@@ -83,6 +87,7 @@ interface State {
 
   set: (p: Partial<State>) => void;
   setOverlay: (id: OverlayId, p: Partial<LayerState>) => void;
+  setSci: (id: string, p: Partial<LayerState>) => void;
   setParams: (p: Partial<WalkParams>) => void;
   setStart: (s: StartPoint | null) => void;
   addStop: (s: Omit<Stop, "id" | "dwellS"> & { dwellS?: number }) => void;
@@ -106,11 +111,14 @@ export const useStore = create<State>((set, get) => ({
     elevation: { on: false, opacity: 0.55 },
     slope: { on: false, opacity: 0.6 },
     surface: { on: false, opacity: 0.5 },
+    confidence: { on: false, opacity: 0.7 },
     cost: { on: false, opacity: 0.55 },
     rings: { on: true, opacity: 0.9 },
     track: { on: true, opacity: 0.9 },
     pois: { on: true, opacity: 1 },
   },
+  sci: {},
+  sciData: {},
   view3d: false,
   exaggeration: 3,
 
@@ -142,6 +150,7 @@ export const useStore = create<State>((set, get) => ({
 
   set: (p) => set(p),
   setOverlay: (id, p) => set({ overlays: { ...get().overlays, [id]: { ...get().overlays[id], ...p } } }),
+  setSci: (id, p) => set({ sci: { ...get().sci, [id]: { on: false, opacity: 0.75, ...get().sci[id], ...p } } }),
   setParams: (p) => {
     const cur = get().params;
     if (cur) set({ params: { ...cur, ...p } });

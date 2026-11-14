@@ -34,6 +34,7 @@ export interface CoreApi {
   planRouteAlternatives(layers: Layers, params: WalkParams, points: LonLat[], dwellS?: number[]): RouteResult[];
   computeReach(layers: Layers, params: WalkParams, profile: RouteProfile, start: LonLat): ReachField;
   reachRings(grid: GridSpec, reach: ReachField, budgetsS: number[]): ReachRing[];
+  walkLimitRing(grid: GridSpec, reach: ReachField, params: WalkParams, dwellS?: number): ReachRing;
   samplePoint(layers: Layers, lonLat: LonLat): { elevationM: number; slopeDeg: number; surfaceId: number } | null;
 }
 

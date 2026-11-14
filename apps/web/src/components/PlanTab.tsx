@@ -2,7 +2,7 @@ import { useState } from "react";
 import { useShallow } from "zustand/react/shallow";
 import type { RouteResult, RouteSegment, SurfaceClass } from "@marsmap/core";
 import { selectedResult, usableTimeS, useStore } from "../store";
-import { fmtDist, fmtDur, fmtEnergy, fmtLonLat } from "../format";
+import { fmtDist, fmtDur, fmtEnergy, fmtLonLat, fmtO2 } from "../format";
 import { limitMessage, pointNames } from "../lib";
 import { profileColor } from "../map/MapView";
 import { flyTo } from "./ExploreTab";
@@ -110,6 +110,8 @@ export function PlanTab() {
   const usableT = usableTimeS(params);
   const src = ((area.config.walkParams as unknown as { _sources?: Record<string, string> })._sources ?? {}) as Record<string, string | undefined>;
   const usableE = params.energyBudgetKJ * (1 - params.reserveFraction);
+  const o2On = (params.o2BudgetKg ?? 0) > 0 && (params.o2KgPerKJ ?? 0) > 0;
+  const usableO = (params.o2BudgetKg ?? 0) * (1 - params.reserveFraction);
   const msg = sel ? limitMessage(sel, names, params) : null;
   const calculating = planStatus === "calculating" || reachStatus === "calculating";
 
@@ -244,10 +246,14 @@ export function PlanTab() {
             st.set({ stops: useStore.getState().stops.map((s) => ({ ...s, dwellS: v * 60 })) });
           }}
         />
+        {o2On && (
+          <Slider hint={src.o2BudgetKg} label="Oxygen carried" value={params.o2BudgetKg!} min={0.2} max={1.5} step={0.05} fmt={(v) => `${v.toFixed(2)} kg`} onChange={(v) => st.setParams({ o2BudgetKg: v })} />
+        )}
         <Slider hint={src.reserveFraction} label="Safety reserve" value={params.reserveFraction * 100} min={0} max={50} step={1} fmt={(v) => `${Math.round(v)}%`} onChange={(v) => st.setParams({ reserveFraction: v / 100 })} />
       </div>
       <div className="small dim">
-        Usable after reserve: {fmtDur(usableT)} · {fmtEnergy(usableE)} · max slope {params.maxSlopeDeg}° · source {area.config.walkParamsSource}
+        Usable after reserve: {fmtDur(usableT)} · {fmtEnergy(usableE)}
+        {o2On ? ` · ${fmtO2(usableO)} oxygen` : ""} · max slope {params.maxSlopeDeg}° · source {area.config.walkParamsSource}
       </div>
 
       {planError && <div className="alert bad">Routing failed: {planError}</div>}
@@ -266,10 +272,11 @@ export function PlanTab() {
       {sel && (
         <>
           {msg && <div className="alert bad">{msg}</div>}
-          {!msg && <div className="alert ok">Plan fits the EVA limits with {Math.round(params.reserveFraction * 100)}% held in reserve.</div>}
+          {!msg && <div className="alert ok">Plan fits the time, energy{o2On ? " and oxygen" : ""} limits with {Math.round(params.reserveFraction * 100)}% held in reserve.</div>}
           <div className="totals">
             <Meter label="Total time (walk + dwell)" used={sel.totals.totalTimeS} limit={usableT} fmt={fmtDur} />
             <Meter label="Energy" used={sel.totals.energyKJ} limit={usableE} fmt={fmtEnergy} />
+            {o2On && sel.totals.o2Kg != null && <Meter label="Oxygen (breathing + leakage, modelled)" used={sel.totals.o2Kg} limit={usableO} fmt={fmtO2} />}
             <dl className="stats compact">
               <div>
                 <dt>Distance</dt>

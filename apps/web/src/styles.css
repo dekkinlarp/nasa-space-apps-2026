@@ -20,6 +20,9 @@
 
 * { box-sizing: border-box; }
 html, body, #root { margin: 0; height: 100%; }
+/* The app is one fixed screen: no page scroll, rubber-band or browser pinch-zoom behind the map. */
+html, body { overflow: hidden; overscroll-behavior: none; touch-action: pan-x pan-y; -webkit-text-size-adjust: 100%; }
+#root { height: 100dvh; }
 body { background: var(--bg); color: var(--text); font: 13px/1.45 var(--font); -webkit-font-smoothing: antialiased; }
 button, input, select { font: inherit; color: inherit; }
 a { color: var(--accent); text-decoration: none; }
@@ -295,4 +298,125 @@ input[type="number"] { background: var(--bg); border: 1px solid var(--line-2); b
   .side { width: 330px; }
   .cond-note { display: none; }
   .card-slot { width: 300px; }
+}
+
+/* ---------- science layers, evidence, checks ---------- */
+.badges { display: flex; flex-wrap: wrap; gap: 6px; margin: 4px 0 2px; }
+.badges:empty { display: none; }
+.badge.prio-primary { color: #ffb98f; border-color: rgba(255,122,47,.6); background: rgba(255,122,47,.12); }
+.badge.prio-secondary { color: #d3bcff; border-color: rgba(181,140,255,.5); background: rgba(181,140,255,.1); }
+.badge.prio-optional { color: var(--dim); border-color: var(--line-2); background: transparent; }
+.evidence { list-style: none; margin: 2px 0 0; padding: 0; display: grid; gap: 5px; }
+.evidence li { font-size: 12.5px; }
+.basis { display: inline-block; font-size: 9px; font-weight: 700; text-transform: uppercase; letter-spacing: .08em; padding: 0 5px; border-radius: 3px; margin-right: 6px; vertical-align: 1px; border: 1px solid var(--line-2); color: var(--dim); }
+.basis.b-rover { color: #f5f0e6; border-color: rgba(245,240,230,.45); }
+.basis.b-orbital { color: var(--teal); border-color: rgba(54,209,196,.5); }
+.minerals { width: 100%; border-collapse: collapse; font-size: 12px; margin: 2px 0 4px; }
+.minerals td { padding: 2px 8px 2px 0; vertical-align: top; }
+.minerals td:first-child { font-weight: 600; white-space: nowrap; }
+.checks { margin: 0; padding-left: 16px; display: grid; gap: 6px; font-size: 12px; color: var(--dim); }
+.checks b { color: var(--text); }
+.ring-label.limit { border-color: rgba(255,179,71,.7); color: #ffd9a3; }
+.readout-row { flex-wrap: wrap; }
+
+/* ---------- gestures hint ---------- */
+.map { touch-action: none; }
+.gesture-hint { position: relative; }
+.hint-btn { width: 28px; height: 28px; border-radius: 50%; background: rgba(22,17,15,.9); border: 1px solid var(--line-2); color: var(--dim); font-weight: 700; cursor: pointer; }
+.hint-btn:hover, .hint-btn[aria-expanded="true"] { color: var(--text); border-color: var(--accent); }
+.hint-pop { position: absolute; top: 36px; left: 0; z-index: 5; margin: 0; width: max-content; max-width: min(320px, calc(100vw - 32px)); background: rgba(15,12,11,.96); border: 1px solid var(--line-2); border-radius: 6px; padding: 8px 10px; display: grid; gap: 4px; font-size: 12px; box-shadow: 0 8px 24px rgba(0,0,0,.5); }
+.hint-pop div { display: flex; gap: 10px; justify-content: space-between; }
+.hint-pop dt { font-weight: 600; }
+.hint-pop dd { margin: 0; color: var(--dim); text-align: right; }
+.sheet-toggle { display: none; }
+
+/* ---------- responsive ---------- */
+.topbar { padding-left: max(16px, env(safe-area-inset-left)); padding-right: max(16px, env(safe-area-inset-right)); padding-top: env(safe-area-inset-top); height: calc(56px + env(safe-area-inset-top)); }
+.side { padding-left: env(safe-area-inset-left); }
+.card-slot, .go-panel, .readout { max-width: calc(100% - 24px); }
+.readout { min-width: min(300px, calc(100% - 24px)); }
+/* No hover on touch screens: drop the "hover the map" prompt, keep the values of the last tap. */
+@media (hover: none) {
+  .readout:has(> .dim:only-child) { display: none; }
+}
+
+/* Fingers need bigger targets than a mouse pointer. */
+@media (pointer: coarse) {
+  .btn, select, .seg-ctl button, .tabs button, .link-btn { min-height: 40px; }
+  .seg-ctl button { padding: 0 14px; }
+  .icon-btn, .card-close, .hint-btn { min-width: 40px; min-height: 40px; }
+  .hint-btn { width: 40px; height: 40px; }
+  .hint-pop { top: 48px; }
+  input[type="number"] { min-height: 36px; width: 54px; font-size: 16px; }
+  select { font-size: 16px; } /* iOS zooms the page into any field under 16px */
+  input[type="range"] { min-height: 32px; }
+  .switch { width: 46px; height: 26px; }
+  .switch span { border-radius: 14px; }
+  .switch span::before { width: 20px; height: 20px; left: 3px; top: 3px; }
+  .switch input:checked + span::before { transform: translateX(20px); }
+  .layer-row { padding: 12px 0; }
+  .base-opt { padding: 12px 10px; }
+  .poi-list li { padding: 11px 8px; }
+  .stop { padding: 8px 6px; }
+  .maplibregl-ctrl-group button { width: 40px !important; height: 40px !important; }
+  .maplibregl-popup-close-button { min-width: 36px; min-height: 36px; }
+  .stop-marker { width: 30px; height: 30px; }
+  .poi-dot { width: 18px; height: 18px; }
+}
+
+/* Tablet portrait and phones: the map on top, the side panel as a bottom sheet under it. */
+@media (max-width: 860px) {
+  .main { flex-direction: column; }
+  .mapwrap { order: 1; min-height: 0; }
+  .side { order: 2; width: auto; border-right: 0; border-top: 1px solid var(--line-2); padding-left: 0; padding-bottom: env(safe-area-inset-bottom); box-shadow: 0 -8px 24px rgba(0,0,0,.45); }
+  .sheet-open .side { height: 42dvh; }
+  .sheet-closed .side > :not(.tabs) { display: none; }
+  .tab-body { padding: 12px max(14px, env(safe-area-inset-right)) 28px max(14px, env(safe-area-inset-left)); -webkit-overflow-scrolling: touch; overscroll-behavior: contain; touch-action: pan-y; }
+  .sheet-toggle { display: block; flex: 0 0 48px !important; font-size: 16px !important; color: var(--text) !important; }
+
+  .topbar { gap: 12px; height: calc(48px + env(safe-area-inset-top)); }
+  .site { padding-left: 12px; min-width: 0; }
+  .site-name { white-space: nowrap; overflow: hidden; text-overflow: ellipsis; }
+  .site-sub, .cond-note { display: none; }
+  .conditions { gap: 12px; flex: none; }
+  .cond-k { font-size: 9px; }
+  .cond-v { font-size: 12px; white-space: nowrap; }
+
+  .view-ctl { top: 8px; left: 8px; right: 56px; flex-wrap: wrap; gap: 8px; }
+  .exag input { width: 90px; }
+  .gesture-hint { position: static; } /* anchor the popover to the control row so it cannot run off the right edge */
+  .hint-pop { top: calc(100% + 6px); max-width: calc(100vw - 16px); }
+  .card-slot { top: 56px; left: 8px; right: 8px; width: auto; max-width: none; max-height: min(58%, calc(100% - 64px)); z-index: 3; }
+  .go-panel { z-index: 3; }
+  /* One floating panel at a time: during a walk the Go panel replaces the POI card. */
+  .map-area:has(.go-panel) .card-slot { display: none; }
+  .go-grid { grid-template-columns: repeat(3, 1fr); }
+  .go-panel { left: 8px; right: 8px; bottom: 8px; width: auto; max-width: none; }
+  .readout { left: 8px; bottom: 8px; font-size: 11.5px; }
+  .map-credit { display: none; }
+  .profile { height: 180px; }
+  .profile-photo { display: none; }
+}
+
+/* Phones: the top bar keeps the brand and the conditions only, and the sheet takes the profile's room. */
+@media (max-width: 600px) {
+  .brand-sub, .site { display: none; }
+  .brand-title { font-size: 12px; letter-spacing: 0.12em; }
+  .topbar { gap: 10px; }
+  .conditions { gap: 10px; min-width: 0; overflow-x: auto; scrollbar-width: none; }
+  .cond:nth-child(n + 3) { display: none; }
+  .sheet-open .side { height: 50dvh; }
+  .sheet-open .profile { display: none; }
+  .stats { gap: 6px 10px; }
+  .go-clock { font-size: 22px; margin-top: 2px; }
+  .go-panel { padding: 10px; }
+  .readout-row { gap: 4px 10px; }
+  .photo-grid { grid-template-columns: 1fr; }
+}
+
+/* Short landscape phones: keep the sheet from swallowing the map. */
+@media (max-width: 860px) and (max-height: 480px) {
+  .sheet-open .side { height: 56dvh; }
+  .sheet-open .profile { display: none; }
+  .card-slot { max-height: calc(100% - 60px); }
 }

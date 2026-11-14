@@ -6,7 +6,8 @@ import type { LonLat, ReachRing, RouteResult } from "@marsmap/core";
 import { selectedResult, useStore, type OverlayId } from "../store";
 import type { AreaData, Poi } from "../types";
 import { cellIndex, M_PER_DEG_LAT } from "../geo";
-import { costUrl, elevationUrl, slopeUrl, surfaceUrl } from "./rasters";
+import { confidenceUrl, costUrl, elevationUrl, SCIENCE_RAMPS, scienceUrl, slopeUrl, surfaceUrl } from "./rasters";
+import { loadFloatLayer } from "../data";
 import { demMaxZoom, DEM_TILE_SIZE, registerDemProtocol, setDemSource } from "./dem";
 import { fmtDur } from "../format";
 import { ClickMenu } from "../components/ClickMenu";
@@ -30,7 +31,160 @@ export const profileColor = (id: string, i = 0) => PROFILE_COLORS[id] ?? ["#ff8a
 export const imageryGroup = (id: string) => id.replace(/[_-]r?\d+[_-]c?\d+$/, "");
 
 const TILE_SWITCH_ZOOM = 17;
-const RASTER_OVERLAYS = ["elevation", "slope", "surface", "cost"] as const;
+/** True for a full-resolution piece of an imagery group that also has an overview image (e.g. hirise_0_1). */
+const isDetailTile = (a: AreaData, id: string) => id !== imageryGroup(id) && a.manifest.imagery.some((o) => o.id === imageryGroup(id));
+const RASTER_OVERLAYS = ["elevation", "slope", "surface", "confidence", "cost"] as const;
+
+/** Manifest layers the pipeline marked as science overlays (e.g. CRISM mineral indicators). */
+export const scienceLayers = (a: AreaData) => a.manifest.layers.filter((l) => l.group === "science" && l.dtype === "float32");
+export const scienceRamp = (a: AreaData, id: string) => SCIENCE_RAMPS[Math.max(0, scienceLayers(a).findIndex((l) => l.id === id)) % SCIENCE_RAMPS.length]!;
+
+/**
+ * Trackpad, mouse-wheel and Safari pinch handling. Replaces MapLibre's scrollZoom, which treats
+ * every scroll as a zoom, so a two-finger scroll can pan the map the way it does in native map apps.
+ *
+ *   two-finger scroll            pan
+ *   pinch (ctrl/cmd + scroll)    zoom about the pointer
+ *   shift + scroll               rotate
+ *   alt/option + scroll          tilt (3D only: 2D caps the pitch at 0)
+ *   mouse wheel                  zoom about the pointer
+ *
+ * Mouse wheel vs trackpad: a wheel reports whole lines (Firefox, deltaMode 1) or a legacy
+ * wheelDeltaY in steps of 120 that is NOT simply -3 x deltaY, which is what trackpads report.
+ * The verdict is held for events less than 120 ms apart so one gesture is never split.
+ * Touch screens are left to MapLibre's own handlers (drag, pinch, two-finger rotate and tilt).
+ */
+/** Touch-and-hold time and allowed finger drift before it stops counting as a hold. */
+const HOLD_MS = 500;
+const HOLD_SLOP_PX = 10;
+/** A single tap waits this long for a second tap (double-tap zoom) before it opens the point menu. */
+const TAP_DELAY_MS = 260;
+/** Tilting past ENTER switches the terrain on; levelling below LEAVE switches it off. */
+const TILT_ENTER_3D = 4;
+const TILT_LEAVE_3D = 1;
+/** Set when a hold has just opened the menu, so the tap that ends the hold does not reopen it elsewhere. */
+let suppressNextClick = 0;
+/** True while the 2D/3D state is being changed by a tilt gesture rather than the 2D/3D buttons. */
+let tiltDriven = false;
+/** True while the 2D button is levelling the camera, so that animation is not read as a tilt gesture. */
+let levelling = false;
+
+function attachGestures(map: MLMap): () => void {
+  const el = map.getCanvasContainer();
+  let lastT = 0, lastMouse = false, targetZoom = map.getZoom();
+  const isMouseWheel = (e: WheelEvent): boolean => {
+    if (e.deltaMode !== 0) return true;
+    const wd = (e as WheelEvent & { wheelDeltaY?: number }).wheelDeltaY;
+    return e.deltaX === 0 && wd != null && wd !== 0 && wd % 120 === 0 && Math.abs(wd) !== Math.round(Math.abs(e.deltaY) * 3);
+  };
+  const pointer = (e: { clientX: number; clientY: number }) => {
+    const r = el.getBoundingClientRect();
+    return map.unproject([e.clientX - r.left, e.clientY - r.top]);
+  };
+  const clampZoom = (z: number) => Math.max(map.getMinZoom(), Math.min(map.getMaxZoom(), z));
+  const onWheel = (e: WheelEvent) => {
+    e.preventDefault();
+    const fresh = e.timeStamp - lastT > 120;
+    const mouse = fresh ? isMouseWheel(e) : lastMouse;
+    lastT = e.timeStamp;
+    lastMouse = mouse;
+    const unit = e.deltaMode === 1 ? 16 : e.deltaMode === 2 ? 400 : 1;
+    const dx = e.deltaX * unit, dy = e.deltaY * unit;
+    if (e.ctrlKey || e.metaKey) {
+      map.easeTo({ zoom: clampZoom(map.getZoom() - dy * 0.01), around: pointer(e), duration: 0 });
+    } else if (e.shiftKey) {
+      // Browsers turn shift + vertical scroll into horizontal scroll, so take whichever axis moved.
+      map.jumpTo({ bearing: map.getBearing() + (Math.abs(dx) > Math.abs(dy) ? dx : dy) * 0.3 });
+    } else if (e.altKey) {
+      // Orbit: Chromium never delivers a trackpad twist to a page, so Option + two-finger scroll stands in
+      // for it. Sideways turns the map, up/down tilts it. Mostly-sideways or mostly-vertical motion is
+      // locked to that one axis so a turn does not also tilt.
+      const ax = Math.abs(dx), ay = Math.abs(dy);
+      const turn = ax > ay * 1.5 ? dx : ay > ax * 1.5 ? 0 : dx;
+      const tilt = ay > ax * 1.5 ? dy : ax > ay * 1.5 ? 0 : dy;
+      map.jumpTo({
+        bearing: map.getBearing() + turn * 0.3,
+        pitch: map.getMaxPitch() > 0 ? Math.max(0, Math.min(map.getMaxPitch(), map.getPitch() - tilt * 0.25)) : 0,
+      });
+    } else if (mouse) {
+      const wd = (e as WheelEvent & { wheelDeltaY?: number }).wheelDeltaY;
+      const step = Math.max(-1, Math.min(1, wd ? wd / 240 : -dy / 100)); // one notch = half a zoom level
+      targetZoom = clampZoom((fresh ? map.getZoom() : targetZoom) + step);
+      map.easeTo({ zoom: targetZoom, around: pointer(e), duration: 160, easing: (t) => t });
+    } else {
+      map.panBy([dx, dy], { animate: false });
+    }
+  };
+  // Safari sends pinch and rotate on a Mac trackpad as gesture events instead of ctrl + wheel.
+  // On iPad the same events accompany real touches, which MapLibre already handles.
+  type GestureEvent = Event & { scale: number; rotation: number; clientX: number; clientY: number };
+  let touches = 0;
+  let g0: { zoom: number; bearing: number } | null = null;
+  const onTouch = (e: TouchEvent) => (touches = e.touches.length);
+  const onGestureStart = (e: Event) => {
+    e.preventDefault();
+    g0 = touches > 0 ? null : { zoom: map.getZoom(), bearing: map.getBearing() };
+  };
+  const onGestureChange = (e: Event) => {
+    e.preventDefault();
+    const g = e as GestureEvent;
+    if (!g0 || touches > 0 || !(g.scale > 0)) return;
+    map.easeTo({ zoom: clampZoom(g0.zoom + Math.log2(g.scale)), bearing: g0.bearing - g.rotation, around: pointer(g), duration: 0 });
+  };
+  const onGestureEnd = (e: Event) => {
+    e.preventDefault();
+    g0 = null;
+  };
+  // Touch and hold drops a pin (opens the "set start / add stop" menu), as in Apple Maps.
+  let holdTimer: ReturnType<typeof setTimeout> | undefined;
+  let holdAt: { x: number; y: number } | null = null;
+  const cancelHold = () => {
+    clearTimeout(holdTimer);
+    holdAt = null;
+  };
+  const onHoldStart = (e: TouchEvent) => {
+    cancelHold();
+    if (e.touches.length !== 1) return;
+    const t = e.touches[0]!;
+    holdAt = { x: t.clientX, y: t.clientY };
+    holdTimer = setTimeout(() => {
+      if (!holdAt) return;
+      const ll = pointer({ clientX: holdAt.x, clientY: holdAt.y });
+      holdAt = null;
+      suppressNextClick = performance.now();
+      useStore.getState().set({ mapClick: [ll.lng, ll.lat], selectedWaypoint: null });
+    }, HOLD_MS);
+  };
+  const onHoldMove = (e: TouchEvent) => {
+    const t = e.touches[0];
+    if (!holdAt || !t || e.touches.length !== 1 || Math.hypot(t.clientX - holdAt.x, t.clientY - holdAt.y) > HOLD_SLOP_PX) cancelHold();
+  };
+  el.addEventListener("touchstart", onHoldStart, { passive: true });
+  el.addEventListener("touchmove", onHoldMove, { passive: true });
+  el.addEventListener("touchend", cancelHold, { passive: true });
+  el.addEventListener("touchcancel", cancelHold, { passive: true });
+  el.addEventListener("wheel", onWheel, { passive: false });
+  el.addEventListener("touchstart", onTouch, { passive: true });
+  el.addEventListener("touchend", onTouch, { passive: true });
+  el.addEventListener("touchcancel", onTouch, { passive: true });
+  el.addEventListener("gesturestart", onGestureStart);
+  el.addEventListener("gesturechange", onGestureChange);
+  el.addEventListener("gestureend", onGestureEnd);
+  return () => {
+    cancelHold();
+    el.removeEventListener("touchstart", onHoldStart);
+    el.removeEventListener("touchmove", onHoldMove);
+    el.removeEventListener("touchend", cancelHold);
+    el.removeEventListener("touchcancel", cancelHold);
+    el.removeEventListener("wheel", onWheel);
+    el.removeEventListener("touchstart", onTouch);
+    el.removeEventListener("touchend", onTouch);
+    el.removeEventListener("touchcancel", onTouch);
+    el.removeEventListener("gesturestart", onGestureStart);
+    el.removeEventListener("gesturechange", onGestureChange);
+    el.removeEventListener("gestureend", onGestureEnd);
+  };
+}
 
 function gridCoords(a: AreaData): [[number, number], [number, number], [number, number], [number, number]] {
   const g = a.layers.grid;
@@ -74,7 +228,7 @@ function ringFeatures(rings: ReachRing[] | null): GeoJSON.FeatureCollection {
     type: "FeatureCollection",
     features: rings.map((r, i) => ({
       type: "Feature",
-      properties: { id: r.id, i, t: n > 1 ? i / (n - 1) : 1 },
+      properties: { id: r.id, i, t: n > 1 ? i / (n - 1) : 1, limit: r.kind === "limit" ? 1 : 0 },
       geometry: {
         type: "MultiPolygon",
         coordinates: r.coordinates
@@ -131,9 +285,11 @@ export function MapView() {
       maxPitch: 80,
       attributionControl: false,
       dragRotate: true,
+      scrollZoom: false, // replaced by attachGestures
       renderWorldCopies: false,
     });
     mapInstance = map;
+    const detachGestures = attachGestures(map);
     map.addControl(new maplibregl.NavigationControl({ visualizePitch: true }), "top-right");
     map.addControl(new maplibregl.ScaleControl({ unit: "metric" }), "bottom-right");
     (window as unknown as { __map: MLMap }).__map = map;
@@ -141,17 +297,15 @@ export function MapView() {
     map.on("load", () => {
       const coords = gridCoords(area);
       // Base imagery: one image source per manifest entry.
+      // Full-resolution tiles of a group are added on demand (see syncTiles); everything else loads now.
       for (const im of area.manifest.imagery) {
+        if (isDetailTile(area, im.id)) continue;
         map.addSource(`img-${im.id}`, {
           type: "image",
           url: `${area.base}/${im.file}`,
           coordinates: [[im.west, im.north], [im.east, im.north], [im.east, im.south], [im.west, im.south]],
         });
-        // A group with both an overview image and a full-res tile set: overview when zoomed out, tiles when in.
-        const group = imageryGroup(im.id);
-        const hasTiles = area.manifest.imagery.some((o) => imageryGroup(o.id) === group && o.id !== group);
-        const zoomRange = !hasTiles ? {} : im.id === group ? { maxzoom: TILE_SWITCH_ZOOM } : { minzoom: TILE_SWITCH_ZOOM };
-        map.addLayer({ id: `img-${im.id}`, type: "raster", source: `img-${im.id}`, ...zoomRange, layout: { visibility: "none" }, paint: { "raster-fade-duration": 0, "raster-resampling": "linear" } });
+        map.addLayer({ id: `img-${im.id}`, type: "raster", source: `img-${im.id}`, layout: { visibility: "none" }, paint: { "raster-fade-duration": 0, "raster-resampling": "linear" } });
       }
       // DEM: one source for terrain, one for hillshade (MapLibre recommends separate sources).
       const demMax = demMaxZoom(g);
@@ -163,8 +317,14 @@ export function MapView() {
         map.addSource(`ov-${id}`, { type: "image", url: BLANK, coordinates: coords });
         map.addLayer({ id: `ov-${id}`, type: "raster", source: `ov-${id}`, layout: { visibility: "none" }, paint: { "raster-fade-duration": 0, "raster-resampling": id === "surface" ? "nearest" : "linear" } });
       }
+      // Science layers keep their source pixels visible (nearest), so an 18 m CRISM pixel reads as one block.
+      for (const l of scienceLayers(area)) {
+        map.addSource(`sci-${l.id}`, { type: "image", url: BLANK, coordinates: coords });
+        map.addLayer({ id: `sci-${l.id}`, type: "raster", source: `sci-${l.id}`, layout: { visibility: "none" }, paint: { "raster-fade-duration": 0, "raster-resampling": "nearest" } });
+      }
       map.addSource("rings", { type: "geojson", data: EMPTY_FC });
-      map.addLayer({ id: "rings-line", type: "line", source: "rings", paint: { "line-color": ["interpolate", ["linear"], ["get", "t"], 0, "#36d1c4", 1, "#ffb347"], "line-width": ["interpolate", ["linear"], ["get", "t"], 0, 1.2, 1, 2.2], "line-dasharray": [3, 2] } });
+      map.addLayer({ id: "rings-limit", type: "line", source: "rings", filter: ["==", ["get", "limit"], 1], paint: { "line-color": "#ffb347", "line-width": 2.6 } });
+      map.addLayer({ id: "rings-line", type: "line", source: "rings", filter: ["==", ["get", "limit"], 0], paint: { "line-color": ["interpolate", ["linear"], ["get", "t"], 0, "#36d1c4", 1, "#ffb347"], "line-width": ["interpolate", ["linear"], ["get", "t"], 0, 1.2, 1, 2.2], "line-dasharray": [3, 2] } });
 
       map.addSource("track", { type: "geojson", data: area.rover.traverse ?? EMPTY_FC });
       map.addLayer({ id: "track-casing", type: "line", source: "track", paint: { "line-color": "#000", "line-width": 4, "line-opacity": 0.5 } });
@@ -215,6 +375,7 @@ export function MapView() {
     map.on("mouseenter", "waypoints", () => (map.getCanvas().style.cursor = "pointer"));
     map.on("mouseleave", "waypoints", () => (map.getCanvas().style.cursor = ""));
 
+    let tapTimer: ReturnType<typeof setTimeout> | undefined;
     map.on("click", (e) => {
       const s = useStore.getState();
       const ll: LonLat = [e.lngLat.lng, e.lngLat.lat];
@@ -231,10 +392,25 @@ export function MapView() {
           return;
         }
       }
-      s.set({ mapClick: ll, selectedWaypoint: null });
+      if (performance.now() - suppressNextClick < 700) return;
+      clearTimeout(tapTimer);
+      tapTimer = setTimeout(() => useStore.getState().set({ mapClick: ll, selectedWaypoint: null }), TAP_DELAY_MS);
+    });
+    map.on("dblclick", () => clearTimeout(tapTimer));
+    // Apple Maps style: tilting the flat map slides into 3D, levelling it out returns to 2D.
+    map.on("pitch", () => {
+      if (levelling || !area.layers.elevation || useStore.getState().view3d || map.getPitch() < TILT_ENTER_3D) return;
+      tiltDriven = true;
+      useStore.getState().set({ view3d: true });
+    });
+    map.on("moveend", () => {
+      if (!useStore.getState().view3d || map.getPitch() > TILT_LEAVE_3D || map.isMoving()) return;
+      tiltDriven = true;
+      useStore.getState().set({ view3d: false });
     });
 
     return () => {
+      detachGestures();
       map.remove();
       mapInstance = null;
     };
@@ -247,10 +423,37 @@ export function MapView() {
     const map = mapInstance;
     if (!ready || !map) return;
     for (const im of area.manifest.imagery) {
+      if (!map.getLayer(`img-${im.id}`)) continue;
       const on = imageryGroup(im.id) === baseImagery;
       map.setLayoutProperty(`img-${im.id}`, "visibility", on ? "visible" : "none");
       map.setPaintProperty(`img-${im.id}`, "raster-opacity", baseOpacity);
     }
+    // Full-resolution tiles: only the ones in view while zoomed in, drawn over the overview image.
+    // An 8 km area has 16 of them (about 40 MB of texture each), far too much to hold at once.
+    const syncTiles = () => {
+      const zoomedIn = map.getZoom() >= TILE_SWITCH_ZOOM - 0.5;
+      const b = map.getBounds();
+      for (const im of area.manifest.imagery) {
+        if (!isDetailTile(area, im.id)) continue;
+        const id = `img-${im.id}`;
+        const want = zoomedIn && imageryGroup(im.id) === baseImagery && im.west < b.getEast() && im.east > b.getWest() && im.south < b.getNorth() && im.north > b.getSouth();
+        const has = !!map.getSource(id);
+        if (want && !has) {
+          map.addSource(id, { type: "image", url: `${area.base}/${im.file}`, coordinates: [[im.west, im.north], [im.east, im.north], [im.east, im.south], [im.west, im.south]] });
+          map.addLayer({ id, type: "raster", source: id, minzoom: TILE_SWITCH_ZOOM - 0.5, paint: { "raster-fade-duration": 0, "raster-resampling": "linear", "raster-opacity": baseOpacity } }, "hillshade");
+        } else if (want) {
+          map.setPaintProperty(id, "raster-opacity", baseOpacity);
+        } else if (has) {
+          map.removeLayer(id);
+          map.removeSource(id);
+        }
+      }
+    };
+    syncTiles();
+    map.on("moveend", syncTiles);
+    return () => {
+      map.off("moveend", syncTiles);
+    };
   }, [ready, baseImagery, baseOpacity, area]);
 
   // ---------- raster overlays ----------
@@ -279,6 +482,7 @@ export function MapView() {
       if (id === "elevation" && L.elevation) p = elevationUrl(g, L.elevation, L.elevMin, L.elevMax);
       if (id === "slope" && L.slope) p = slopeUrl(g, L.slope);
       if (id === "surface" && L.surface) p = surfaceUrl(g, L.surface, area.config.surfaceClasses);
+      if (id === "confidence" && L.confidence) p = confidenceUrl(g, L.confidence);
       if (id === "cost" && reach) p = costUrl(g, reach.outTimeS, reach.backTimeS, reach.usableS);
       if (!p) continue;
       urls.current[id] = "pending";
@@ -291,12 +495,42 @@ export function MapView() {
     }
     map.setLayoutProperty("hillshade", "visibility", overlays.hillshade.on ? "visible" : "none");
     map.setPaintProperty("hillshade", "hillshade-exaggeration", overlays.hillshade.opacity);
-    map.setLayoutProperty("rings-line", "visibility", overlays.rings.on ? "visible" : "none");
-    map.setPaintProperty("rings-line", "line-opacity", overlays.rings.opacity);
+    for (const l of ["rings-line", "rings-limit"]) {
+      map.setLayoutProperty(l, "visibility", overlays.rings.on ? "visible" : "none");
+      map.setPaintProperty(l, "line-opacity", overlays.rings.opacity);
+    }
     for (const l of ["track", "track-casing", "waypoints"]) map.setLayoutProperty(l, "visibility", overlays.track.on ? "visible" : "none");
     map.setPaintProperty("track", "line-opacity", overlays.track.opacity);
     map.setPaintProperty("waypoints", "circle-opacity", overlays.track.opacity);
   }, [ready, overlays, reach, area]);
+
+  // ---------- science overlays (data fetched the first time each is switched on) ----------
+  const sci = useStore((s) => s.sci);
+  const sciData = useStore((s) => s.sciData);
+  const sciUrls = useRef<Record<string, string>>({});
+  useEffect(() => {
+    const map = mapInstance;
+    if (!ready || !map) return;
+    for (const l of scienceLayers(area)) {
+      const st = sci[l.id];
+      const on = !!st?.on;
+      map.setLayoutProperty(`sci-${l.id}`, "visibility", on ? "visible" : "none");
+      if (st) map.setPaintProperty(`sci-${l.id}`, "raster-opacity", st.opacity);
+      if (!on || sciUrls.current[l.id]) continue;
+      sciUrls.current[l.id] = "pending";
+      void (async () => {
+        const data = useStore.getState().sciData[l.id] ?? (await loadFloatLayer(area, l.id));
+        if (!data) {
+          delete sciUrls.current[l.id];
+          return;
+        }
+        if (!useStore.getState().sciData[l.id]) useStore.getState().set({ sciData: { ...useStore.getState().sciData, [l.id]: data } });
+        const url = await scienceUrl(area.layers.grid, data, l.display?.min ?? 0, l.display?.max ?? 1, scienceRamp(area, l.id));
+        sciUrls.current[l.id] = url;
+        (map.getSource(`sci-${l.id}`) as ImageSource | undefined)?.updateImage({ url, coordinates: gridCoords(area) });
+      })();
+    }
+  }, [ready, sci, sciData, area]);
 
   // ---------- rings ----------
   const rings = useStore((s) => s.rings);
@@ -316,8 +550,9 @@ export function MapView() {
       if (!best) continue;
       const el = document.createElement("div");
       el.className = "ring-label";
-      const isLimit = r.budgetS === Math.max(...rings.map((x) => x.budgetS));
-      el.textContent = isLimit ? `Walk limit · ${fmtDur(r.budgetS)} round trip + one stop` : `${fmtDur(r.budgetS)} round trip`;
+      const isLimit = r.kind ? r.kind === "limit" : r.budgetS === Math.max(...rings.map((x) => x.budgetS));
+      el.textContent = isLimit ? `Walk limit${r.limitedBy ? ` · ${r.limitedBy} runs out first` : ""} · round trip + one stop` : `${fmtDur(r.budgetS)} round trip`;
+      if (isLimit) el.classList.add("limit");
       ringMarkers.current.push(new maplibregl.Marker({ element: el, anchor: "bottom" }).setLngLat(best as [number, number]).addTo(map));
     }
   }, [ready, rings, overlays.rings.on, reach]);
@@ -403,9 +638,19 @@ export function MapView() {
   // ---------- 3D ----------
   const view3d = useStore((s) => s.view3d);
   const exaggeration = useStore((s) => s.exaggeration);
+  const last3d = useRef(false);
   useEffect(() => {
     const map = mapInstance;
     if (!ready || !map) return;
+    const byTilt = tiltDriven;
+    tiltDriven = false;
+    // Only a 2D/3D switch moves the camera; changing the vertical scale must not.
+    const switched = last3d.current !== view3d;
+    last3d.current = view3d;
+    // Tilt gestures work from the flat map too (they switch 3D on), so only a map without elevation is locked flat.
+    map.setMaxPitch(area.layers.elevation ? 80 : 0);
+    if (area.layers.elevation) map.touchPitch.enable();
+    else map.touchPitch.disable();
     if (view3d && area.layers.elevation) {
       map.setTerrain({ source: "dem", exaggeration });
       // The camera keeps its altitude above the *centre* elevation; refresh it once DEM tiles are
@@ -415,10 +660,16 @@ export function MapView() {
         if (e != null) map.jumpTo({ elevation: e });
       };
       map.once("idle", lift);
-      if (map.getPitch() < 30) map.easeTo({ pitch: 60, bearing: map.getBearing() || -20, duration: 900 });
+      // The 3D button swings the camera down; a tilt gesture is already holding it where the user wants.
+      if (switched && !byTilt && map.getPitch() < 30) map.easeTo({ pitch: 60, bearing: map.getBearing() || -20, duration: 900 });
     } else {
       map.setTerrain(null);
-      if (map.getPitch() > 0) map.easeTo({ pitch: 0, bearing: 0, duration: 600 });
+      // The 2D button levels the camera and faces north; levelling by gesture keeps the heading.
+      if (switched && !byTilt && map.getPitch() > 0) {
+        levelling = true;
+        map.once("moveend", () => (levelling = false));
+        map.easeTo({ pitch: 0, bearing: 0, duration: 600 });
+      }
     }
   }, [ready, view3d, exaggeration, area]);
 

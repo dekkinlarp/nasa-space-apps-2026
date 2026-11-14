@@ -4,16 +4,13 @@ import { useStore, usableTimeS } from "./store";
 import type { AreaData, StartPoint, Stop } from "./types";
 import type { WorkerIn, WorkerOut } from "./worker/protocol";
 
-/** Round-trip walking-time rings, seconds. The outermost ring is the real limit (see ringBudgets). */
+/** Round-trip walking-time rings, seconds. The worker adds the real walk limit as the outermost ring. */
 export const RING_STEPS_S = [15 * 60, 30 * 60, 60 * 60];
 
-/**
- * Ring budgets: fixed round-trip walking times, plus the walk limit = usable EVA time
- * (after reserve) minus one stop's work time, i.e. the farthest you can go, work once and get home.
- */
+/** The fixed time rings that sit clearly inside the time limit (usable EVA time minus one stop's work). */
 export function ringBudgets(usableS: number, dwellS: number): number[] {
   const limit = Math.max(0, usableS - dwellS);
-  return [...RING_STEPS_S.filter((b) => b < limit * 0.9), limit];
+  return RING_STEPS_S.filter((b) => b < limit * 0.9);
 }
 
 /** Two workers so a slow reach flood (whole grid, out + back) never delays route planning. */
@@ -71,6 +68,7 @@ function scheduleReach() {
       params: s.params,
       profileId: s.selectedProfile,
       budgetsS: ringBudgets(usable, s.params.stopDwellS),
+      dwellS: s.params.stopDwellS,
     });
   }, 200);
 }

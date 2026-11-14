@@ -1,7 +1,9 @@
 import type { ReactNode } from "react";
 import { useStore, type OverlayId } from "../store";
-import { imageryGroup } from "../map/MapView";
-import { COST_RAMP, cssGradient, ELEV_RAMP, SLOPE_STOPS } from "../map/rasters";
+import type { LayerEntry } from "@marsmap/core";
+import { imageryGroup, scienceLayers, scienceRamp } from "../map/MapView";
+import { CONFIDENCE_CLEAR, CONFIDENCE_LOW, COST_RAMP, cssGradient, ELEV_RAMP, SLOPE_STOPS } from "../map/rasters";
+import type { AreaData } from "../types";
 
 function Row({ id, title, children, disabled, note }: { id: OverlayId; title: string; children?: ReactNode; disabled?: string; note?: ReactNode }) {
   const st = useStore((s) => s.overlays[id]);
@@ -29,6 +31,89 @@ function Row({ id, title, children, disabled, note }: { id: OverlayId; title: st
       </div>
       {disabled ? <div className="small dim">{disabled}</div> : st.on && children}
     </div>
+  );
+}
+
+/** One science layer from the manifest: switch, opacity, legend, what it means and where it comes from. */
+function ScienceRow({ area, layer }: { area: AreaData; layer: LayerEntry }) {
+  const st = useStore((s) => s.sci[layer.id]) ?? { on: false, opacity: 0.75 };
+  const setSci = useStore((s) => s.setSci);
+  const loaded = useStore((s) => !!s.sciData[layer.id]);
+  const info = area.minerals?.layers.find((l) => l.id === layer.id);
+  const max = layer.display?.max ?? 1;
+  return (
+    <div className="layer-row">
+      <div className="layer-head">
+        <label className="switch">
+          <input type="checkbox" checked={st.on} onChange={(e) => setSci(layer.id, { on: e.target.checked })} />
+          <span />
+        </label>
+        <span className="layer-title">{layer.name ?? layer.id}</span>
+        {layer.estimated && <span className="badge est tiny">estimated</span>}
+        <input className="opacity" type="range" min={0} max={1} step={0.05} value={st.opacity} disabled={!st.on} onChange={(e) => setSci(layer.id, { opacity: Number(e.target.value) })} title="Opacity" />
+      </div>
+      {st.on && (
+        <>
+          <div className="legend-bar" style={{ background: cssGradient(scienceRamp(area, layer.id)) }} />
+          <div className="legend-ticks">
+            <span>just above 0</span>
+            <span>{loaded ? "" : "loading…"}</span>
+            <span>{max}+ (strongest 2%)</span>
+          </div>
+          {info && (
+            <div className="small">
+              {info.indicates} <span className="dim">{info.caveat}</span>
+            </div>
+          )}
+          {info?.stats && <div className="small dim">Present (above 0) over {info.stats.positivePct}% of this area. Ground with no signal is left clear.</div>}
+        </>
+      )}
+    </div>
+  );
+}
+
+function DataChecks({ area }: { area: AreaData }) {
+  const c = area.checks;
+  const m = area.minerals;
+  const scenes = m ? (m.scenes ?? [{ obs: m.observation, acquired: m.acquired, coregistration: m.coregistration }]) : [];
+  const share = m?.layers[0]?.stats?.scenePct;
+  if (!c?.georef && !c?.slopeVsTilt && !scenes.length) return null;
+  return (
+    <>
+      <h4 className="section-h">Checks against the rover</h4>
+      <ul className="checks">
+        {c?.georef && (
+          <li>
+            <b>Elevation.</b> At {c.georef.waypoints} Curiosity waypoints the map's elevation differs from the rover's own by a median of {c.georef.medianAbsDiffM.toFixed(2)} m (largest{" "}
+            {c.georef.maxAbsDiffM.toFixed(2)} m). This confirms the map is in the right place; it does not prove the elevation data itself is that accurate.
+          </li>
+        )}
+        {c?.slopeVsTilt && (
+          <li>
+            <b>Slope.</b> At {c.slopeVsTilt.waypoints} waypoints the map's median slope is {c.slopeVsTilt.medianSlopeDeg.toFixed(1)}° and the rover's median recorded tilt is{" "}
+            {c.slopeVsTilt.medianTiltDeg.toFixed(1)}°; spot by spot they differ by a median of {c.slopeVsTilt.medianAbsDiffDeg.toFixed(1)}°.
+          </li>
+        )}
+        {scenes.map(({ obs, coregistration: co }) =>
+          co.corrBest == null ? null : (
+            <li key={obs}>
+              <b>Minerals, scene {obs}</b>
+              {share?.[obs] != null ? ` (${share[obs]}% of the area)` : ""}.{" "}
+              {co.applied
+                ? `As delivered it sat ${Math.round(Math.hypot(co.shiftM[0], co.shiftM[1]))} m off the photo. Shifting it ${Math.abs(co.shiftPx[0])} px ${co.shiftPx[0] > 0 ? "west" : "east"} and ${Math.abs(co.shiftPx[1])} px ${co.shiftPx[1] > 0 ? "north" : "south"} raised its match with the HiRISE photo from r = ${co.corrUnshifted} to r = ${co.corrBest}.`
+                : `It matches the HiRISE photo at r = ${co.corrUnshifted} without any shift (best nearby shift: r = ${co.corrBest}).`}
+            </li>
+          ),
+        )}
+        {scenes.length > 0 && (
+          <li>
+            Each scene is moved as a whole, so expect mineral pixels to be within one to two pixels ({m?.pixelM}–{(m?.pixelM ?? 0) * 2} m) of their true place.
+            {scenes.length > 1 ? " Where two scenes meet there is a seam: they were taken in different years, so compare values across it with care." : ""}
+          </li>
+        )}
+        {c?.problems && c.problems.length > 0 && <li className="bad">Pipeline problems: {c.problems.join("; ")}</li>}
+      </ul>
+    </>
   );
 }
 
@@ -85,6 +170,22 @@ export function LayersTab() {
         <input type="range" min={0} max={1} step={0.05} value={baseOpacity} onChange={(e) => set({ baseOpacity: Number(e.target.value) })} />
       </div>
 
+      {scienceLayers(area).length > 0 && (
+        <>
+          <h4 className="section-h">
+            Minerals from orbit <span className="badge sim tiny">science</span>
+          </h4>
+          {scienceLayers(area).map((l) => (
+            <ScienceRow key={l.id} area={area} layer={l} />
+          ))}
+          {area.minerals && (
+            <div className="layer-src">
+              {area.minerals.mission}, observation {area.minerals.observation}, {area.minerals.acquired}, {area.minerals.pixelM} m per pixel. {area.minerals.note}
+            </div>
+          )}
+        </>
+      )}
+
       <h4 className="section-h">Overlays</h4>
       <Row id="surface" title="Surface conditions" note={est("surface")} disabled={L.surface ? undefined : "No surface layer in this dataset"}>
         <div className="legend-classes">
@@ -97,6 +198,15 @@ export function LayersTab() {
           ))}
         </div>
         <Source text={layer("surface") && `${layer("surface")!.source} · ${layer("surface")!.method}`} />
+      </Row>
+      <Row id="confidence" title="Surface uncertainty" note={est("surface_confidence")} disabled={L.confidence ? undefined : "No confidence layer in this dataset"}>
+        <div className="legend-bar" style={{ background: "linear-gradient(90deg, rgba(232,62,140,.9), rgba(232,62,140,0))" }} />
+        <div className="legend-ticks">
+          <span>least sure ({CONFIDENCE_LOW} or less)</span>
+          <span>clear = {CONFIDENCE_CLEAR}+ of 200</span>
+        </div>
+        <div className="small dim">Pink marks ground where the surface estimate is a close call between two classes. Treat routes across it as less certain.</div>
+        <Source text={layer("surface_confidence")?.method} />
       </Row>
       <Row id="slope" title="Slope" note={est("slope")} disabled={L.slope ? undefined : "No slope layer"}>
         <div className="legend-bar" style={{ background: cssGradient(SLOPE_STOPS) }} />
@@ -138,12 +248,17 @@ export function LayersTab() {
         )}
       </Row>
       <Row id="rings" title="Walk-limit rings" disabled={!start ? "Set a start to see walk-limit rings" : undefined}>
-        <div className="small dim">Round-trip walking time from the start: 15 min, 30 min, 1 h, and the walk limit (usable EVA time minus one stop of work).</div>
+        <div className="small dim">
+          Dashed rings: 15 min, 30 min and 1 h of round-trip walking from the start. Solid ring: the walk limit, the farthest you can go, work one stop and still get home with the reserve intact on
+          time, energy and oxygen. Its label names the one that runs out first.
+        </div>
       </Row>
       <Row id="track" title="Curiosity traverse + waypoints" disabled={area.rover.traverse ? undefined : "No rover traverse in this dataset"}>
         <div className="layer-src">NASA/JPL-Caltech MSL localized traverse</div>
       </Row>
       <Row id="pois" title="Points of interest" />
+
+      <DataChecks area={area} />
 
       <h4 className="section-h">Data</h4>
       <div className="small dim">

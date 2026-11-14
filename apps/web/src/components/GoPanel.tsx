@@ -1,10 +1,10 @@
 import { useEffect, useMemo, useRef } from "react";
-import type { LonLat } from "@marsmap/core";
+import { oxygenUsedKg, type LonLat } from "@marsmap/core";
 import { selectedResult, usableTimeS, useStore } from "../store";
 import { routePoints } from "../engine";
 import { buildTimeline, pointNames, positionAt } from "../lib";
 import { bearingDeg, cellIndex, marsDistanceM, nearestOnLine, offsetLonLat } from "../geo";
-import { fmtClock, fmtDist, fmtDur, fmtEnergy } from "../format";
+import { fmtClock, fmtDist, fmtDur, fmtEnergy, fmtO2 } from "../format";
 import { getMap } from "../map/MapView";
 
 const SPEEDS = [30, 120, 600, 1800];
@@ -121,7 +121,11 @@ export function GoPanel() {
   const cell = cellIndex(area.layers.grid, here);
   const homeS = reach && cell != null ? reach.backTimeS[cell] : undefined;
   const homeE = reach && cell != null ? reach.backEnergyKJ[cell] : undefined;
-  const turnBack = homeS != null && Number.isFinite(homeS) && (timeLeft < homeS || (homeE != null && energyLeft < homeE));
+  const o2On = (params.o2BudgetKg ?? 0) > 0 && (params.o2KgPerKJ ?? 0) > 0;
+  const o2Left = (params.o2BudgetKg ?? 0) * (1 - params.reserveFraction) - oxygenUsedKg(params, go.elapsedS, energyUsed);
+  const homeO2 = homeS != null && homeE != null && Number.isFinite(homeS) ? oxygenUsedKg(params, homeS, homeE) : undefined;
+  const turnBack =
+    homeS != null && Number.isFinite(homeS) && (timeLeft < homeS || (homeE != null && energyLeft < homeE) || (o2On && homeO2 != null && o2Left < homeO2));
   const brg = bearingDeg(here, nextPt);
 
   return (
@@ -154,6 +158,12 @@ export function GoPanel() {
             <span>Energy left</span>
             <b className={energyLeft < 0 ? "bad" : ""}>{fmtEnergy(energyLeft)}</b>
           </div>
+          {o2On && (
+            <div>
+              <span>Oxygen left</span>
+              <b className={o2Left < 0 ? "bad" : ""}>{fmtO2(o2Left)}</b>
+            </div>
+          )}
           <div>
             <span>Walk home</span>
             <b>{homeS != null && Number.isFinite(homeS) ? fmtDur(homeS) : "—"}</b>

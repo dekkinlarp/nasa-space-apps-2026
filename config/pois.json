@@ -1,5 +1,6 @@
 {
-  "note": "Points of interest for the Gale boxwork demo area. positionSource says where each position comes from: drill-sites.json / rover waypoint = Curiosity's localized end-of-drive positions (drill holes are within a few metres of the rover), 'illustrative' = a plausible spot picked for the demo from the HiRISE image, not a surveyed target. Keep claims modest.",
+  "note": "Points of interest for the Gale boxwork demo area. positionSource says where each position comes from: drill-sites.json / rover waypoint = Curiosity's localized end-of-drive positions (drill holes are within a few metres of the rover), 'illustrative' = a plausible spot picked for the demo from the HiRISE image, not a surveyed target. Keep claims modest. priority ranks each stop against that objective. evidence lists only what the linked sources say (basis: rover = measured on the ground, orbital = seen from orbit, inferred = our reading of the HiRISE picture); orbital mineral readings are added to each card from data/<area>/minerals.json, not written here.",
+  "objective": "How did groundwater build the boxwork? Compare a hardened ridge with the hollow beside it, then trace how far the network reaches.",
   "pois": [
     {
       "id": "altadena",
@@ -15,7 +16,19 @@
       "sources": [
         "https://science.nasa.gov/blog/curiosity-blog-sols-4709-4715-drilling-high-and-low-in-the-boxwork-unit",
         "https://www.jpl.nasa.gov/news/nasas-curiosity-rover-sees-martian-spiderwebs-up-close/"
-      ]
+      ],
+      "priority": "secondary",
+      "objective": "What was the rock like before the boxwork formed? A baseline to compare ridges and hollows against.",
+      "activity": "Photograph the outcrop around the hole and take a hand sample.",
+      "evidence": [
+        {
+          "claim": "Curiosity drilled a ~6 cm hole here and analysed the powder on board.",
+          "basis": "rover",
+          "source": "https://science.nasa.gov/blog/curiosity-blog-sols-4709-4715-drilling-high-and-low-in-the-boxwork-unit"
+        }
+      ],
+      "confidence": "high",
+      "confidenceNote": "Position is Curiosity's localized end-of-drive waypoint; the drill hole is within a few metres of it."
     },
     {
       "id": "valle-de-la-luna",
@@ -30,7 +43,24 @@
       "positionSource": "drill-sites.json (inferred from rover waypoint, sol 4687)",
       "sources": [
         "https://science.nasa.gov/blog/curiosity-blog-sols-4709-4715-drilling-high-and-low-in-the-boxwork-unit"
-      ]
+      ],
+      "priority": "primary",
+      "objective": "Why did the hollows erode while the ridges stood? The hollow floor is the 'low' half of the ridge-and-hollow pair.",
+      "activity": "Trench through the sand to bedrock, photograph the wall of the trench and sample the floor.",
+      "evidence": [
+        {
+          "claim": "Drill sample from the hollow floor pointed to carbonate.",
+          "basis": "rover",
+          "source": "https://science.nasa.gov/blog/curiosity-blog-sols-4709-4715-drilling-high-and-low-in-the-boxwork-unit"
+        },
+        {
+          "claim": "Curiosity's wheels slipped in the sand that fills the hollows.",
+          "basis": "rover",
+          "source": "https://science.nasa.gov/blog/curiosity-blog-sols-4709-4715-drilling-high-and-low-in-the-boxwork-unit"
+        }
+      ],
+      "confidence": "high",
+      "confidenceNote": "Position is Curiosity's localized end-of-drive waypoint; the drill hole is within a few metres of it."
     },
     {
       "id": "nevado-sajama",
@@ -46,7 +76,24 @@
       "sources": [
         "https://science.nasa.gov/blog/curiosity-blog-sols-4709-4715-drilling-high-and-low-in-the-boxwork-unit",
         "https://www.jpl.nasa.gov/news/nasas-curiosity-rover-sees-martian-spiderwebs-up-close/"
-      ]
+      ],
+      "priority": "primary",
+      "objective": "What hardened the ridges? The ridge top is the 'high' half of the ridge-and-hollow pair.",
+      "activity": "Sample the ridge wall from top to base and photograph the fracture fill in cross-section.",
+      "evidence": [
+        {
+          "claim": "Drill sample from the ridge top contained clay minerals.",
+          "basis": "rover",
+          "source": "https://science.nasa.gov/blog/curiosity-blog-sols-4709-4715-drilling-high-and-low-in-the-boxwork-unit"
+        },
+        {
+          "claim": "The ridges are thought to mark fractures that groundwater flowed through.",
+          "basis": "rover",
+          "source": "https://www.jpl.nasa.gov/news/nasas-curiosity-rover-sees-martian-spiderwebs-up-close/"
+        }
+      ],
+      "confidence": "high",
+      "confidenceNote": "Position is Curiosity's localized end-of-drive waypoint; the drill hole is within a few metres of it."
     },
     {
       "id": "ridge-intersection",
@@ -61,7 +108,23 @@
       "positionSource": "illustrative",
       "sources": [
         "https://www.jpl.nasa.gov/news/nasas-curiosity-rover-sees-martian-spiderwebs-up-close/"
-      ]
+      ],
+      "priority": "secondary",
+      "objective": "Which fractures came first? Where ridges cross, one cuts the other.",
+      "activity": "Walk the junction, photograph which ridge cuts which, and sample each arm.",
+      "evidence": [
+        {
+          "claim": "Several ridges appear to meet here in the HiRISE picture.",
+          "basis": "inferred"
+        },
+        {
+          "claim": "Curiosity imaged the ridges from a distance but did not climb a junction.",
+          "basis": "rover",
+          "source": "https://www.jpl.nasa.gov/news/nasas-curiosity-rover-sees-martian-spiderwebs-up-close/"
+        }
+      ],
+      "confidence": "low",
+      "confidenceNote": "The science reasoning comes from the linked sources, but this exact spot was picked by eye from the HiRISE picture and has not been surveyed."
     },
     {
       "id": "sand-hollow-dig",
@@ -76,7 +139,23 @@
       "positionSource": "illustrative",
       "sources": [
         "https://science.nasa.gov/blog/curiosity-blog-sols-4709-4715-drilling-high-and-low-in-the-boxwork-unit"
-      ]
+      ],
+      "priority": "secondary",
+      "objective": "What lies under the sand in the hollows? The rover could not dig to find out.",
+      "activity": "Dig a hand trench through the sand to the hollow floor and sample it.",
+      "evidence": [
+        {
+          "claim": "A broad hollow that looks sand-covered in the HiRISE picture.",
+          "basis": "inferred"
+        },
+        {
+          "claim": "Curiosity avoided sand-filled hollows after its wheels slipped.",
+          "basis": "rover",
+          "source": "https://science.nasa.gov/blog/curiosity-blog-sols-4709-4715-drilling-high-and-low-in-the-boxwork-unit"
+        }
+      ],
+      "confidence": "low",
+      "confidenceNote": "The science reasoning comes from the linked sources, but this exact spot was picked by eye from the HiRISE picture and has not been surveyed."
     },
     {
       "id": "network-edge",
@@ -91,7 +170,18 @@
       "positionSource": "illustrative",
       "sources": [
         "https://www.jpl.nasa.gov/news/nasas-curiosity-rover-sees-martian-spiderwebs-up-close/"
-      ]
+      ],
+      "priority": "optional",
+      "objective": "How far did the groundwater system reach?",
+      "activity": "Walk the boundary, record where ridges stop and sample both sides.",
+      "evidence": [
+        {
+          "claim": "The ridge pattern appears to fade into layered rock here in the HiRISE picture.",
+          "basis": "inferred"
+        }
+      ],
+      "confidence": "low",
+      "confidenceNote": "The science reasoning comes from the linked sources, but this exact spot was picked by eye from the HiRISE picture and has not been surveyed."
     },
     {
       "id": "ridge-overlook",
@@ -104,7 +194,18 @@
       "roverCouldNot": "Reposition freely for the best viewpoint.",
       "humanCan": "Take a panorama and choose the safest line into the network.",
       "positionSource": "illustrative",
-      "sources": []
+      "sources": [],
+      "priority": "optional",
+      "objective": "Orientation: see the network before walking into it.",
+      "activity": "Take a panorama and choose the line into the hollows.",
+      "evidence": [
+        {
+          "claim": "Slightly higher ground than its surroundings in the elevation data.",
+          "basis": "inferred"
+        }
+      ],
+      "confidence": "low",
+      "confidenceNote": "Picked by eye for the demo; not a surveyed viewpoint."
     },
     {
       "id": "start-central",
