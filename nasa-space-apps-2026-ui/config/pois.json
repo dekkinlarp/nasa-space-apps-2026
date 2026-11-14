@@ -1,0 +1,165 @@
+{
+  "note": "Points of interest for the Gale boxwork demo area. positionSource says where each position comes from: drill-sites.json / rover waypoint = Curiosity's localized end-of-drive positions (drill holes are within a few metres of the rover), 'illustrative' = a plausible spot picked for the demo from the HiRISE image, not a surveyed target. Keep claims modest.",
+  "pois": [
+    {
+      "id": "altadena",
+      "name": "Altadena drill hole",
+      "short": "Altadena",
+      "type": "drill-site",
+      "lon": 137.3840451,
+      "lat": -4.79879294,
+      "summary": "Curiosity's last drill hole before the boxwork campaign, one of the three ~6 cm sample holes in this area.",
+      "roverDid": "Drilled a ~6 cm deep hole and delivered powder to the rover's onboard instruments.",
+      "roverCouldNot": "Sample more than a single spot per drill campaign, or look below the drilled depth.",
+      "humanCan": "Collect a hand sample from the outcrop around the hole for comparison with the boxwork ridges and hollows.",
+      "positionSource": "drill-sites.json (inferred from rover waypoint, sol 4548)",
+      "sources": [
+        "https://science.nasa.gov/blog/curiosity-blog-sols-4709-4715-drilling-high-and-low-in-the-boxwork-unit",
+        "https://www.jpl.nasa.gov/news/nasas-curiosity-rover-sees-martian-spiderwebs-up-close/"
+      ]
+    },
+    {
+      "id": "valle-de-la-luna",
+      "name": "Valle de la Luna (hollow)",
+      "short": "Valle de la Luna",
+      "type": "drill-site",
+      "lon": 137.3810353,
+      "lat": -4.80783916,
+      "summary": "Drill hole in a hollow between boxwork ridges. Analyses pointed to carbonate in the hollow-floor rock.",
+      "roverDid": "Drilled a ~6 cm hole in the hollow floor as the 'low' half of a ridge/hollow pair.",
+      "roverCouldNot": "Dig through the sand that fills most hollows, so bedrock under the sand stays unsampled; wheels slipped in the sand-filled hollows.",
+      "humanCan": "Trench through the hollow-fill sand with a scoop to reach bedrock and see how the carbonate is distributed.",
+      "positionSource": "drill-sites.json (inferred from rover waypoint, sol 4687)",
+      "sources": [
+        "https://science.nasa.gov/blog/curiosity-blog-sols-4709-4715-drilling-high-and-low-in-the-boxwork-unit"
+      ]
+    },
+    {
+      "id": "nevado-sajama",
+      "name": "Nevado Sajama (ridge top)",
+      "short": "Nevado Sajama",
+      "type": "drill-site",
+      "lon": 137.3810041,
+      "lat": -4.80800755,
+      "summary": "Drill hole on a boxwork ridge top, about 20 m from Valle de la Luna. The ridge rock contained clay minerals.",
+      "roverDid": "Drilled a ~6 cm hole on the ridge crest as the 'high' half of the ridge/hollow pair.",
+      "roverCouldNot": "Sample the ridge walls or the central fracture that the groundwater is thought to have followed.",
+      "humanCan": "Sample the ridge wall from top to base and look at the fracture fill in cross-section.",
+      "positionSource": "drill-sites.json (inferred from rover waypoint, sol 4711)",
+      "sources": [
+        "https://science.nasa.gov/blog/curiosity-blog-sols-4709-4715-drilling-high-and-low-in-the-boxwork-unit",
+        "https://www.jpl.nasa.gov/news/nasas-curiosity-rover-sees-martian-spiderwebs-up-close/"
+      ]
+    },
+    {
+      "id": "ridge-intersection",
+      "name": "Unsampled ridge intersection",
+      "short": "Ridge junction",
+      "type": "science-target",
+      "lon": 137.38075,
+      "lat": -4.80485,
+      "summary": "A junction where several boxwork ridges meet. Junctions may show where fractures crossed and which groundwater pulse came first.",
+      "roverDid": "Imaged boxwork ridges from a distance.",
+      "roverCouldNot": "Climb onto narrow ridge crests or reach the junction without risking the wheels.",
+      "humanCan": "Walk the junction, photograph cross-cutting relations and take samples from each ridge arm.",
+      "positionSource": "illustrative",
+      "sources": [
+        "https://www.jpl.nasa.gov/news/nasas-curiosity-rover-sees-martian-spiderwebs-up-close/"
+      ]
+    },
+    {
+      "id": "sand-hollow-dig",
+      "name": "Sand-filled hollow: dig to bedrock",
+      "short": "Sand hollow",
+      "type": "science-target",
+      "lon": 137.38163,
+      "lat": -4.80576,
+      "summary": "A broad hollow covered by wind-blown sand. What lies under the sand is one of the open questions of the campaign.",
+      "roverDid": "Avoided sand-filled hollows after wheel slip.",
+      "roverCouldNot": "Excavate more than a shallow wheel scuff.",
+      "humanCan": "Dig a hand trench through the sand to the hollow floor and sample it.",
+      "positionSource": "illustrative",
+      "sources": [
+        "https://science.nasa.gov/blog/curiosity-blog-sols-4709-4715-drilling-high-and-low-in-the-boxwork-unit"
+      ]
+    },
+    {
+      "id": "network-edge",
+      "name": "Edge of the boxwork network",
+      "short": "Network edge",
+      "type": "science-target",
+      "lon": 137.3837,
+      "lat": -4.8053,
+      "summary": "Where the ridge network fades into the surrounding layered rock. Tracing the edge shows how far the groundwater system reached.",
+      "roverDid": "Mapped the network mostly from orbit and from its drive path.",
+      "roverCouldNot": "Leave its planned path to trace the network boundary.",
+      "humanCan": "Walk the boundary and record where ridges stop, with samples on each side.",
+      "positionSource": "illustrative",
+      "sources": [
+        "https://www.jpl.nasa.gov/news/nasas-curiosity-rover-sees-martian-spiderwebs-up-close/"
+      ]
+    },
+    {
+      "id": "ridge-overlook",
+      "name": "Ridge overlook",
+      "short": "Ridge overlook",
+      "type": "viewpoint",
+      "lon": 137.37976,
+      "lat": -4.80441,
+      "summary": "A slightly higher spot with a view across the boxwork, useful for orienting a crew before entering the hollows.",
+      "roverDid": "Took context panoramas from nearby stops.",
+      "roverCouldNot": "Reposition freely for the best viewpoint.",
+      "humanCan": "Take a panorama and choose the safest line into the network.",
+      "positionSource": "illustrative",
+      "sources": []
+    },
+    {
+      "id": "start-central",
+      "name": "Start: boxwork camp (sol 4820)",
+      "short": "Boxwork camp",
+      "type": "start",
+      "lon": 137.38267,
+      "lat": -4.80778,
+      "summary": "An end-of-drive spot on Curiosity's track about 170 m east of the drill sites (rover tilt under 4°).",
+      "roverDid": "Stopped here on sol 4820 after the drill campaign.",
+      "roverCouldNot": "",
+      "humanCan": "Start and end the EVA here: the rover already drove on this ground.",
+      "positionSource": "rover waypoint sol 4820",
+      "sources": [
+        "https://mars.nasa.gov/mmgis-maps/MSL/Layers/json/MSL_waypoints.json"
+      ]
+    },
+    {
+      "id": "start-north",
+      "name": "Start: north rover stop (sol 4571)",
+      "short": "North rover stop",
+      "type": "start",
+      "lon": 137.38299,
+      "lat": -4.80041,
+      "summary": "An end-of-drive spot on Curiosity's track north of the boxwork, where the rover sat at a low 2° tilt.",
+      "roverDid": "Stopped here on sol 4571 on its way south into the boxwork.",
+      "roverCouldNot": "",
+      "humanCan": "Start and end the EVA here: the rover already drove on this ground.",
+      "positionSource": "rover waypoint sol 4571",
+      "sources": [
+        "https://mars.nasa.gov/mmgis-maps/MSL/Layers/json/MSL_waypoints.json"
+      ]
+    },
+    {
+      "id": "start-south",
+      "name": "Start: south rover stop (sol 4851)",
+      "short": "South rover stop",
+      "type": "start",
+      "lon": 137.38204,
+      "lat": -4.81202,
+      "summary": "An end-of-drive spot on Curiosity's track south of the boxwork band.",
+      "roverDid": "Stopped here on sol 4851 heading south.",
+      "roverCouldNot": "",
+      "humanCan": "Start and end the EVA here: the rover already drove on this ground.",
+      "positionSource": "rover waypoint sol 4851",
+      "sources": [
+        "https://mars.nasa.gov/mmgis-maps/MSL/Layers/json/MSL_waypoints.json"
+      ]
+    }
+  ]
+}
