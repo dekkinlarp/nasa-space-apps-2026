@@ -1,0 +1,21 @@
+{
+  "$schema": "node_modules/wrangler/config-schema.json",
+  "name": "marsmap",
+  // Pinned so a deploy can never land on whichever account the CLI happens to be logged into.
+  "account_id": "3b0a74fed3dfd4328a91e37aa941f1cb",
+  "main": "apps/server/src/worker.ts",
+  "compatibility_date": "2026-11-14",
+  "workers_dev": true,
+  "preview_urls": true,
+  "assets": {
+    // Built web app plus data/<area>, assembled by `pnpm build` (scripts/assemble-assets.mjs).
+    "directory": "apps/web/dist",
+    "binding": "ASSETS",
+    "not_found_handling": "single-page-application",
+    // Only the API runs Worker code; the app and map data are served as free static assets.
+    "run_worker_first": ["/api/*"]
+  },
+  "observability": { "enabled": true },
+  // Settings for branch and pull-request Previews (none differ from production yet).
+  "previews": {}
+}
