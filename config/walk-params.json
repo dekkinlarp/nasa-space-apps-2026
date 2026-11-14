@@ -1,0 +1,28 @@
+{
+  "baseSpeedMps": 1.0,
+  "maxSlopeDeg": 20,
+  "cautionSlopeDeg": 15,
+  "bodyMassKg": 82,
+  "suitMassKg": 104,
+  "gravity": 3.71,
+  "evaLimitS": 21600,
+  "energyBudgetKJ": 10130,
+  "reserveFraction": 0.1667,
+  "stopDwellS": 1800,
+  "radiationMSvPerDay": 0.67,
+  "dwellMetabolicW": 249,
+  "_sources": {
+    "baseSpeedMps": "Apollo planners assumed 3.6 km/h (1 m/s) for an hour-long walk-back from a failed rover (Apollo Lunar Surface Journal, 'Lunar Gaits'). Slope and surface factors slow this further. See packages/core/README.md.",
+    "maxSlopeDeg": "Artemis xEVA concept of operations: walking up/down/across slopes of up to 20 deg (NASA 'EVA Lunar Surface Concept of Operations', 2020).",
+    "cautionSlopeDeg": "ASSUMPTION: 15 deg, below the 20 deg suit capability; the same conops plans traverses with slopes up to ~12-16 deg, and Apollo 15 traversed ~17 deg.",
+    "bodyMassKg": "Average 180 lbm (82 kg) crewmember used by Ogilvie et al., 'Mars Spacesuit Mass Requirements', ICES-2026-127.",
+    "suitMassKg": "230 lbm (104 kg) recommended starting maximum Mars suit mass (PGS + PLSS), ICES-2026-127.",
+    "gravity": "Mars equatorial surface gravity 3.71 m/s^2 (Gale is at 4.8 deg S). NASA NSSDC Mars fact sheet gives 3.73 m/s^2 as the mean value; the difference is about 0.5%.",
+    "evaLimitS": "BASALT analog flight rule EM6: 'A single EVA shall not exceed 6 h' (Beaton et al. 2019, Astrobiology 19(3)).",
+    "energyBudgetKJ": "Exploration suits are sized for an average 1200 BTU/hr (352 W) metabolic rate (ICES-2026-127) over EVAs of up to 8 h (Artemis conops): 352 W x 8 h = 10130 kJ.",
+    "reserveFraction": "BASALT flight rule EM7: plan to a <=5 h timeline plus 30 min margin inside the 6 h cap, so 1 h of 6 h (1/6) is held back.",
+    "stopDwellS": "BASALT planned 30 min per sampling location (Beaton et al. 2019, Table 2).",
+    "radiationMSvPerDay": "MSL RAD measured an average GCR dose equivalent rate of 0.67 mSv/day on the surface in Gale crater (Hassler et al. 2013, Science; SwRI press release).",
+    "dwellMetabolicW": "ISS EVA profile average 850 BTU/hr (249 W), built from Apollo, Skylab and Shuttle data (quoted in ICES-2026-127)."
+  }
+}

@@ -1,0 +1,12 @@
+{
+  "name": "nasa-space-apps-2026",
+  "private": true,
+  "type": "module",
+  "scripts": {
+    "data": "pnpm --filter @marsmap/scripts run all",
+    "dev": "pnpm -r --parallel --filter @marsmap/web --filter @marsmap/server run dev",
+    "test": "pnpm -r run test",
+    "typecheck": "pnpm -r run typecheck"
+  },
+  "packageManager": "pnpm@12.15.0"
+}

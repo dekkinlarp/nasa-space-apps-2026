@@ -1,0 +1,10 @@
+{
+  "note": "Class IDs stored in the surface grid. speedFactor multiplies walking speed; terrainFactor is the Pandolf-style terrain coefficient used for energy. Values are placeholders until packages/core/README.md documents their sources.",
+  "classes": [
+    { "id": 0, "name": "Unknown", "color": "#8a8a8a", "speedFactor": 0.8, "terrainFactor": 1.5, "hazard": false },
+    { "id": 1, "name": "Bedrock", "color": "#c9a27a", "speedFactor": 1.0, "terrainFactor": 1.0, "hazard": false },
+    { "id": 2, "name": "Firm soil", "color": "#b5773f", "speedFactor": 0.9, "terrainFactor": 1.2, "hazard": false },
+    { "id": 3, "name": "Loose sand", "color": "#e8c860", "speedFactor": 0.6, "terrainFactor": 2.1, "hazard": true },
+    { "id": 4, "name": "Rocky rubble", "color": "#6b4a3a", "speedFactor": 0.5, "terrainFactor": 1.8, "hazard": true }
+  ]
+}
