@@ -15,18 +15,21 @@ export function ClickMenu({ lonLat }: { lonLat: LonLat }) {
   const inside = inGrid(area.layers.grid, lonLat);
   return (
     <div className="click-menu">
-      <div className="mono small dim">{fmtLonLat(lonLat)}</div>
       {smp && (
         <div className="click-stats">
-          <span>{fmtNum(smp.elevationM, 1, " m")}</span>
-          <span>{fmtNum(smp.slopeDeg, 1, "°")}</span>
+          <span title="Elevation">{fmtNum(smp.elevationM, 0, " m")}</span>
+          <span title="Slope">
+            {fmtNum(smp.slopeDeg, 1, "°")} <small>slope</small>
+          </span>
           {surf && (
-            <span>
-              <i className="swatch" style={{ background: surf.color }} /> {surf.name}
+            <span title="Surface">
+              <i className="swatch" style={{ background: surf.color }} />
+              {surf.name}
             </span>
           )}
         </div>
       )}
+      <div className="click-ll">{fmtLonLat(lonLat)}</div>
       {inside ? (
         <div className="click-actions">
           <button
@@ -36,7 +39,7 @@ export function ClickMenu({ lonLat }: { lonLat: LonLat }) {
               set({ mapClick: null, tab: "plan" });
             }}
           >
-            Set start here
+            Start here
           </button>
           <button
             className="btn primary"
@@ -45,7 +48,7 @@ export function ClickMenu({ lonLat }: { lonLat: LonLat }) {
               set({ mapClick: null, tab: "plan" });
             }}
           >
-            Add stop here
+            Add stop
           </button>
         </div>
       ) : (

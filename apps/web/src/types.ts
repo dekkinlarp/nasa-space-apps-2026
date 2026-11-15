@@ -5,6 +5,8 @@ export type PoiType = "drill-site" | "science-target" | "start" | "viewpoint";
 export interface Poi {
   id: string;
   name: string;
+  /** Optional short map label; the full name shows on hover / in the card. */
+  short?: string;
   type: PoiType;
   lon: number;
   lat: number;

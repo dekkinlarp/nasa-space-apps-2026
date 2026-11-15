@@ -17,11 +17,11 @@ export function PhotoThumb({ photo, distM }: { photo: RoverPhoto; distM?: number
     <a className="photo" href={photo.sourceUrl ?? photo.url} target="_blank" rel="noreferrer" title="Open source image">
       <img src={photo.url} alt={`Rover image, sol ${photo.sol}`} loading="lazy" />
       <div className="photo-cap">
-        <span>
+        <span className="photo-what" title={photo.instrument ? `Camera: ${photo.instrument}` : undefined}>
           Sol {photo.sol}
           {photo.instrument ? ` · ${photo.instrument}` : ""}
         </span>
-        {distM != null && <span>{fmtDist(distM)} away</span>}
+        {distM != null && <span className="photo-dist">{fmtDist(distM)} away</span>}
       </div>
       {photo.credit && <div className="photo-credit">{photo.credit}</div>}
     </a>
@@ -36,12 +36,8 @@ function PointStats({ lonLat }: { lonLat: LonLat }) {
   return (
     <dl className="stats">
       <div>
-        <dt>Position</dt>
-        <dd className="mono">{fmtLonLat(lonLat)}</dd>
-      </div>
-      <div>
         <dt>Elevation</dt>
-        <dd>{fmtNum(smp?.elevationM, 1, " m")}</dd>
+        <dd>{fmtNum(smp?.elevationM, 0, " m")}</dd>
       </div>
       <div>
         <dt>Slope</dt>
@@ -52,7 +48,8 @@ function PointStats({ lonLat }: { lonLat: LonLat }) {
         <dd>
           {surf ? (
             <>
-              <i className="swatch" style={{ background: surf.color }} /> {surf.name}
+              <i className="swatch" style={{ background: surf.color }} />
+              {surf.name}
             </>
           ) : (
             "—"
@@ -60,9 +57,9 @@ function PointStats({ lonLat }: { lonLat: LonLat }) {
         </dd>
       </div>
       {start && (
-        <div>
+        <div title="Straight-line distance from the start">
           <dt>From start</dt>
-          <dd>{fmtDist(marsDistanceM(start.lonLat, lonLat))} straight line</dd>
+          <dd>{fmtDist(marsDistanceM(start.lonLat, lonLat))}</dd>
         </div>
       )}
     </dl>
@@ -83,25 +80,31 @@ export function PoiCard({ poi }: { poi: Poi }) {
       <button className="card-close" onClick={() => set({ selectedPoi: null })} aria-label="Close">
         ×
       </button>
-      <div className={`type-tag t-${poi.type}`}>{POI_TYPE_LABEL[poi.type] ?? poi.type}</div>
+      <div className="card-tags">
+        <span className={`type-tag t-${poi.type}`}>{POI_TYPE_LABEL[poi.type] ?? poi.type}</span>
+        {poi.positionSource === "illustrative" && (
+          <span className="est-tag" title="A plausible spot picked from the HiRISE image for the demo, not a surveyed target">
+            Illustrative position
+          </span>
+        )}
+      </div>
       <h3>{poi.name}</h3>
-      {poi.positionSource === "illustrative" && <div className="badge est">Illustrative position</div>}
       <p className="lead">{poi.summary}</p>
       {poi.roverDid && (
         <div className="kv">
-          <div className="k">What Curiosity did</div>
+          <div className="k">Curiosity did</div>
           <div>{poi.roverDid}</div>
         </div>
       )}
       {poi.roverCouldNot && (
         <div className="kv">
-          <div className="k">What it couldn't do</div>
+          <div className="k">Curiosity couldn't</div>
           <div>{poi.roverCouldNot}</div>
         </div>
       )}
       {poi.humanCan && (
         <div className="kv">
-          <div className="k">What a crew can do</div>
+          <div className="k">A crew can</div>
           <div>{poi.humanCan}</div>
         </div>
       )}
@@ -133,16 +136,16 @@ export function PoiCard({ poi }: { poi: Poi }) {
           {already ? "In plan" : "Add as stop"}
         </button>
       </div>
-      {poi.sources.length > 0 && (
-        <div className="sources">
-          {poi.sources.map((u) => (
-            <a key={u} href={u} target="_blank" rel="noreferrer">
-              {new URL(u).hostname.replace(/^www\./, "")}
-            </a>
-          ))}
-          <span className="dim small">· position: {poi.positionSource}</span>
-        </div>
-      )}
+      <div className="sources">
+        {poi.sources.map((u) => (
+          <a key={u} href={u} target="_blank" rel="noreferrer" title={u}>
+            {new URL(u).hostname.replace(/^www\./, "")}
+          </a>
+        ))}
+        <span className="card-ll" title={`Position source: ${poi.positionSource}`}>
+          {fmtLonLat(ll)}
+        </span>
+      </div>
     </div>
   );
 }
@@ -205,6 +208,9 @@ export function WaypointCard() {
       ) : (
         <div className="small dim">No rover photos stored for this sol.</div>
       )}
+      <div className="sources">
+        <span className="card-ll">{fmtLonLat(w.lonLat)}</span>
+      </div>
     </div>
   );
 }

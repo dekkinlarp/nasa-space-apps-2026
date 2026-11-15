@@ -1,0 +1,96 @@
+/* Go walker: animated astronaut marker (see GoWalker.tsx / walkerArt.ts). */
+.walker { --cycle: 1.1s; position: relative; width: 62px; height: 74px; pointer-events: none; z-index: 3; }
+.walker-ground { pointer-events: none; z-index: 1; }
+.walker-ground .w-chev { transition: opacity .3s; }
+.walker-ground.is-still .w-chev { opacity: .35; }
+
+.walker .w-shadow {
+  position: absolute; left: 50%; bottom: 3px; width: 40px; height: 10px; margin-left: -20px; border-radius: 50%;
+  background: radial-gradient(closest-side, rgba(0,0,0,.6), rgba(0,0,0,.25) 60%, rgba(0,0,0,0));
+}
+.walker .w-flip { position: absolute; inset: 0; transition: transform .18s ease-out; }
+.walker.face-left .w-flip { transform: scaleX(-1); }
+.walker .w-lean { position: absolute; inset: 0; transform-origin: 50% 92%; transition: transform .5s ease-out; }
+.walker .w-svg { display: block; overflow: visible; filter: drop-shadow(0 0 1.5px rgba(0,0,0,.85)) drop-shadow(0 1px 2px rgba(0,0,0,.5)); }
+
+.walker .w-suit, .walker .w-torso { fill: url(#w-body); stroke: #6f7882; stroke-width: .8; }
+.walker .w-torso { stroke-width: .9; }
+.walker .w-band { fill: #b8c0c8; }
+.walker .w-boot { fill: #59616a; stroke: #2b3036; stroke-width: .7; }
+.walker .w-glove { fill: #e8ebee; stroke: #6f7882; stroke-width: .8; }
+.walker .w-pack { fill: #c4cad1; stroke: #6f7882; stroke-width: .8; }
+.walker .w-helmet { fill: #f7f8f9; stroke: #6f7882; stroke-width: .9; }
+.walker .w-back { filter: brightness(.78); }
+.walker .w-tool { display: none; }
+.walker .w-sparks { display: none; }
+.walker .w-spark { fill: #fff3b0; stroke: #ffb347; stroke-width: .4; transform-box: fill-box; transform-origin: center; }
+
+/* Joints (viewBox units). */
+.walker .w-leg, .walker .w-arm, .walker .w-shin, .walker .w-fore, .walker .w-body, .walker .w-head { transform-box: view-box; }
+.walker .w-leg { transform-origin: 28px 40px; }
+.walker .w-shin { transform-origin: 28px 52px; }
+.walker .w-arm { transform-origin: 29px 26px; }
+.walker .w-fore { transform-origin: 29px 34px; }
+.walker .w-head { transform-origin: 30px 22px; }
+.walker .w-body { transform-origin: 30px 66px; }
+
+/* ---- walk cycle (one full stride per --cycle) ---- */
+.walker.walking .w-leg-f { animation: w-hip var(--cycle) ease-in-out infinite; }
+.walker.walking .w-leg-b { animation: w-hip var(--cycle) ease-in-out infinite; animation-delay: calc(var(--cycle) * -.5); }
+.walker.walking .w-leg-f .w-shin { animation: w-knee var(--cycle) linear infinite; }
+.walker.walking .w-leg-b .w-shin { animation: w-knee var(--cycle) linear infinite; animation-delay: calc(var(--cycle) * -.5); }
+.walker.walking .w-arm-f { animation: w-shoulder var(--cycle) ease-in-out infinite; animation-delay: calc(var(--cycle) * -.5); }
+.walker.walking .w-arm-b { animation: w-shoulder var(--cycle) ease-in-out infinite; }
+.walker.walking .w-fore { transform: rotate(-24deg); }
+.walker.walking .w-body { animation: w-bob calc(var(--cycle) / 2) ease-in-out infinite; }
+.walker.paused * { animation-play-state: paused !important; }
+
+@keyframes w-hip { 0%, 100% { transform: rotate(-26deg); } 50% { transform: rotate(24deg); } }
+@keyframes w-knee {
+  0% { transform: rotate(4deg); } 20% { transform: rotate(10deg); } 50% { transform: rotate(6deg); }
+  68% { transform: rotate(48deg); } 86% { transform: rotate(18deg); } 100% { transform: rotate(4deg); }
+}
+@keyframes w-shoulder { 0%, 100% { transform: rotate(-24deg); } 50% { transform: rotate(22deg); } }
+@keyframes w-bob { 0%, 100% { transform: translateY(0); } 50% { transform: translateY(-1.6px); } }
+
+/* ---- working at a stop: kneel, tap the ground with a rock hammer, sparkles ---- */
+.walker.working .w-body { transform: translateY(9px); }
+.walker.working .w-leg-f { transform: rotate(-84deg); }
+.walker.working .w-leg-f .w-shin { transform: rotate(86deg); }
+.walker.working .w-leg-b { transform: rotate(-4deg); }
+.walker.working .w-leg-b .w-shin { transform: rotate(92deg); }
+.walker.working .w-arm-f { transform: rotate(-62deg); }
+.walker.working .w-arm-f .w-fore { animation: w-tap .7s ease-in-out infinite; }
+.walker.working .w-arm-b { transform: rotate(-30deg); }
+.walker.working .w-arm-b .w-fore { transform: rotate(-40deg); }
+.walker.working .w-head { transform: rotate(14deg); }
+.walker.working .w-tool { display: inline; }
+.walker.working .w-sparks { display: inline; }
+.walker.working .w-spark { animation: w-spark 1.4s ease-out infinite; }
+.walker.working .w-spark.s2 { animation-delay: -.45s; }
+.walker.working .w-spark.s3 { animation-delay: -.9s; }
+@keyframes w-tap { 0%, 100% { transform: rotate(-6deg); } 45% { transform: rotate(-44deg); } 60% { transform: rotate(-2deg); } }
+@keyframes w-spark { 0% { transform: scale(.2); opacity: 0; } 25% { transform: scale(1.1); opacity: 1; } 100% { transform: scale(.4) translateY(-3px); opacity: 0; } }
+
+/* ---- idle (walk complete / GPS standing still): relaxed stance, a slow breath ---- */
+.walker.idle .w-arm-f { transform: rotate(-6deg); }
+.walker.idle .w-arm-b { transform: rotate(8deg); }
+.walker.idle .w-leg-f { transform: rotate(-6deg); }
+.walker.idle .w-leg-b { transform: rotate(6deg); }
+.walker.idle .w-body { animation: w-bob 3s ease-in-out infinite; }
+
+/* ---- label above the head while working ---- */
+.walker .w-label {
+  position: absolute; left: 50%; bottom: 74px; transform: translateX(-50%); display: none; align-items: center; gap: 7px;
+  padding: 4px 9px 4px 5px; white-space: nowrap; border-radius: 999px; font: 600 11.5px/1.2 system-ui, sans-serif; color: #f2fbfa;
+  background: rgba(11,10,12,.88); border: 1px solid rgba(54,209,196,.55); box-shadow: 0 4px 14px rgba(0,0,0,.45);
+}
+.walker .w-label::after { content: ""; position: absolute; left: 50%; bottom: -5px; margin-left: -4px; border: 4px solid transparent; border-top-color: rgba(54,209,196,.55); border-bottom: 0; }
+.walker.working .w-label, .walker.idle.done .w-label { display: flex; }
+.walker .w-label small { display: block; font-weight: 500; font-size: 10.5px; color: #9fdcd6; font-variant-numeric: tabular-nums; }
+.walker .w-ring { flex: none; }
+.walker .w-ring circle:last-child { transition: stroke-dashoffset .25s linear; }
+
+/* Camera-follow toggle in the Go panel. */
+.go-follow.active { border-color: rgba(54,209,196,.7); color: #36d1c4; }
+.go-head .go-follow { margin-left: auto; margin-right: 6px; padding: 3px 9px; font-size: 11px; }
