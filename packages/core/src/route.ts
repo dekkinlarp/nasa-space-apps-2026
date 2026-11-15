@@ -1,5 +1,6 @@
 import { createCostModel, type CostFactor, type MarsCostModel } from "./costModel";
 import { cellToLonLat, lonLatToCell } from "./grid";
+import { oxygenModelOn, oxygenUsedKg } from "./params";
 import { astar } from "./search";
 import type {
   GridSpec,
@@ -288,8 +289,10 @@ export function computeTotals(
   let t = dwell[0] ?? 0;
   let dwellEnergy = (t * dwellW) / 1000;
   let e = dwellEnergy;
+  const o2On = oxygenModelOn(params);
+  const o2Limit = o2On ? params.o2BudgetKg! * (1 - params.reserveFraction) : Infinity;
   let firstOver: number | null = null;
-  let limiting: "time" | "energy" | null = null;
+  let limiting: "time" | "energy" | "oxygen" | null = null;
   segments.forEach((s, k) => {
     distanceM += s.distanceM;
     walkTimeS += s.timeS;
@@ -302,14 +305,17 @@ export function computeTotals(
     dwellEnergy += de;
     t += s.timeS + dw;
     e += s.energyKJ + de;
-    if (firstOver === null && (t > timeLimit || e > energyLimit)) {
+    const o = oxygenUsedKg(params, t, e);
+    if (firstOver === null && (t > timeLimit || e > energyLimit || o > o2Limit)) {
       firstOver = k;
-      const tr = t / timeLimit, er = e / energyLimit;
-      limiting = t > timeLimit && (e <= energyLimit || tr >= er) ? "time" : "energy";
+      // The budget that is most over its limit is reported (time wins ties, then energy).
+      const tr = t / timeLimit, er = e / energyLimit, or = o / o2Limit;
+      limiting = tr >= er && tr >= or ? "time" : er >= or ? "energy" : "oxygen";
     }
   });
   const totalTimeS = t;
   const energyKJ = walkEnergy + dwellEnergy;
+  const o2Kg = oxygenUsedKg(params, totalTimeS, energyKJ);
   return {
     distanceM,
     walkTimeS,
@@ -325,6 +331,7 @@ export function computeTotals(
     dwellEnergyKJ: dwellEnergy,
     timeUsedFraction: timeLimit > 0 ? totalTimeS / timeLimit : Infinity,
     energyUsedFraction: energyLimit > 0 ? energyKJ / energyLimit : Infinity,
+    ...(o2On ? { o2Kg, o2UsedFraction: o2Kg / o2Limit } : {}),
   };
 }
 

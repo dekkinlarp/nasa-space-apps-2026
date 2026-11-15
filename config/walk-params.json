@@ -11,6 +11,9 @@
   "stopDwellS": 1800,
   "radiationMSvPerDay": 0.67,
   "dwellMetabolicW": 249,
+  "o2BudgetKg": 0.55,
+  "o2KgPerKJ": 7.1e-05,
+  "o2LeakKgPerH": 0.005,
   "_sources": {
     "baseSpeedMps": "Apollo planners assumed 3.6 km/h (1 m/s) for an hour-long walk-back from a failed rover (Apollo Lunar Surface Journal, 'Lunar Gaits'). Slope and surface factors slow this further. See packages/core/README.md.",
     "maxSlopeDeg": "Artemis xEVA concept of operations: walking up/down/across slopes of up to 20 deg (NASA 'EVA Lunar Surface Concept of Operations', 2020).",
@@ -23,6 +26,9 @@
     "reserveFraction": "BASALT flight rule EM7: plan to a <=5 h timeline plus 30 min margin inside the 6 h cap, so 1 h of 6 h (1/6) is held back.",
     "stopDwellS": "BASALT planned 30 min per sampling location (Beaton et al. 2019, Table 2).",
     "radiationMSvPerDay": "MSL RAD measured an average GCR dose equivalent rate of 0.67 mSv/day on the surface in Gale crater (Hassler et al. 2013, Science; SwRI press release).",
-    "dwellMetabolicW": "ISS EVA profile average 850 BTU/hr (249 W), built from Apollo, Skylab and Shuttle data (quoted in ICES-2026-127)."
+    "dwellMetabolicW": "ISS EVA profile average 850 BTU/hr (249 W), built from Apollo, Skylab and Shuttle data (quoted in ICES-2026-127).",
+    "o2BudgetKg": "ASSUMPTION / placeholder: 0.55 kg (1.2 lb) of usable primary oxygen, the size of the primary charge in the Shuttle/ISS EMU. No Mars suit tank is defined yet, so this is adjustable in the app.",
+    "o2KgPerKJ": "Physiology: burning food with 1 litre of oxygen releases about 20.1 kJ (mixed diet, respiratory quotient ~0.82), and 1 litre of O2 weighs 1.429 g at 0 C and 1 atm, so 1.429 / 20.1 = 0.071 g O2 per kJ of metabolic energy.",
+    "o2LeakKgPerH": "ASSUMPTION: 5 g/h of oxygen lost through suit leakage, charged for every hour outside. Small next to breathing (about 90 g/h at 352 W)."
   }
 }

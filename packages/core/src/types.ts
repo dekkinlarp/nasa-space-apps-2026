@@ -43,6 +43,14 @@ export interface LayerEntry {
   version: string;
   /** True when the layer is a rough estimate rather than a measurement. */
   estimated: boolean;
+  /** (optional) Human-readable name for layer lists. */
+  name?: string;
+  /** (optional) "science" layers are listed as map overlays without any code change. */
+  group?: "science";
+  /** (optional) Pixel size of the source data when it is coarser than the grid, metres. */
+  nativeResolutionM?: number;
+  /** (optional) Value range for colouring a float layer; values at or below `min` are not drawn. */
+  display?: { min: number; max: number };
 }
 
 /** A georeferenced picture (orbital photo, thermal map) for display only. */
@@ -120,6 +128,16 @@ export interface WalkParams {
    * dwell time against the energy budget. Falls back to 0 (dwell costs no energy) if absent.
    */
   dwellMetabolicW?: number;
+  /**
+   * (added by core, optional) Oxygen model: used = energy x o2KgPerKJ + time x o2LeakKgPerH.
+   * The oxygen limit is skipped when o2BudgetKg or o2KgPerKJ is absent.
+   */
+  /** Usable primary oxygen carried, kg. */
+  o2BudgetKg?: number;
+  /** Oxygen breathed per kJ of metabolic energy, kg/kJ. */
+  o2KgPerKJ?: number;
+  /** Oxygen lost to suit leakage, kg per hour outside. */
+  o2LeakKgPerH?: number;
 }
 
 /** What the search minimises: cost = time*timeW + energy*energyW + hazardMetres*hazardW. */
@@ -190,13 +208,17 @@ export interface RouteTotals {
   withinLimits: boolean;
   /** Index of the first segment that breaks a limit, or null. */
   firstSegmentOverLimit: number | null;
-  limitingFactor: "time" | "energy" | null;
+  limitingFactor: "time" | "energy" | "oxygen" | null;
   /** (added by core, optional) Energy spent working at stops (dwell time x dwellMetabolicW), kJ; included in energyKJ. */
   dwellEnergyKJ?: number;
   /** (added by core, optional) totalTimeS / (evaLimitS x (1 - reserveFraction)). > 1 means over. */
   timeUsedFraction?: number;
   /** (added by core, optional) energyKJ / (energyBudgetKJ x (1 - reserveFraction)). > 1 means over. */
   energyUsedFraction?: number;
+  /** (added by core, optional) Oxygen used over the whole plan, kg. Absent when the oxygen model is off. */
+  o2Kg?: number;
+  /** (added by core, optional) o2Kg / (o2BudgetKg x (1 - reserveFraction)). > 1 means over. */
+  o2UsedFraction?: number;
 }
 
 export interface RouteResult {
@@ -226,4 +248,8 @@ export interface ReachRing {
   budgetS: number;
   /** GeoJSON MultiPolygon coordinates in [lon, lat]. */
   coordinates: number[][][][];
+  /** (added by core, optional) "limit" for the ring from walkLimitRing; time rings leave it unset. */
+  kind?: "limit";
+  /** (added by core, optional) Which budget runs out first along most of a limit ring. */
+  limitedBy?: "time" | "energy" | "oxygen";
 }
