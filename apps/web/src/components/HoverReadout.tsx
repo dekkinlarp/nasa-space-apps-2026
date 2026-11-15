@@ -10,20 +10,16 @@ export function HoverReadout() {
   const picking = useStore((s) => s.pickingStart);
   const surf = surfaceById(area.config.surfaceClasses, hover?.surfaceId);
   return (
-    <div className="readout">
+    <div className={`readout ${hover ? "" : "idle"}`}>
       {picking && <div className="readout-hint">Click the map to place the start</div>}
       {hover ? (
         <>
-          <div className="mono">{fmtLonLat(hover.lonLat)}</div>
           <div className="readout-row">
-            <span>
-              <b>Elev</b> {fmtNum(hover.elevationM, 1, " m")}
+            <span title="Elevation">{fmtNum(hover.elevationM, 0, " m")}</span>
+            <span title="Slope">
+              {fmtNum(hover.slopeDeg, 1, "°")} <small>slope</small>
             </span>
-            <span>
-              <b>Slope</b> {fmtNum(hover.slopeDeg, 1, "°")}
-            </span>
-            <span>
-              <b>Surface</b>{" "}
+            <span title="Surface (mapped class)">
               {surf ? (
                 <>
                   <i className="swatch" style={{ background: surf.color }} />
@@ -34,14 +30,15 @@ export function HoverReadout() {
               )}
             </span>
             {start && (
-              <span>
-                <b>From start</b> {fmtDist(marsDistanceM(start.lonLat, hover.lonLat))}
+              <span title="Straight-line distance from the start">
+                {fmtDist(marsDistanceM(start.lonLat, hover.lonLat))} <small>from start</small>
               </span>
             )}
           </div>
+          <div className="readout-ll">{fmtLonLat(hover.lonLat)}</div>
         </>
       ) : (
-        <div className="dim">Hover the map for elevation, slope and surface</div>
+        <div>Hover the map for slope and surface</div>
       )}
     </div>
   );

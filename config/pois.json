@@ -4,6 +4,7 @@
     {
       "id": "altadena",
       "name": "Altadena drill hole",
+      "short": "Altadena",
       "type": "drill-site",
       "lon": 137.3840451,
       "lat": -4.79879294,
@@ -20,6 +21,7 @@
     {
       "id": "valle-de-la-luna",
       "name": "Valle de la Luna (hollow)",
+      "short": "Valle de la Luna",
       "type": "drill-site",
       "lon": 137.3810353,
       "lat": -4.80783916,
@@ -35,6 +37,7 @@
     {
       "id": "nevado-sajama",
       "name": "Nevado Sajama (ridge top)",
+      "short": "Nevado Sajama",
       "type": "drill-site",
       "lon": 137.3810041,
       "lat": -4.80800755,
@@ -51,6 +54,7 @@
     {
       "id": "ridge-intersection",
       "name": "Unsampled ridge intersection",
+      "short": "Ridge junction",
       "type": "science-target",
       "lon": 137.38075,
       "lat": -4.80485,
@@ -66,6 +70,7 @@
     {
       "id": "sand-hollow-dig",
       "name": "Sand-filled hollow: dig to bedrock",
+      "short": "Sand hollow",
       "type": "science-target",
       "lon": 137.38163,
       "lat": -4.80576,
@@ -81,6 +86,7 @@
     {
       "id": "network-edge",
       "name": "Edge of the boxwork network",
+      "short": "Network edge",
       "type": "science-target",
       "lon": 137.3837,
       "lat": -4.8053,
@@ -96,6 +102,7 @@
     {
       "id": "ridge-overlook",
       "name": "Ridge overlook",
+      "short": "Ridge overlook",
       "type": "viewpoint",
       "lon": 137.37976,
       "lat": -4.80441,
@@ -109,6 +116,7 @@
     {
       "id": "start-central",
       "name": "Start: boxwork camp (sol 4820)",
+      "short": "Boxwork camp",
       "type": "start",
       "lon": 137.38267,
       "lat": -4.80778,
@@ -124,6 +132,7 @@
     {
       "id": "start-north",
       "name": "Start: north rover stop (sol 4571)",
+      "short": "North rover stop",
       "type": "start",
       "lon": 137.38299,
       "lat": -4.80041,
@@ -139,6 +148,7 @@
     {
       "id": "start-south",
       "name": "Start: south rover stop (sol 4851)",
+      "short": "South rover stop",
       "type": "start",
       "lon": 137.38204,
       "lat": -4.81202,
