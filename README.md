@@ -31,7 +31,7 @@ walk" in the app loads one such plan: camp → hollow → ridge junction → san
 |---|---|
 | **Explore** | Curiosity's traverse, waypoints (click one for its sol, rover tilt and the Navcam photos taken there), its drill sites and hand-picked science targets. Each card shows elevation, slope, surface and the orbital mineral readings at that spot. |
 | **Plan** | Choose a start (a rover stop or any point), add stops from a card or by clicking the map, drag to reorder, set work time per stop, loop back to start. Compare the three routes, read the elevation and slope profile, and watch the time, energy and oxygen budget bars and the turn-back time. |
-| **Go** | Plays the planned walk as a simulated astronaut with time, energy and oxygen left, bearing and the walk home. "Use my location" maps your real movement on Earth onto the Mars route. |
+| **Go** | Plays the planned walk as a simulated astronaut with time, energy and oxygen left, bearing and the walk home. |
 | **Layers** | Base imagery (HiRISE photo, CTX, THEMIS day/night infrared), slope, elevation, hillshade, estimated surface and its uncertainty, mineral indicators, walk cost from the start, walk-limit rings. 2D or 3D with adjustable vertical exaggeration. |
 
 The Explore tab opens with typical conditions at Curiosity (air temperature range, daylight hours,
@@ -95,7 +95,7 @@ Defaults live in `config/walk-params.json`; equations, URLs and caveats are in
 
 ## Honest limits
 
-- Mars has no GPS. "Go" plays a simulated walk; "Use my location" maps your real movement onto Mars.
+- Mars has no GPS. "Go" plays a simulated walk.
 - The surface map is an estimate from orbit, not validated against rover observations.
 - The boxwork ridges are sharp in the photo but barely resolved in the elevation data, so ridge and
   hollow targets are hand-placed, not detected.

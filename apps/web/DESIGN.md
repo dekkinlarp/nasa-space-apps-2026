@@ -222,8 +222,7 @@ pointer back, so the map stays draggable in every gap.
   description is on the place's card, not in the list.
 - **Plan tab:** top to bottom, the verdict and the three budgets as one block; the walk as one ordered
   list (start, stops, "Return to start" with a switch); the routes as a comparison table; then the Segment
-  details and Walk settings disclosures. "Simulate walk" and "Use my location" sit in a footer under the
-  scrolling body. With no start and no stops it opens with a card that names the three steps and offers
+  details and Walk settings disclosures. "Simulate walk" sits in a footer under the scrolling body. With no start and no stops it opens with a card that names the three steps and offers
   the demo walk.
 - **Top right:** zoom buttons and the compass dial stack in the corner. The top left holds only the button that brings back a hidden side panel.
 - **Middle:** the point-of-interest card on the right, 340px (300px under 1100px).
@@ -338,7 +337,8 @@ Every label on the map is one physical thing: a small black plate with engraved 
 countdown and place names all use it. This is the one place the map is skeuomorphic, and it follows the
 raised controls and the segmented meters: lit from above, drawn with shadows only.
 
-- **The plate:** 18px tall, 4px corner, the Well fill, 11px medium in the mono face. No border: `shadow-plate`
+- **The plate:** 18px tall, 4px corner, 11px medium in the mono face, on the panels' own Glass fill (a faded
+  black the ground shows through a little, not solid black; no blur, since there are many plates). No border: `shadow-plate`
   gives it a dark keyline, a bright top lip with a soft highlight under it, a dark bottom edge and a short
   shadow on the ground.
 - **The text** is cut in: a 1px dark line above the letters. Ink 2 for a plain measure (a ring's time), Ink
@@ -397,7 +397,9 @@ muted; no colour is added. A route that does not fit says so in red under its na
 The mode as plain text in the Sim colour, a Follow toggle and a close button; the clock; one line for what
 is happening and, while the crew works at a stop, their task under it. Then the distance and bearing to
 the next point, what is left of time, energy and oxygen on segmented meters, and the walk home. Beside the
-clock is the headline: what is left of the tightest budget.
+clock is the headline: what is left of the tightest budget. It folds to a single row: clock, status, play,
+follow, unfold, stop. On the bottom-sheet layout every walk opens folded, and unfolding it folds the sheet, so
+the full panel and the open sheet are never both over the map.
 
 ### Segmented meter
 What is left of one budget, read like a battery (`SegMeter`, in `MiniBar`): a sunk track of 14 or 20

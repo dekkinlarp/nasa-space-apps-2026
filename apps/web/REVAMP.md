@@ -156,7 +156,7 @@ Only what changes. Everything not listed keeps its `DESIGN.md` entry with the ne
 ### Buttons
 - **Primary:** Ink fill, as now.
 - **Go** (replaces Demo): Signal fill, `signal-ink` text, cut bottom-right. Two uses only: "Simulate
-  walk" and the demo walk. "Use my location" stays Secondary.
+  walk" and the demo walk.
 - **Focus:** 2px Signal outline, 2px offset, dark keyline.
 
 ### Selection
