@@ -16,6 +16,7 @@ import {
   planRouteAlternatives,
   reachRings,
   walkLimitRing,
+  fetchLayerBytes,
   oxygenUsedKg,
   samplePoint,
   type CostFactor,
@@ -273,6 +274,21 @@ describe("routing", () => {
     const fine = planRoute(L, P, EFFORT, pts, dwell);
     expect(fine.totals.withinLimits).toBe(true);
     expect(fine.totals.firstSegmentOverLimit).toBeNull();
+  });
+});
+
+describe("layers in parts", () => {
+  it("joins numbered parts in order and reads single files as they are", async () => {
+    const files: Record<string, number[]> = { "a.f32": [1, 2, 3], "b.f32.0": [1, 2], "b.f32.1": [3, 4], "b.f32.2": [5] };
+    const asked: string[] = [];
+    const fetchBinary = async (f: string) => {
+      asked.push(f);
+      return new Uint8Array(files[f]!).buffer;
+    };
+    const entry = { id: "x", dtype: "uint8" as const, units: "", source: "", method: "", version: "1", estimated: false };
+    expect([...new Uint8Array(await fetchLayerBytes({ ...entry, file: "a.f32" }, fetchBinary))]).toEqual([1, 2, 3]);
+    expect([...new Uint8Array(await fetchLayerBytes({ ...entry, file: "b.f32", parts: 3 }, fetchBinary))]).toEqual([1, 2, 3, 4, 5]);
+    expect(asked).toEqual(["a.f32", "b.f32.0", "b.f32.1", "b.f32.2"]);
   });
 });
 

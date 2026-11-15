@@ -25,6 +25,11 @@ export async function runVerify(): Promise<boolean> {
     const have = existsSync(f) ? statSync(f).size : -1;
     log("verify", `${l.file}: ${have} bytes (expected ${want})`);
     ok(have === want, `${l.file} size ${have} != ${want}`);
+    if (l.parts) {
+      // The app reads the parts, not the whole file: they must add up and each must fit one static asset.
+      const sizes = Array.from({ length: l.parts }, (_, i) => (existsSync(`${f}.${i}`) ? statSync(`${f}.${i}`).size : -1));
+      ok(sizes.every((s) => s > 0 && s <= 25 * 2 ** 20) && sizes.reduce((p, q) => p + q, 0) === want, `${l.file} parts do not add up or exceed 25 MiB: ${sizes.join(", ")}`);
+    } else ok(have <= 25 * 2 ** 20, `${l.file} is over 25 MiB and has no parts`);
   }
 
   const elev = readF32(join(dir, "elevation.f32"));

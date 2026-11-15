@@ -29,8 +29,9 @@ synthetic test data (`pnpm --filter @marsmap/web fixture`).
 
 One Worker named `marsmap` serves everything: the built web app and the map data are static assets,
 and Worker code only answers `/api/*`. Vite builds both (Cloudflare's Vite plugin), and Wrangler
-uploads the result without re-bundling. No R2 is needed (about 56 MB, 137 files, largest 9 MB; the
-limit is 25 MiB per file). Config is in `wrangler.jsonc`.
+uploads the result without re-bundling. No R2 is needed: the limit is 25 MiB per file, and the
+pipeline writes any larger raster in parts of at most 24 MiB that the app joins when it loads
+(`parts` in `layers.json`). Config is in `wrangler.jsonc`.
 
 ```bash
 pnpm deploy            # build + wrangler deploy (production)

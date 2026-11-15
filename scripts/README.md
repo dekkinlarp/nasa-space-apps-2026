@@ -31,6 +31,7 @@ little-endian. See `packages/core/src/types.ts`.
 | `grid.json` | `GridSpec` built from `config/area.json` |
 | `layers.json` | `LayerManifest`: the layers below plus the imagery list with exact bounds and pixel sizes |
 | `elevation.f32` | Float32 metres (Mars areoid), 64 000 000 bytes |
+| `<layer>.f32.0`, `.1`, … | The same layer in parts of at most 24 MiB, written by the manifest step for any layer file over that size. `layers.json` records the count in `parts`. The app and the release tarball use the parts; the pipeline keeps using the whole file |
 | `slope.f32` | Float32 degrees, 64 000 000 bytes |
 | `surface.u8` | Surface class ids (`config/surface-classes.json`), **estimated** |
 | `surface_confidence.u8` | 0–255 heuristic confidence (max 200), **estimated** |

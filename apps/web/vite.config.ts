@@ -43,7 +43,9 @@ function mapData(): Plugin {
       const out = join(resolve(this.environment.config.root, this.environment.config.build.outDir), "data");
       rmSync(out, { recursive: true, force: true });
       // Quick-look previews and the full-planet rover files are not used by the app.
-      const skip = [join(src, "preview"), join(src, ".release")];
+      // Layers published in parts ship as their parts only: the whole file is over Cloudflare's 25 MiB per asset.
+      const manifest = JSON.parse(readFileSync(join(src, "layers.json"), "utf8")) as { layers: { file: string; parts?: number }[] };
+      const skip = [join(src, "preview"), join(src, ".release"), ...manifest.layers.filter((l) => l.parts).map((l) => join(src, l.file))];
       cpSync(src, join(out, area), {
         recursive: true,
         filter: (p) => !skip.includes(p) && !/[\\/]rover[\\/]MSL_[^\\/]*\.json$/.test(p),

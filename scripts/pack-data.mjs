@@ -22,10 +22,13 @@ const prev = JSON.parse(readFileSync(releaseFile, "utf8"));
 const asset = `marsmap-${area}-${tag}.tar.gz`;
 const out = join(ROOT, "data", asset);
 
-// Quick-look previews and the full-planet rover files are not used by the app.
+// Quick-look previews and the full-planet rover files are not used by the app. Layers published
+// in parts (over Cloudflare's 25 MiB per asset) ship as their parts only, not the whole file.
+const manifest = JSON.parse(readFileSync(join(ROOT, "data", area, "layers.json"), "utf8"));
+const whole = manifest.layers.filter((l) => l.parts).flatMap((l) => ["--exclude", `^${area}/${l.file}$`]);
 execFileSync(
   "tar",
-  ["-czf", out, "-C", join(ROOT, "data"), "--exclude", `${area}/preview`, "--exclude", `${area}/rover/MSL_*.json`, area],
+  ["-czf", out, "-C", join(ROOT, "data"), "--exclude", `${area}/preview`, "--exclude", `${area}/rover/MSL_*.json`, "--exclude", `${area}/.release`, ...whole, area],
   { stdio: "inherit" },
 );
 const sha256 = createHash("sha256").update(readFileSync(out)).digest("hex");

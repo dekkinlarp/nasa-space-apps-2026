@@ -1,10 +1,10 @@
 /** grid.json + layers.json (LayerManifest). Always rewritten (cheap); preserves imported layers. */
-import { existsSync, readFileSync } from "node:fs";
+import { existsSync, readFileSync, readdirSync, rmSync, statSync } from "node:fs";
 import { join } from "node:path";
 import type { ImageryEntry, LayerEntry, LayerManifest } from "../../packages/core/src/types";
 import { areaDir, cacheDir, gridFromArea, isMain, loadArea, log } from "./lib/area";
 import { DEM_LABEL_URL, DEM_NAME, DEM_URL } from "./lib/demgrid";
-import { writeJson } from "./lib/net";
+import { writeAtomic, writeJson } from "./lib/net";
 import { SURFACE_METHOD } from "./derive";
 
 const VERSION = "1";
@@ -56,6 +56,29 @@ export function builtInLayers(g: { cellSizeM: number } = { cellSizeM: 2 }): Laye
   ];
 }
 
+/**
+ * Cloudflare serves the data as static assets and caps one asset at 25 MiB. A layer file larger
+ * than this is also written as numbered parts (<file>.0, <file>.1, …) and its manifest entry says
+ * how many. The whole file stays on disk for the pipeline; packing and the web build leave it out.
+ */
+export const PART_BYTES = 24 * 1024 * 1024;
+
+function splitLargeLayers(dir: string, layers: LayerEntry[]): LayerEntry[] {
+  return layers.map((l) => {
+    const file = join(dir, l.file);
+    const size = statSync(file).size;
+    // Clear parts left by an earlier run (the file may have shrunk or grown).
+    for (const f of readdirSync(dir)) if (f.startsWith(`${l.file}.`) && /\.\d+$/.test(f)) rmSync(join(dir, f));
+    const { parts: _old, ...entry } = l;
+    if (size <= PART_BYTES) return entry;
+    const data = readFileSync(file);
+    const parts = Math.ceil(size / PART_BYTES);
+    for (let i = 0; i < parts; i++) writeAtomic(`${file}.${i}`, data.subarray(i * PART_BYTES, Math.min(size, (i + 1) * PART_BYTES)));
+    log("manifest", `${l.file}: ${(size / 2 ** 20).toFixed(1)} MiB, written in ${parts} parts`);
+    return { ...entry, parts };
+  });
+}
+
 export function runManifest(): LayerManifest {
   const a = loadArea();
   const g = gridFromArea(a);
@@ -70,7 +93,7 @@ export function runManifest(): LayerManifest {
   // Mineral indicator layers are described by the minerals step (their display range depends on the data).
   const mineralFile = join(cacheDir(a.id), "mineral-layers.json");
   const minerals = existsSync(mineralFile) ? (JSON.parse(readFileSync(mineralFile, "utf8")) as LayerEntry[]) : [];
-  const layers = [...[...builtInLayers(g), ...minerals].filter((l) => !overridden.has(l.id) && existsSync(join(dir, l.file))), ...imported];
+  const layers = splitLargeLayers(dir, [...[...builtInLayers(g), ...minerals].filter((l) => !overridden.has(l.id) && existsSync(join(dir, l.file))), ...imported]);
   const imgIndex = join(cacheDir(a.id), "imagery-entries.json");
   const imagery: ImageryEntry[] = existsSync(imgIndex)
     ? (JSON.parse(readFileSync(imgIndex, "utf8")) as ImageryEntry[]).filter((e) => existsSync(join(dir, e.file)))
