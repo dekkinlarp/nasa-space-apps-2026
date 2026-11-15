@@ -1,6 +1,6 @@
-/** Plan-tab safety budget: stacked time and energy bars against the EVA limits, plus the turn-back point. */
+/** Plan-tab safety budget: stacked time, energy and oxygen bars against the EVA limits, plus the turn-back point. */
 import type { RouteResult, WalkParams } from "@marsmap/core";
-import { fmtDist, fmtDur, fmtEnergy } from "../format";
+import { fmtDist, fmtDur, fmtEnergy, fmtO2 } from "../format";
 import type { PnrResult } from "../pnr";
 import { PNR_METHOD_NOTE } from "../usePnr";
 import "./safety.css";
@@ -143,6 +143,9 @@ export function SafetyBudget({ r, params, pnr, names }: { r: RouteResult; params
   const dwellE = t.dwellEnergyKJ ?? 0;
   const walkE = Math.max(0, t.energyKJ - dwellE);
   const rf = params.reserveFraction;
+  // Oxygen model from the routing core: breathing follows metabolic energy, leakage follows time.
+  const k = params.o2KgPerKJ ?? 0;
+  const o2On = (params.o2BudgetKg ?? 0) > 0 && k > 0;
   return (
     <div className="safety">
       <BudgetBar
@@ -159,8 +162,8 @@ export function SafetyBudget({ r, params, pnr, names }: { r: RouteResult; params
         marker={pnr ? { at: pnr.kind === "pnr" ? pnr.elapsedS : -1, label: `Turn back by ${fmtMin(pnr.elapsedS)}`, kind: pnr.kind } : null}
       />
       <BudgetBar
-        title="Energy / O₂"
-        hint={`Metabolic energy the crew burns (walking + working at stops), our stand-in for suit oxygen, cooling and battery. The budget is ${fmtEnergy(params.energyBudgetKJ)} (a suit sized for 352 W average over 8 h); ${Math.round(rf * 100)}% is held in reserve. Suit consumables are not modelled directly.`}
+        title="Energy"
+        hint={`Metabolic energy the crew burns (walking + working at stops), our stand-in for suit cooling and battery. The budget is ${fmtEnergy(params.energyBudgetKJ)} (a suit sized for 352 W average over 8 h); ${Math.round(rf * 100)}% is held in reserve. Suit consumables are not modelled directly.`}
         parts={[
           { key: "walk", label: "Walk", value: walkE },
           { key: "dwell", label: "Stops", value: dwellE },
@@ -171,6 +174,22 @@ export function SafetyBudget({ r, params, pnr, names }: { r: RouteResult; params
         limitLabel={`${fmtEnergy(params.energyBudgetKJ)} budget, reserve ${fmtEnergy(params.energyBudgetKJ * rf)}`}
         reserveKey={false}
       />
+      {o2On && (
+        <BudgetBar
+          title="Oxygen"
+          hint={`Oxygen breathed (in proportion to the energy burned) plus suit leakage, against ${fmtO2(params.o2BudgetKg ?? 0)} carried. The tank size and leak rate are placeholder assumptions; change the tank under Walk settings.`}
+          parts={[
+            { key: "walk", label: "Walk", value: walkE * k },
+            { key: "dwell", label: "Stops", value: dwellE * k },
+            { key: "leak", label: "Leak", value: (t.totalTimeS / 3600) * (params.o2LeakKgPerH ?? 0) },
+          ]}
+          limit={params.o2BudgetKg ?? 0}
+          reserveFraction={rf}
+          fmt={fmtO2}
+          limitLabel={`${fmtO2(params.o2BudgetKg ?? 0)} carried, reserve ${fmtO2((params.o2BudgetKg ?? 0) * rf)}`}
+          reserveKey={false}
+        />
+      )}
       {pnr && <PnrNote pnr={pnr} names={names} />}
     </div>
   );

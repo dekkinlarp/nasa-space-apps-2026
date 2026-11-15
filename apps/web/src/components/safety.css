@@ -9,6 +9,7 @@
 .budget-track .bz { position: absolute; top: 0; bottom: 0; display: block; }
 .bz.p-walk { background: var(--c-walk); border-radius: 4px 0 0 4px; }
 .bz.p-dwell { background: var(--c-dwell); }
+.bz.p-leak { background: #7a808a; }
 .bz.reserve, .sw.reserve {
   background: repeating-linear-gradient(135deg, #3d302a 0 3px, #241c18 3px 7px);
 }
@@ -29,6 +30,7 @@
 .sw { display: inline-block; width: 9px; height: 9px; border-radius: 2px; margin-right: 4px; vertical-align: -1px; }
 .sw.p-walk { background: var(--c-walk); }
 .sw.p-dwell { background: var(--c-dwell); }
+.sw.p-leak { background: #7a808a; }
 .sw.left { background: var(--c-left); box-shadow: inset 0 0 0 1px var(--c-left-edge); }
 
 .pnr-note { display: flex; gap: 9px; align-items: flex-start; border-radius: 6px; padding: 8px 10px; margin: 4px 0 12px; border: 1px solid var(--line-2); background: var(--bg); font-size: 12.5px; cursor: help; }
