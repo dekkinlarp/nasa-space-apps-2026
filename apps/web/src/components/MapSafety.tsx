@@ -8,7 +8,7 @@ import { fmtEnergy, fmtO2 } from "../format";
 import { fmtMin as fmtDur } from "./SafetyBudget";
 import { getMap, RELAYOUT_LABELS } from "../map/MapView";
 import { PNR_METHOD_NOTE, usePnr } from "../usePnr";
-import { MAP_LABEL_BOX, MAP_LABEL_TONE } from "../map/mapLabel";
+import { MAP_LABEL_BOX, MAP_LABEL_MARK, MAP_LABEL_TONE } from "../map/mapLabel";
 import { MiniBar } from "@/components/ui/mini-bar";
 import { Panel } from "@/components/ui/panel";
 import { cn } from "@/lib/utils";
@@ -37,8 +37,8 @@ export function MapSafety({ planVisible }: { planVisible: boolean }) {
         : `Tightest point of the walk: turning back here still leaves ${fmtDur(pnr.marginS)} spare.`;
     // A map label on a stem with a diamond at the spot; at a stop the stop's own marker is the spot.
     el.innerHTML =
-      `<div class="pnr-chip flex items-center gap-[5px] ${MAP_LABEL_BOX} ${isPnr ? MAP_LABEL_TONE.warn : MAP_LABEL_TONE.ok}">` +
-      `<svg class="size-3 flex-none" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.5" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><path d="M9 14 4 9l5-5"/><path d="M4 9h10.5a5.5 5.5 0 0 1 5.5 5.5a5.5 5.5 0 0 1-5.5 5.5H11"/></svg><b class="font-semibold"></b></div>` +
+      `<div class="pnr-chip flex items-center gap-[5px] ${MAP_LABEL_BOX} ${MAP_LABEL_TONE.strong}">` +
+      `<svg class="size-3 flex-none ${isPnr ? MAP_LABEL_MARK.warn : MAP_LABEL_MARK.ok}" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.5" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><path d="M9 14 4 9l5-5"/><path d="M4 9h10.5a5.5 5.5 0 0 1 5.5 5.5a5.5 5.5 0 0 1-5.5 5.5H11"/></svg><b class="font-semibold"></b></div>` +
       `<div class="h-2 w-0.5 ${isPnr ? "bg-warn" : "bg-ok"}"></div>` +
       (pnr.atStop ? "" : `<div class="-mb-[5px] size-2.5 rotate-45 border-2 border-well ${isPnr ? "bg-warn shadow-[0_0_0_1.5px_var(--warn)]" : "bg-ok shadow-[0_0_0_1.5px_var(--ok)]"}"></div>`);
     el.querySelector("b")!.textContent = label;

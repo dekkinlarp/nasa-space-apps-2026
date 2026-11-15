@@ -1,8 +1,9 @@
 import { CompassControl } from "./compassControl";
+import { ZoomHomeControl } from "./zoomHomeControl";
 import { useEffect, useRef, useState } from "react";
 import { createPortal } from "react-dom";
 import maplibregl, { type GeoJSONSource, type ImageSource, type Map as MLMap } from "maplibre-gl";
-import { MAP_LABEL, MAP_LABEL_BOX, MAP_LABEL_TONE, STOP_BADGE, STOP_BADGE_NUMBER, STOP_BADGE_START } from "./mapLabel";
+import { MAP_LABEL, MAP_LABEL_BOX, MAP_LABEL_HALO, MAP_LABEL_TONE, mapLabelDot, STOP_BADGE, STOP_BADGE_NUMBER, STOP_BADGE_START } from "./mapLabel";
 import type { GridSpec, LonLat, ReachRing, RouteResult } from "@marsmap/core";
 import { selectedResult, useStore, type LayerState, type OverlayId } from "../store";
 import type { AreaData, DisplayLayers, Poi } from "../types";
@@ -11,13 +12,13 @@ import { sampleBest } from "../lib";
 import { confidenceUrl, costUrl, elevationUrl, SCIENCE_RAMPS, scienceUrl, slopeUrl, surfaceUrl } from "./rasters";
 import { loadFloatLayer } from "../data";
 import { CONTOUR_COLOR, CONTOUR_FINE_ZOOM, CONTOUR_MID_ZOOM, contourFeatures } from "./contours";
-import { demMaxZoom, demTilesUrl, DEM_TILE_SIZE, registerDemProtocol, setDemSource } from "./dem";
+import { demHeight, demMaxZoom, demTilesUrl, DEM_TILE_SIZE, registerDemProtocol, setDemSource } from "./dem";
 import { IMAGERY_TILE_SIZE, imageryGroups, imageryMaxZoom, imageryTilesUrl, registerImageryProtocol, setImageryArea } from "./imageryTiles";
 import { fmtDur } from "../format";
 import { ClickMenu } from "../components/ClickMenu";
 import { routeSlopeFeatures } from "./routeSlope";
 import { setRenderDistance, tuneTerrain } from "./terrainPerf";
-import { keepCameraAboveGround } from "./cameraClearance";
+import { followGroundAfterEase, keepCameraAboveGround } from "./cameraClearance";
 
 let mapInstance: MLMap | null = null;
 export const getMap = () => mapInstance;
@@ -59,6 +60,9 @@ export function mountScaleBar(slot: HTMLElement | null) {
   scaleSlot = slot;
   placeScaleBar();
 }
+/** Set while the map is still opening: fits the opening view again (see the map's load handler). */
+let refitOpening: (() => void) | null = null;
+const OPENING_SETTLE_MS = 3000;
 let pendingInsets: { top?: number; right?: number; bottom?: number; left?: number } | null = null;
 
 /**
@@ -76,6 +80,12 @@ export function setMapInsets(p: { top?: number; right?: number; bottom?: number;
   const padding = { top: p.top ?? 0, right: p.right ?? 0, bottom: p.bottom ?? 0, left: p.left ?? 0 };
   const cur = map.getPadding();
   if (cur.top === padding.top && cur.right === padding.right && cur.bottom === padding.bottom && cur.left === padding.left) return;
+  if (refitOpening) {
+    // Still opening: take the insets at once and fit the opening view inside them.
+    map.jumpTo({ padding });
+    refitOpening();
+    return;
+  }
   map.easeTo({ padding, duration: ms, easing: (t) => 1 - Math.pow(1 - t, 3) });
 }
 
@@ -135,8 +145,151 @@ const TILT_LEAVE_3D = 1;
 let suppressNextClick = 0;
 /** True while the 2D/3D state is being changed by a tilt gesture rather than the 2D/3D buttons. */
 let tiltDriven = false;
-/** True while the 2D button is levelling the camera, so that animation is not read as a tilt gesture. */
-let levelling = false;
+/** True while the 2D/3D buttons are swinging the camera, so that animation is not read as a tilt gesture. */
+let switching = false;
+
+/** How long the ground takes to rise when the 3D button is pressed, to sink for the 2D button, and to do either for a tilt gesture. */
+const TERRAIN_RISE_MS = 900;
+const TERRAIN_LEVEL_MS = 650;
+const TERRAIN_TILT_MS = 350;
+/** Longest the transition waits for the first terrain heights before starting anyway. */
+const TERRAIN_WAIT_MS = 600;
+/** Terrain is switched on at this height (not 0, so loaded heights can be told from missing ones). */
+const TERRAIN_FLAT = 0.001;
+const easeInOut = (t: number) => (t < 0.5 ? 4 * t * t * t : 1 - Math.pow(-2 * t + 2, 3) / 2);
+let stopTerrainAnim: (() => void) | null = null;
+
+/**
+ * The 2D/3D transition: ease the height of the terrain to a vertical exaggeration (0 is flat) and, when
+ * `camera` is given, swing the camera to that pitch and heading in the same motion. `done` runs when it gets there.
+ *
+ * The camera is moved with jumpTo on every frame rather than one easeTo: jumpTo puts the camera on the
+ * ground under the centre each time, so it rides up with the rising ground, where easeTo (MapLibre 5.24)
+ * holds the height it started with. Touching the map hands the camera back to the user; the ground still finishes moving.
+ */
+function animateTerrain(map: MLMap, exaggeration: number, camera: { pitch: number; bearing: number } | null, ms: number, done?: () => void) {
+  stopTerrainAnim?.();
+  if (camera) stopGlide?.();
+  const terrain = map.terrain;
+  if (!terrain) return;
+  const from = { exaggeration: terrain.exaggeration, pitch: map.getPitch(), bearing: map.getBearing() };
+  // Turn the short way round.
+  const turn = camera ? ((camera.bearing - from.bearing + 540) % 360) - 180 : 0;
+  const el = map.getCanvasContainer();
+  const INPUT = ["pointerdown", "wheel", "touchstart"] as const;
+  let raf = 0;
+  let steering = !!camera;
+  const release = () => {
+    steering = false;
+    switching = false;
+  };
+  const stop = () => {
+    cancelAnimationFrame(raf);
+    for (const ev of INPUT) el.removeEventListener(ev, release);
+    if (steering) switching = false;
+    stopTerrainAnim = null;
+  };
+  stopTerrainAnim = stop;
+  if (steering) {
+    switching = true;
+    for (const ev of INPUT) el.addEventListener(ev, release, { passive: true });
+  }
+  // Rising from flat waits (briefly) for the heights under the centre to load, so the camera is never
+  // moved against ground MapLibre cannot measure yet.
+  const asked = performance.now();
+  let t0 = asked;
+  let waiting = from.exaggeration < 0.01 && exaggeration > 0;
+  const groundLoaded = () => {
+    const c = map.getCenter();
+    const want = demHeight(c.lng, c.lat);
+    const got = terrain.getElevationForLngLatZoom(c, map.transform.tileZoom) / (terrain.exaggeration || 1);
+    return Math.abs(got - want) <= Math.max(50, Math.abs(want) * 0.1);
+  };
+  const step = () => {
+    if (map.terrain !== terrain) return stop();
+    if (waiting) {
+      t0 = performance.now();
+      waiting = t0 - asked < TERRAIN_WAIT_MS && !groundLoaded();
+      if (waiting) {
+        map.triggerRepaint();
+        raf = requestAnimationFrame(step);
+        return;
+      }
+    }
+    const k = ms > 0 ? Math.min(1, (performance.now() - t0) / ms) : 1;
+    const e = easeInOut(k);
+    terrain.exaggeration = from.exaggeration + (exaggeration - from.exaggeration) * e;
+    if (steering && camera) map.jumpTo({ pitch: from.pitch + (camera.pitch - from.pitch) * e, bearing: from.bearing + turn * e });
+    else map.triggerRepaint();
+    if (k < 1) raf = requestAnimationFrame(step);
+    else {
+      stop();
+      done?.();
+    }
+  };
+  step();
+}
+
+let stopGlide: (() => void) | null = null;
+/** True while glideTo is moving the camera (map.isMoving() is false between its steps). */
+export const isCameraGliding = () => !!stopGlide;
+
+/**
+ * Move the camera to a view over `ms`, one jumpTo per frame. Used instead of easeTo because in 3D
+ * easeTo (MapLibre 5.24) keeps the ground height of the place it left for the whole move, which
+ * buries the camera when the destination is higher. Each step here is given the ground height under
+ * its own centre. Touching the map stops it where it is.
+ */
+function glideTo(map: MLMap, to: { center: maplibregl.LngLat; zoom: number; pitch: number; bearing: number }, ms: number) {
+  stopGlide?.();
+  const from = { center: map.getCenter(), zoom: map.getZoom(), pitch: map.getPitch(), bearing: map.getBearing() };
+  const turn = ((to.bearing - from.bearing + 540) % 360) - 180;
+  const el = map.getCanvasContainer();
+  const INPUT = ["pointerdown", "wheel", "touchstart"] as const;
+  let raf = 0;
+  const stop = () => {
+    cancelAnimationFrame(raf);
+    for (const ev of INPUT) el.removeEventListener(ev, stop);
+    switching = false;
+    stopGlide = null;
+  };
+  stopGlide = stop;
+  switching = true;
+  for (const ev of INPUT) el.addEventListener(ev, stop, { passive: true });
+  const t0 = performance.now();
+  const step = () => {
+    const k = Math.min(1, (performance.now() - t0) / ms);
+    const e = easeInOut(k);
+    const lng = from.center.lng + (to.center.lng - from.center.lng) * e, lat = from.center.lat + (to.center.lat - from.center.lat) * e;
+    map.jumpTo({
+      center: [lng, lat],
+      zoom: from.zoom + (to.zoom - from.zoom) * e,
+      pitch: from.pitch + (to.pitch - from.pitch) * e,
+      bearing: from.bearing + turn * e,
+      ...(map.terrain ? { elevation: demHeight(lng, lat) * map.terrain.exaggeration } : {}),
+    });
+    if (k < 1) raf = requestAnimationFrame(step);
+    else stop();
+  };
+  step();
+}
+
+/**
+ * Fly the camera to a point or to a box of ground: the app's "show on the map" move. In 2D this is
+ * MapLibre's own flight; in 3D it is glideTo, keeping the tilt and heading the user has set.
+ */
+export function showOnMap(target: { center: LonLat; zoom: number } | { bounds: [LonLat, LonLat]; padding: number; maxZoom: number }, ms = 900) {
+  const map = mapInstance;
+  if (!map) return;
+  if ("center" in target) {
+    if (!map.terrain) map.flyTo({ center: target.center, zoom: target.zoom, duration: ms });
+    else glideTo(map, { center: maplibregl.LngLat.convert(target.center), zoom: target.zoom, pitch: map.getPitch(), bearing: map.getBearing() }, ms);
+    return;
+  }
+  if (!map.terrain) return void map.fitBounds(target.bounds, { padding: target.padding, maxZoom: target.maxZoom, duration: ms });
+  const cam = map.cameraForBounds(target.bounds, { padding: target.padding, maxZoom: target.maxZoom, bearing: map.getBearing() });
+  if (cam?.center && cam.zoom != null) glideTo(map, { center: maplibregl.LngLat.convert(cam.center), zoom: cam.zoom, pitch: map.getPitch(), bearing: map.getBearing() }, ms);
+}
 
 function attachGestures(map: MLMap): () => void {
   const el = map.getCanvasContainer();
@@ -386,7 +539,7 @@ const POI_DOT = "block size-3 rounded-full border-[1.5px] border-well shadow-[0_
 /** Sits beside the dot (further out once the pin carries a stop number), flips to the left near an edge,
     hides when it would collide, and becomes a boxed full name on hover or when selected: the box is MAP_LABEL_BOX
     (map/mapLabel.ts) spelled out behind the group variant. */
-const POI_LABEL = `poi-label ${MAP_LABEL} pointer-events-none absolute -top-px left-[19px] text-white text-shadow-[0_0_2px_#000,0_0_4px_#000,0_1px_6px_#000] group-[.in-plan]/pin:left-[23px] group-[.flip]/pin:right-[19px] group-[.flip]/pin:left-auto group-[.in-plan.flip]/pin:right-[23px] group-[.in-plan.flip]/pin:left-auto group-[.lbl-off:not(:hover,.selected)]/pin:invisible group-[:is(:hover,.selected)]/pin:-top-0.5 group-[:is(:hover,.selected)]/pin:rounded-sm group-[:is(:hover,.selected)]/pin:border group-[:is(:hover,.selected)]/pin:border-input group-[:is(:hover,.selected)]/pin:bg-glass-thick group-[:is(:hover,.selected)]/pin:px-1.5 group-[:is(:hover,.selected)]/pin:text-shadow-none [.lowzoom_&]:hidden [.lowzoom_.poi-pin:hover_&]:inline`;
+const POI_LABEL = `poi-label ${MAP_LABEL} pointer-events-none absolute -top-px left-[19px] ${MAP_LABEL_HALO} group-[.in-plan]/pin:left-[23px] group-[.flip]/pin:right-[19px] group-[.flip]/pin:left-auto group-[.in-plan.flip]/pin:right-[23px] group-[.in-plan.flip]/pin:left-auto group-[.lbl-off:not(:hover,.selected)]/pin:invisible group-[:is(:hover,.selected)]/pin:-top-0.5 group-[:is(:hover,.selected)]/pin:rounded-sm group-[:is(:hover,.selected)]/pin:border group-[:is(:hover,.selected)]/pin:border-input group-[:is(:hover,.selected)]/pin:bg-glass-thick group-[:is(:hover,.selected)]/pin:px-1.5 group-[:is(:hover,.selected)]/pin:[-webkit-text-stroke:0px] [.lowzoom_&]:hidden [.lowzoom_.poi-pin:hover_&]:inline`;
 /** Stop markers carry the same badge as the stop numbers in the Plan tab's list, larger and with a keyline for the ground. */
 const STOP_MARKER = `stop-marker ${STOP_BADGE} size-[22px] cursor-grab text-[11px] coarse:size-[30px] coarse:text-base`;
 const STOP_NUMBER = `${STOP_MARKER} ${STOP_BADGE_NUMBER} shadow-[0_0_0_1px_rgba(0,0,0,0.6)]`;
@@ -458,6 +611,17 @@ function placePoiLabels(map: MLMap, pins: { el: HTMLElement; ll: LonLat; rank: n
     });
 }
 
+/** Margin kept round the points of interest in the opening (and home) view, px. */
+const HOME_PADDING = 40;
+const HOME_MS = 900;
+/** The angle the 3D button and the home button put the camera at. */
+/**
+ * The heading the map opens at and comes home to: east at the top of the screen, i.e. the map turned
+ * a quarter turn anticlockwise from north-up. The compass still turns north up when clicked.
+ */
+const HOME_BEARING = 90;
+const HOME_3D = { pitch: 60, bearing: HOME_BEARING - 20 };
+
 /** Open on the points of interest (the boxwork), not the whole region. */
 function initialBounds(a: AreaData): [number, number, number, number] {
   const g = a.manifest.grid;
@@ -496,7 +660,8 @@ export function MapView() {
         layers: [{ id: "bg", type: "background", paint: { "background-color": "rgba(0,0,0,0)" } }],
       },
       bounds: initialBounds(area),
-      fitBoundsOptions: { padding: 40 },
+      bearing: HOME_BEARING,
+      fitBoundsOptions: { padding: HOME_PADDING, bearing: HOME_BEARING },
       maxBounds: [g.west - padLon, g.south - padLat, g.east + padLon, g.north + padLat],
       minZoom: 10,
       maxZoom: 21,
@@ -509,8 +674,19 @@ export function MapView() {
     mapInstance = map;
     const detachGestures = attachGestures(map);
     keepCameraAboveGround(map);
-    // Top-right corner, stacking downward: zoom buttons, then the compass dial.
-    map.addControl(new maplibregl.NavigationControl({ showCompass: false }), "top-right");
+    followGroundAfterEase(map);
+    // Home: the opening view of the points of interest, at the default angle of the current mode
+    // (3D: tilted and turned a little; 2D: straight down, at the home heading).
+    const goHome = () => {
+      const in3d = useStore.getState().view3d && !!map.terrain;
+      const bearing = in3d ? HOME_3D.bearing : HOME_BEARING;
+      const cam = map.cameraForBounds(initialBounds(area), { padding: HOME_PADDING, bearing });
+      // Not while the 2D/3D switch is still swinging the camera.
+      if (!cam?.center || cam.zoom == null || (switching && !stopGlide)) return;
+      glideTo(map, { center: maplibregl.LngLat.convert(cam.center), zoom: cam.zoom, pitch: in3d ? HOME_3D.pitch : 0, bearing }, HOME_MS);
+    };
+    // Top-right corner, stacking downward: the zoom and home strip, then the compass dial.
+    map.addControl(new ZoomHomeControl(goHome), "top-right");
     map.addControl(new CompassControl(), "top-right");
     // MapLibre draws the scale bar; the app shows it beside the view controls (see mountScaleBar).
     map.addControl(new maplibregl.ScaleControl({ unit: "metric" }), "bottom-right");
@@ -525,6 +701,20 @@ export function MapView() {
         pendingInsets = null;
         setMapInsets(p, 0);
       }
+      // Fit the opening view again now the map has its final size and insets, so it is the view home returns to.
+      // The panels report their insets a little after load, so the fit is repeated for those until the user touches the map.
+      const refit = () => {
+        const cam = map.cameraForBounds(initialBounds(area), { padding: HOME_PADDING, bearing: HOME_BEARING });
+        if (cam) map.jumpTo(cam);
+      };
+      refit();
+      refitOpening = refit;
+      const settle = () => {
+        refitOpening = null;
+        for (const ev of ["pointerdown", "wheel", "touchstart"]) map.getCanvasContainer().removeEventListener(ev, settle);
+      };
+      for (const ev of ["pointerdown", "wheel", "touchstart"]) map.getCanvasContainer().addEventListener(ev, settle, { passive: true });
+      setTimeout(settle, OPENING_SETTLE_MS);
       const coords = gridCoords(g);
       // The mapped square is solid ground: with imagery faded or off it stays dark instead of showing stars through it.
       map.addSource("ground", { type: "geojson", data: { type: "Feature", properties: {}, geometry: { type: "Polygon", coordinates: [[...coords, coords[0]]] } } });
@@ -635,17 +825,20 @@ export function MapView() {
     map.on("dblclick", () => clearTimeout(tapTimer));
     // Apple Maps style: tilting the flat map slides into 3D, levelling it out returns to 2D.
     map.on("pitch", () => {
-      if (levelling || !area.overview.elevation || useStore.getState().view3d || map.getPitch() < TILT_ENTER_3D) return;
+      if (switching || !area.overview.elevation || useStore.getState().view3d || map.getPitch() < TILT_ENTER_3D) return;
       tiltDriven = true;
       useStore.getState().set({ view3d: true });
     });
     map.on("moveend", () => {
-      if (!useStore.getState().view3d || map.getPitch() > TILT_LEAVE_3D || map.isMoving()) return;
+      if (switching || !useStore.getState().view3d || map.getPitch() > TILT_LEAVE_3D || map.isMoving()) return;
       tiltDriven = true;
       useStore.getState().set({ view3d: false });
     });
 
     return () => {
+      stopTerrainAnim?.();
+      stopGlide?.();
+      refitOpening = null;
       detachGestures();
       map.remove();
       mapInstance = null;
@@ -845,11 +1038,13 @@ export function MapView() {
       const el = document.createElement("div");
       el.className = RING_LABEL;
       const isLimit = r.kind ? r.kind === "limit" : r.budgetS === Math.max(...rings.map((x) => x.budgetS));
-      el.textContent = isLimit ? `Limit${r.limitedBy ? ` · ${r.limitedBy}` : ""}` : fmtDur(r.budgetS);
+      // The limit is a status, shown once on a dot in the line's own warning colour; the times are plain measures.
+      if (isLimit) el.innerHTML = mapLabelDot("warn");
+      el.append(isLimit ? `Limit${r.limitedBy ? ` · ${r.limitedBy}` : ""}` : fmtDur(r.budgetS));
       el.title = isLimit
         ? `Walk limit: the farthest you can go, work one stop and still get home with the reserve intact on time, energy and oxygen${r.limitedBy ? `. Here ${r.limitedBy} runs out first` : ""}`
         : `Reachable and back to the start in ${fmtDur(r.budgetS)} of walking (round trip)`;
-      el.className += ` ${isLimit ? MAP_LABEL_TONE.warn : MAP_LABEL_TONE.neutral}`;
+      el.className += ` ${isLimit ? MAP_LABEL_TONE.strong : MAP_LABEL_TONE.neutral}`;
       el.setAttribute("aria-label", el.title);
       ringMarkers.current.push(new maplibregl.Marker({ element: el, anchor: "bottom" }).setLngLat(outline[0] as [number, number]).addTo(map));
       el.tabIndex = -1;
@@ -1021,25 +1216,19 @@ export function MapView() {
     if (hasElev) map.touchPitch.enable();
     else map.touchPitch.disable();
     if (view3d && hasElev) {
-      map.setTerrain({ source: "dem", exaggeration });
-      tuneTerrain(map, area.manifest.grid);
-      // The camera keeps its altitude above the *centre* elevation; refresh it once DEM tiles are
-      // in so the camera is not left inside a raised mesa.
-      const lift = () => {
-        const e = map.queryTerrainElevation(map.getCenter());
-        if (e != null) map.jumpTo({ elevation: e });
-      };
-      map.once("idle", lift);
-      // The 3D button swings the camera down; a tilt gesture is already holding it where the user wants.
-      if (switched && !byTilt && map.getPitch() < 30) map.easeTo({ pitch: 60, bearing: map.getBearing() || -20, duration: 900 });
-    } else {
-      map.setTerrain(null);
-      // The 2D button levels the camera and faces north; levelling by gesture keeps the heading.
-      if (switched && !byTilt && map.getPitch() > 0) {
-        levelling = true;
-        map.once("moveend", () => (levelling = false));
-        map.easeTo({ pitch: 0, bearing: 0, duration: 600 });
+      // The ground rises out of the flat map while the camera swings down, instead of popping up at full height.
+      if (!map.terrain) {
+        map.setTerrain({ source: "dem", exaggeration: TERRAIN_FLAT });
+        tuneTerrain(map, area.manifest.grid);
       }
+      // The 3D button swings the camera down; a tilt gesture is already holding it where the user wants.
+      const swing = switched && !byTilt && map.getPitch() < 30 ? { pitch: HOME_3D.pitch, bearing: Math.abs(map.getBearing() - HOME_BEARING) < 0.5 ? HOME_3D.bearing : map.getBearing() } : null;
+      animateTerrain(map, exaggeration, swing, !switched ? 0 : byTilt ? TERRAIN_TILT_MS : TERRAIN_RISE_MS);
+    } else if (map.terrain) {
+      // The ground sinks back into the flat map, and only then is the terrain switched off.
+      // The 2D button also levels the camera and turns back to the home heading; levelling by gesture keeps the heading.
+      const level = switched && !byTilt && map.getPitch() > 0 ? { pitch: 0, bearing: HOME_BEARING } : null;
+      animateTerrain(map, 0, level, level ? TERRAIN_LEVEL_MS : TERRAIN_TILT_MS, () => map.setTerrain(null));
     }
   }, [ready, view3d, exaggeration, area]);
 

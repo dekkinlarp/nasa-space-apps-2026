@@ -6,6 +6,10 @@
  * area's median elevation so the map centre sits near 0 m (negatives are fine in Terrarium). Encoding: Terrarium
  * (h = R*256 + G + B/256 - 32768).
  *
+ * Cells with no elevation (the strips beside the DEM mosaic, holes in it) take the height of the nearest
+ * measured cell in their row, for drawing only. Left at the reference height they stood kilometres
+ * below the ground next to them and showed as a wall of smeared imagery around the map.
+ *
  * Heights come from the full-resolution planning window where there is one, and from the region's
  * coarse overview everywhere else. When the window moves, the tile URLs get a new version so MapLibre
  * fetches fresh tiles (see demTilesUrl).
@@ -38,6 +42,56 @@ let version = 0;
 const tileCache = new Map<string, ImageData>();
 const TILE_CACHE_MAX = 96;
 
+/** Gap-filled copies of elevation rasters, by the raster they were made from. */
+const filled = new WeakMap<Float32Array, Float32Array>();
+
+/** The raster with every no-data cell given the nearest measured height in its row (or, for an empty row, of the nearest row). */
+function fillGaps(r: Raster): Raster {
+  let out = filled.get(r.elev);
+  if (!out) {
+    const { width: w, height: h } = r.grid;
+    out = r.elev;
+    let copied = false;
+    const emptyRows: number[] = [];
+    for (let y = 0; y < h; y++) {
+      const o = y * w;
+      let left = -1; // last measured cell seen in this row
+      for (let x = 0; x <= w; x++) {
+        if (x < w && !Number.isFinite(r.elev[o + x]!)) continue;
+        // Cells left+1 .. x-1 are a gap between measured cells `left` and `x` (either may be off the row).
+        if (x - left > 1) {
+          if (left < 0 && x === w) {
+            emptyRows.push(y);
+            break;
+          }
+          if (!copied) {
+            out = new Float32Array(r.elev);
+            copied = true;
+          }
+          const mid = left < 0 ? left : x === w ? w : (left + x) >> 1;
+          for (let i = left + 1; i < x; i++) out[o + i] = i <= mid ? out[o + left]! : out[o + x]!;
+        }
+        left = x;
+      }
+    }
+    if (emptyRows.length && emptyRows.length < h) {
+      if (!copied) out = new Float32Array(r.elev);
+      const empty = new Set(emptyRows);
+      for (const y of emptyRows) {
+        let d = 1;
+        while (empty.has(y - d) || y - d < 0) {
+          if (y + d < h && !empty.has(y + d)) break;
+          d++;
+        }
+        const src = y - d >= 0 && !empty.has(y - d) ? y - d : y + d;
+        out.copyWithin(y * w, src * w, src * w + w);
+      }
+    }
+    filled.set(r.elev, out);
+  }
+  return out === r.elev ? r : { grid: r.grid, elev: out };
+}
+
 /**
  * Elevation for the terrain: the region overview, plus the planning window at full resolution (or null).
  * Returns the tile URL template to give the DEM sources (it changes whenever the heights do).
@@ -53,8 +107,8 @@ export function setDemSource(overview: Raster, detail: Raster | null, ref: numbe
       if (v > hi) hi = v;
     }
   }
-  // Ground outside the area (no DEM tiles) is drawn at 0.
-  current = { overview, detail, min: ref, vscale, lo: Math.min(0, (lo - ref) * vscale), hi: Math.max(0, (hi - ref) * vscale) };
+  // 0 is kept inside the range for the ground beyond the DEM tiles, which MapLibre draws flat.
+  current = { overview: fillGaps(overview), detail, min: ref, vscale, lo: Math.min(0, (lo - ref) * vscale), hi: Math.max(0, (hi - ref) * vscale) };
   tileCache.clear();
   version++;
   return demTilesUrl();
@@ -65,16 +119,19 @@ export const demTilesUrl = () => `marsdem://v${version}/{z}/{x}/{y}`;
 
 const inside = (g: GridSpec, lon: number, lat: number) => lon >= g.west && lon <= g.east && lat >= g.south && lat <= g.north;
 
-/** Elevation (m) at a point from the window if it covers it, else the overview; NaN outside both. */
+/**
+ * Elevation (m) at a point from the window if it covers it, else the overview. Past the edge of the
+ * area the edge height carries on, so a tile that straddles the edge does not end in a cliff down to 0.
+ */
 function elevAt(c: DemSource, lon: number, lat: number): number {
   if (c.detail && inside(c.detail.grid, lon, lat)) {
     const e = sampleBilinear(c.detail.grid, c.detail.elev, lon, lat);
     if (Number.isFinite(e)) return e;
   }
-  return inside(c.overview.grid, lon, lat) ? sampleBilinear(c.overview.grid, c.overview.elev, lon, lat) : NaN;
+  return sampleBilinear(c.overview.grid, c.overview.elev, lon, lat);
 }
 
-/** Terrain height MapLibre draws at a point, in map metres before exaggeration (0 outside the area). */
+/** Terrain height MapLibre draws at a point, in map metres before exaggeration. */
 export function demHeight(lon: number, lat: number): number {
   const c = current;
   if (!c) return 0;

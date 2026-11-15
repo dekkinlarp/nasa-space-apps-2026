@@ -1,19 +1,19 @@
 import { useState } from "react";
 import { useShallow } from "zustand/react/shallow";
-import { CheckIcon, GripVerticalIcon, XIcon } from "lucide-react";
+import { CheckIcon, GripVerticalIcon, PlayIcon, XIcon } from "lucide-react";
 import type { RouteResult, RouteSegment, SurfaceClass } from "@marsmap/core";
 import { selectedResult, usableTimeS, useStore } from "../store";
 import { fmtDist, fmtDur, fmtEnergy, fmtLonLat, fmtO2 } from "../format";
 import { limitMessage, pointNames } from "../lib";
 import { profileColor } from "../map/MapView";
-import { flyTo } from "./ExploreTab";
+import { demoAvailable, flyTo, placeName, runDemoWalk } from "./ExploreTab";
 import { nearlyIdentical, routeDelta } from "./routeCompare";
 import { STOP_BADGE, STOP_BADGE_NUMBER, STOP_BADGE_START } from "../map/mapLabel";
 import { fmtMin, SafetyBudget } from "./SafetyBudget";
 import { usePnr } from "../usePnr";
 import { Alert } from "@/components/ui/alert";
 import { Button } from "@/components/ui/button";
-import { Checkbox } from "@/components/ui/checkbox";
+import { Switch } from "@/components/ui/switch";
 import { Disclosure } from "@/components/ui/disclosure";
 import { InfoTip } from "@/components/ui/info-tip";
 import { Input } from "@/components/ui/input";
@@ -198,7 +198,7 @@ export function PlanTab() {
   const calculating = planStatus === "calculating" || reachStatus === "calculating";
 
   const startItems = [
-    ...starts.map((p) => ({ value: p.id, label: p.name.replace(/^Start:\s*/, "") })),
+    ...starts.map((p) => ({ value: p.id, label: placeName(p) })),
     ...(start && !start.poiId ? [{ value: "__custom", label: "Custom point" }] : []),
   ];
   const stopItems = stopPois.map((p) => ({ value: p.id, label: p.name }));
@@ -227,6 +227,29 @@ export function PlanTab() {
             </p>
           )}
           <SafetyBudget r={sel} params={params} pnr={pnr} names={names} />
+        </section>
+      )}
+
+      {/* Nothing planned yet: say what to do first, and offer the ready-made walk. */}
+      {!start && stops.length === 0 && (
+        <section className="mb-5 rounded-xl bg-white/5 p-3 inset-ring inset-ring-white/10">
+          <h2 className="m-0 text-lg leading-snug font-medium tracking-[-0.01em]">Plan a walk</h2>
+          <ol className="m-0 mt-2 grid list-none gap-1.5 p-0 text-sm text-ink-2">
+            {["Choose where the crew starts.", "Add the places to stop and work.", "Compare the routes against the limits."].map((step, i) => (
+              <li key={step} className="flex items-center gap-2">
+                <span className={cn(ROW_BADGE, STOP_BADGE_NUMBER)} aria-hidden>
+                  {i + 1}
+                </span>
+                {step}
+              </li>
+            ))}
+          </ol>
+          {demoAvailable(area.config.pois) && (
+            <Button variant="secondary" className="mt-3 h-9 w-full gap-2" onClick={() => runDemoWalk(area.config.pois)}>
+              <PlayIcon className="size-3.5 flex-none fill-current" aria-hidden />
+              Or load the boxwork walk
+            </Button>
+          )}
         </section>
       )}
 
@@ -268,7 +291,7 @@ export function PlanTab() {
             {st.pickingStart ? "Click map…" : "Pick on map"}
           </Button>
         </li>
-        {stops.length === 0 && <li className="border-b py-2 text-sm text-muted-foreground">Add a stop below, from a POI card, or by clicking the map.</li>}
+        {stops.length === 0 && <li className="border-b py-2 text-sm text-ink-2">{start ? "Now add a stop: from the list below, a place's card, or a click on the map." : "No stops yet."}</li>}
         {stops.map((s, i) => {
           const over = sel && sel.totals.firstSegmentOverLimit != null && i >= sel.totals.firstSegmentOverLimit;
           return (
@@ -340,7 +363,7 @@ export function PlanTab() {
           </span>
           <label className="flex min-w-0 flex-1 cursor-pointer items-center gap-2 coarse:min-h-11">
             <span className={cn("min-w-0 flex-1 truncate", !returnToStart && "text-muted-foreground")}>Return to start</span>
-            <Checkbox className="mr-1 coarse:mr-3" checked={returnToStart} onCheckedChange={(v) => st.set({ returnToStart: v })} />
+            <Switch size="sm" className="mr-1 coarse:mr-3" aria-label="Return to start" checked={returnToStart} onCheckedChange={(v) => st.set({ returnToStart: v })} />
           </label>
         </li>
       </ol>

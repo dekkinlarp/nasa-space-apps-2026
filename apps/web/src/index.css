@@ -147,8 +147,9 @@
   /* Text */
   --ink: #e8eaed;
   --ink-2: #a8adb5;
-  --ink-3: #7a808a;
-  --ink-4: #4e545d;
+  /* Muted text is at least 5.8:1 on the side panel over the brightest ground; ink-4 is for marks, not text (3.3:1). */
+  --ink-3: #9aa0aa;
+  --ink-4: #6e747e;
 
   /* Status, the simulated-position marker and the one coloured action */
   --ok: #4cc38a;
@@ -191,7 +192,7 @@
 
   /* The floating material: dark glass with a bright top edge. */
   --glass: rgba(17, 19, 23, 0.78);
-  --glass-thick: rgba(15, 17, 20, 0.86);
+  --glass-thick: rgba(15, 17, 20, 0.92);
   --glass-edge: rgba(255, 255, 255, 0.12);
   --blur: blur(28px) saturate(170%);
   --float: 0 0 0 0.5px rgba(0, 0, 0, 0.7), 0 10px 30px rgba(0, 0, 0, 0.45);
@@ -273,13 +274,17 @@
   position: relative;
   isolation: isolate;
   background-color: transparent !important;
+  /* The edge moves to the layer too, so it is drawn over the glass like every other panel's, not over bare ground. */
+  border-color: transparent !important;
   -webkit-backdrop-filter: none !important;
   backdrop-filter: none !important;
 }
 @utility glass-layer {
   position: absolute;
-  inset: 0;
+  /* Out over the host's own (transparent) border, carrying the edge there. */
+  inset: -1px;
   z-index: -1;
+  border: 1px solid var(--glass-edge);
   border-radius: inherit;
   pointer-events: none;
   background-color: var(--glass);
@@ -288,19 +293,15 @@
 }
 @utility glass-layer-thick {
   position: absolute;
-  inset: 0;
+  /* Out over the host's own (transparent) border, carrying the edge there. */
+  inset: -1px;
   z-index: -1;
+  border: 1px solid var(--glass-edge);
   border-radius: inherit;
   pointer-events: none;
   background-color: var(--glass-thick);
   -webkit-backdrop-filter: var(--blur);
   backdrop-filter: var(--blur);
-}
-/* Scales the progressive blur at a scrolling panel's edge (see EdgeBlur). Registered so it can ease in and out. */
-@property --edge-k {
-  syntax: "<number>";
-  inherits: true;
-  initial-value: 0;
 }
 /* Section headings: small, uppercase, slightly open. Not for value labels, buttons or names. */
 @utility caps {

@@ -18,7 +18,7 @@ function InfoTip({ label = "More information", className, children }: { label?: 
       >
         <InfoIcon className="size-3.5" aria-hidden />
       </PopoverTrigger>
-      <PopoverContent className="w-64 max-w-[calc(100vw-24px)] text-sm leading-snug font-normal tracking-normal whitespace-pre-line text-ink-2 normal-case">{children}</PopoverContent>
+      <PopoverContent className="w-64 max-w-[calc(100vw-24px)] text-sm leading-snug font-normal tracking-normal whitespace-pre-line wrap-anywhere text-ink-2 normal-case">{children}</PopoverContent>
     </Popover>
   );
 }

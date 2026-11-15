@@ -10,13 +10,13 @@ colors:
   track: "#262a31"
   ink: "#e8eaed"
   ink-2: "#a8adb5"
-  ink-3: "#7a808a"
-  ink-4: "#4e545d"
+  ink-3: "#9aa0aa"
+  ink-4: "#6e747e"
   seam: "rgba(255, 255, 255, 0.07)"
   seam-2: "rgba(255, 255, 255, 0.13)"
   seam-3: "rgba(255, 255, 255, 0.32)"
   glass: "rgba(17, 19, 23, 0.78)"
-  glass-thick: "rgba(15, 17, 20, 0.86)"
+  glass-thick: "rgba(15, 17, 20, 0.92)"
   ok: "#4cc38a"
   warn: "#e5a93c"
   bad: "#f2594b"
@@ -158,14 +158,16 @@ one meaning.
 ### Neutral
 - **Void** (#08090b): behind the map.
 - **Hull** (#0f1114), **Hull Raised** (#15181c), **Hull Pressed** (#1d2126): docked, raised and
-  pressed surfaces; popovers sit on Hull Raised.
+  pressed surfaces. Nothing that floats uses them as its fill: popovers and menus are glass.
 - **Well** (#0a0b0d): inset fields and marker fills.
-- **Ink** (#e8eaed), **Ink 2** (#a8adb5), **Ink 3** (#7a808a), **Ink 4** (#4e545d): text from primary
-  to disabled. Ink 3 is the muted text colour and sits at about 4.5:1 on the panel, so it is not used
-  on lighter surfaces such as a selected card; step up to Ink 2 there.
+- **Ink** (#e8eaed), **Ink 2** (#a8adb5), **Ink 3** (#9aa0aa), **Ink 4** (#6e747e): text from primary
+  to faint. Ink 3 is the muted text colour and holds about 5.8:1 on the side panel over the brightest ground
+  (6.7:1 over dark ground); on lighter surfaces such as a selected row, step up to Ink 2. Ink 4 is for marks
+  such as grips and hatching, not text: about 3.3:1.
 - **Seams** (white at 7%, 13% and 32%): hairlines, input borders, and hover or dashed borders.
-- **Glass** (rgba(17,19,23,0.78)) and **Thick Glass** (rgba(15,17,20,0.86)): the floating material,
-  with a 12% white edge and a 28px blur.
+- **Glass** (rgba(17,19,23,0.78)) and **Thick Glass** (rgba(15,17,20,0.92)): the floating material,
+  with a 12% white edge and a 28px blur. The edge is always drawn over the glass, never over bare ground, so
+  every panel's edge reads the same; a panel whose glass is an inner layer (`glass-host`) carries its edge on that layer.
 
 ### Status and data
 - **OK** (#4cc38a), **Warn** (#e5a93c), **Bad** (#f2594b): fits, close to or at a limit, over a limit.
@@ -211,16 +213,23 @@ pointer back, so the map stays draggable in every gap.
 
 - **Side panel:** 372px (336px under 1100px), 12px from the window edge, with header, tabs and one
   scrolling tab body. The header is the app name and the site name only. It collapses off the left edge.
-- **Explore tab:** opens with the site facts (position and extent, then the typical sol's conditions with
-  their source behind an info button), then the story, the demo walk and the places.
+- **Explore tab:** figures and pictures before prose. Top to bottom: the position and extent on one line;
+  the typical sol as three tiles, each an icon and a value (temperature, daylight, radiation), with their
+  source behind an info button; the walk card (a title, one sentence, the demo walk drawn as numbered
+  steps, the demo button and "Plan your own", with the longer story folded behind "Why the boxwork?");
+  the places as one list with a filter by kind; then Curiosity's counts as three tiles. A place's row is a
+  32px picture of its ground with its pin colour on the corner, its name, and its kind and priority. The
+  description is on the place's card, not in the list.
 - **Plan tab:** top to bottom, the verdict and the three budgets as one block; the walk as one ordered
-  list (start, stops, "Return to start"); the routes as a comparison table; then the Segment details and
-  Walk settings disclosures. "Simulate walk" and "Use my location" sit in a footer under the scrolling body.
+  list (start, stops, "Return to start" with a switch); the routes as a comparison table; then the Segment
+  details and Walk settings disclosures. "Simulate walk" and "Use my location" sit in a footer under the
+  scrolling body. With no start and no stops it opens with a card that names the three steps and offers
+  the demo walk.
 - **Top right:** zoom buttons and the compass dial stack in the corner. The top left holds only the button that brings back a hidden side panel.
 - **Middle:** the point-of-interest card on the right, 340px (300px under 1100px).
-- **Top left:** the hover readout (elevation, slope, surface, distance from start). It is the one place the elevation under the pointer is shown. When it is too narrow for its line, the cut edge fades and blurs and the line slides to its end and back.
+- **Top left:** empty, except for the prompt shown while the planner is placing the start.
 - **Bottom row:** the suit meter (the Plan tab's stand-in when that tab is out of sight) or the walk panel, then the 2D/3D switch and gesture help on the right. In 3D a settings button joins the switch and opens a popover with vertical exaggeration and draw distance.
-- **Foot:** a slim status bar: the map key (it opens upward), the elevation toggle with the route's length and relief, imagery credit, scale bar, and the position under the pointer. The elevation profile opens above the status bar when asked and takes no room while folded.
+- **Foot:** a slim status bar: in this order, with a hairline rule between each piece: the map key, the elevation toggle with the route's length and relief, the scale bar, the position, then what is under the pointer (elevation, slope, surface, any science layer's value, distance from the start), and the imagery credit at the far end. This is the one place those readings are shown. Fixed-width pieces come first, so only the credit gives way as the readings change. The credit is said once, as text: when it does not fit, its cut edge fades and blurs out and the line slides to its end and back. The key opens upward as a glass panel of its own beside the bar, not inside it, because a blur nested in a blurred surface cannot see the map. The elevation profile opens above the status bar when asked and takes no room while folded.
 - **Under 1100px** the elevation toggle drops its summary; the relief is written on the open profile instead.
 - **Under 860px** the side panel becomes a bottom sheet (46dvh, 50dvh on phones) that folds to its tab
   bar; cards move to the left; a one-line verdict rides on the map. The status bar is the sheet's last
@@ -270,13 +279,35 @@ rounded squares carrying their number.
 
 ### Panels and cards
 - **Material:** glass, with a 12% white edge and a float shadow. The side panel uses thick glass.
-- **One component:** every floating surface is a `Panel` (or takes its classes from `panelVariants`; a popover
-  over the map asks for `surface="glass"`). No surface sets its own radius, fill or blur.
+- **One component:** every floating surface is a `Panel` or takes its classes from `panelVariants`. That
+  includes everything that pops up: info notes, popovers and select menus are glass by default, with the
+  12px corner, so a new popover matches without asking for anything. No surface sets its own radius, fill or
+  blur. The one exception is a popup nested inside another glass surface (the map key inside the status
+  bar), which is solid (`surface="solid"`) because a blur inside a blur cannot see the map.
 - **Corner:** 12px for bars, readouts and controls on the map; 18px for cards, the walk panel and the side panel.
 - **Padding:** 16px. A card's actions sit in a footer that stays put while the body scrolls.
 
 ### Inputs
 - **Style:** transparent with a 13% white border, 8px radius, 32px tall. Number fields for dwell time sit in a Well fill.
+
+### Switches and sliders
+- **Switch:** a 38 x 22px capsule with a white pill thumb, in the macOS style. Off is a 30% white track,
+  on is OK green. The thumb is white in both states, so the state never rests on colour alone. This is the
+  one place a status colour is used in the chrome: it says the thing is on.
+- **Slider:** a 6px capsule track, filled in Ink up to a white 24 x 16px pill thumb (28 x 20px on touch).
+  A slider shows its value beside it.
+
+### Fact tiles
+A small figure in a faint tile (5% white fill, 8px corner): the value in medium weight with its label
+under it, or an icon in place of the label where the unit already says what it is. Used for the typical
+sol and Curiosity's counts on the Explore tab. Never more than three across.
+
+### Layer rows
+One row per layer on the Layers tab: a 32px preview, the name, an info button and a switch. The preview
+is real data: 4 km of ground around the start in the chosen imagery (1 km for the mineral layers, whose 18 m pixels are only speckle from further out), with the layer drawn over it by the
+function that draws it on the map. The opacity slider and the colour key show only while the layer is on.
+What a layer means and where it comes from sit behind its info button. Base imagery is a four-column grid of square picture
+cards showing the same 4 km of ground; the chosen one has an Ink outline and a check.
 
 ### Navigation
 - Three tabs (Explore, Plan, Layers) as a segmented control; the active tab is a lighter fill. On the
@@ -284,11 +315,22 @@ rounded squares carrying their number.
 - **Segmented controls** are 8px with 2px of padding and a 6px thumb, so the corners are concentric. The
   2D/3D switch floats on the map, so it sits in a 12px panel with 4px of padding and 8px segments.
 
+- **The thumb slides.** In a tab bar or segmented control the highlight is one element that moves and
+  resizes from the old option to the new one (`SlidingThumb`), over 300ms on the panels' no-overshoot curve.
+  It can be redirected part-way, and under reduced motion it swaps without moving. Options never paint
+  their own selected fill.
+- A scrolling panel's content simply runs under its neighbours' hairlines: there is no blur or fade at the
+  scroll edges.
+
 ### Map labels
 The walk-limit ring label, the turn-back or tightest-point chip, the walker's countdown and a hovered
 place name share one box (`MAP_LABEL_BOX` in `map/mapLabel.ts`): 4px radius, hairline border, thick-glass
-fill, 11px semibold in the app font. Status shows through the border and text colour only (warn, ok, sim).
+fill, 11px semibold in the app font, with a neutral border and neutral text. A label that reports a status
+carries it once, on its icon or a 6px dot (`MAP_LABEL_MARK`), never on the border or the text.
 The walker's label holds only the work time left at a stop.
+
+Place names are not boxed: white text with a crisp dark outline round the letters (`MAP_LABEL_HALO`), no
+glow. A name reads as a place and a box reads as an annotation; a hovered or selected place takes the box.
 
 ### Stop numbers
 One badge in the Plan tab's list, on the map and in the map key (`STOP_BADGE`): a rounded square with a
@@ -318,8 +360,11 @@ One legend serves all three bars. Each row has an info button, which also gives 
 stops and what is left, and a full text label for screen readers.
 
 ### Info button
-A small "i" that opens a popover. Use it for any explanation a reader may need; a `title` tooltip is
+A small "i" that opens a glass popover, the same material as the panels. Use it for any explanation a reader may need; a `title` tooltip is
 only for a hint that repeats what is already visible.
+A note is written for the planner: what the thing shows, the one caveat that matters, and a one-line
+source, in at most three short paragraphs. Formulas, file URLs and scene lists stay in the data manifest;
+a note never prints the manifest's `method` string.
 
 ## Do's and Don'ts
 

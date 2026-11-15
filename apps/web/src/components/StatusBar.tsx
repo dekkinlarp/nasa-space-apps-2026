@@ -1,6 +1,6 @@
 /**
- * The strip along the bottom of the map: the map key, the elevation profile's toggle, where the imagery comes from,
- * the scale bar, and the position under the pointer (the centre of the view when the pointer is elsewhere).
+ * The strip along the bottom of the map: the map key, the elevation profile's toggle, the scale bar, the position (under the
+ * pointer, or the centre of the view when the pointer is elsewhere), the readings under the pointer, and where the imagery comes from.
  */
 import { useEffect, useMemo, useState } from "react";
 import type { LonLat } from "@marsmap/core";
@@ -8,10 +8,12 @@ import { selectedResult, useStore } from "../store";
 import { fmtDist, fmtLonLat } from "../format";
 import { getMap, mountScaleBar, resizeMapDuring } from "../map/MapView";
 import { pictureGroup } from "../map/imageryTiles";
-import { MapLegend } from "./MapLegend";
+import { MapLegend, MapLegendPanel } from "./MapLegend";
+import { PointerReadings, StatusRule } from "./HoverReadout";
 import { BottomPaneIcon } from "./icons";
 import { routeReliefM, useProfileUi } from "./ProfileStrip";
 import { PANEL_MS } from "../App";
+import { Ticker } from "@/components/ui/ticker";
 import { Panel } from "@/components/ui/panel";
 import { cn } from "@/lib/utils";
 
@@ -47,8 +49,6 @@ function useMapCentre(): LonLat | null {
   return centre;
 }
 
-const rule = <span className="h-3.5 w-px flex-none bg-input" aria-hidden />;
-
 /**
  * Opens and folds the elevation profile, and says in one line what it holds: the route's length and relief.
  * The profile itself opens above the status bar. Nothing to toggle until a route exists.
@@ -63,8 +63,8 @@ function ElevationToggle() {
   if (!r || !r.reachable) return null;
   return (
     // Phones and short screens give the profile's room to the open sheet, so there is nothing to toggle there.
-    <span className="flex flex-none items-center gap-3 phone:in-[.sheet-open]:hidden squat:in-[.sheet-open]:hidden">
-      {rule}
+    <span className="flex flex-none items-center gap-2.5 phone:in-[.sheet-open]:hidden squat:in-[.sheet-open]:hidden">
+      <StatusRule />
       <button
         type="button"
         className="-mx-1 flex h-7 cursor-pointer items-center gap-1.5 rounded-sm px-1 text-xs whitespace-nowrap coarse:px-2"
@@ -98,23 +98,30 @@ export function StatusBar({ inSheet = false }: { inSheet?: boolean }) {
   const centre = useMapCentre();
   const credit = area?.manifest.imagery.find((i) => pictureGroup(i) === baseImagery)?.source ?? "";
   const at = hover?.lonLat ?? centre;
-  const row = "status-bar flex min-w-0 flex-none items-center gap-3 text-xs text-ink-2";
+  const row = "status-bar flex min-w-0 flex-none items-center gap-2.5 text-xs text-ink-2";
+  // Left to right: the two controls, then the map's own measures (scale, position), then what is under the pointer,
+  // and the credit at the far end. Everything of a fixed width comes first, so only the credit gives way as the
+  // readings change with the pointer. A rule separates each piece.
   const content = (
     <>
-      <MapLegend />
+      <MapLegend detached={!inSheet} />
       <ElevationToggle />
-      {rule}
-      <span className="min-w-0 flex-1 truncate" title={credit ? `Imagery: ${credit}` : undefined}>
-        {credit ? `Imagery: ${credit}` : "No base imagery"}
-      </span>
+      <StatusRule />
       {/* MapLibre draws the scale bar; it is moved in here (see mountScaleBar). */}
       <span ref={mountScaleBar} className="flex-none" />
-      {/* The position only: the elevation under the pointer is in the hover readout. */}
       {at && (
-        <span className="flex-none font-mono whitespace-pre phone:hidden" title={hover ? "Position under the pointer" : "Centre of the view"}>
-          {fmtLonLat(at)}
+        <span className="flex flex-none items-center gap-2.5 phone:hidden">
+          <StatusRule />
+          <span className="font-mono whitespace-pre" title={hover ? "Position under the pointer" : "Centre of the view"}>
+            {fmtLonLat(at)}
+          </span>
         </span>
       )}
+      <PointerReadings />
+      <StatusRule />
+      {/* The credit is said once, as text, and takes the room that is left. When it does not fit, its cut edge fades
+          and blurs out and the line slides to its end and back (Ticker), so all of it can still be read. */}
+      <Ticker className="flex-1">{credit ? `Imagery: ${credit}` : "No base imagery"}</Ticker>
     </>
   );
   // In the sheet it is a row of the sheet, not a surface of its own.
@@ -124,5 +131,15 @@ export function StatusBar({ inSheet = false }: { inSheet?: boolean }) {
         {content}
       </div>
     );
-  return <Panel className={cn(row, "h-(--status-h) px-2.5")}>{content}</Panel>;
+  // The key floats above the bar as a panel of its own, so it is the same glass as the bar.
+  return (
+    <div className="relative min-w-0 flex-none">
+      <MapLegendPanel className="absolute bottom-full left-0 z-4 mb-2" />
+      {/* glass-host: the credit blurs at its cut edge, so the glass is a layer behind the content (see index.css). */}
+      <Panel className={cn(row, "glass-host h-(--status-h) px-2.5")}>
+        <i className="glass-layer" aria-hidden />
+        {content}
+      </Panel>
+    </div>
+  );
 }

@@ -15,10 +15,18 @@
  *
  * 3. Render distance. MapLibre covers the whole screen with terrain tiles out to the horizon, also
  *    past the edge of the data where there is nothing to draw, and renders every layer into each of
- *    them. Only tiles inside the data area and inside a square of `renderDistanceKm` around the
- *    point the camera looks at are kept (widened to reach back to the camera, so the foreground is never cut).
+ *    them. Only tiles inside the data area and inside a square around the point the camera looks at
+ *    are kept (widened to reach back to the camera, so the foreground is never cut). The square is
+ *    `renderDistanceKm` wide close to the ground and grows with the camera's distance, so zooming out
+ *    never cuts ground that is in view; far tiles are coarse, so that stays cheap.
  *
- * All three rely on MapLibre internals (Terrain.pointCoordinate / depthAtPoint / getElevationForLngLat, TerrainTileManager.update,
+ * 4. No wall under the edges. MapLibre hangs a skirt from every terrain tile to hide the cracks between
+ *    tiles of different detail, a fifth of a *view-zoom* tile tall for every tile: kilometres when zoomed
+ *    out. Inside the map the neighbouring tiles hide it, but along a cut edge it shows as a wall of
+ *    smeared imagery. Each tile's skirt is sized from that tile's own width and the vertical
+ *    exaggeration instead, which is what the height of a crack depends on.
+ *
+ * All of these rely on MapLibre internals (Terrain.pointCoordinate / depthAtPoint / getElevationForLngLat / getMeshFrameDelta / getTerrainData, TerrainTileManager.update,
  * the transform's inverse view-projection matrix), checked against maplibre-gl 5.24; package.json pins
  * it to 5.24.x, so re-check these before moving to a newer minor version.
  */
@@ -34,6 +42,7 @@ interface TransformInternals {
   width: number;
   height: number;
   worldSize: number;
+  cameraToCenterDistance: number;
   center: LngLat;
   _invViewProjMatrix: Mat4;
   getCameraLngLat(): LngLat;
@@ -50,6 +59,8 @@ interface TerrainInternals {
   depthAtPoint(p: Pt): number;
   getElevationForLngLat(ll: LngLat, transform: unknown): number;
   getElevationForLngLatZoom(ll: LngLat, zoom: number): number;
+  getMeshFrameDelta(zoom: number): number;
+  getTerrainData(id: TileID): unknown;
   tileManager: {
     maxzoom: number;
     update(transform: unknown, terrain: unknown): void;
@@ -121,8 +132,15 @@ function raycast(tr: TransformInternals, exaggeration: number, p: Pt): { x: numb
   return null;
 }
 
+/** The square of ground kept is at least this many camera-to-centre distances to each side of the look-at point. */
+const VIEW_REACH = 2;
+/** Height of the skirt under a terrain tile, as a share of the tile's width, per unit of vertical exaggeration. */
+const SKIRT_SHARE = 0.012;
+/** A tile closer to the edge of the area than this share of its own width has no skirt. */
+const EDGE_MARGIN = 0.05;
+
 let renderDistanceKm = 8;
-/** Side of the square kept around the look-at point in 3D. Takes effect on the next frame. */
+/** Side of the square kept around the look-at point in 3D when close to the ground. Takes effect on the next frame. */
 export function setRenderDistance(map: MLMap | null, km: number) {
   renderDistanceKm = km;
   map?.triggerRepaint();
@@ -149,6 +167,23 @@ export function tuneTerrain(map: MLMap, grid: GridSpec) {
     return t.lngLatToCameraDepth(new maplibregl.MercatorCoordinate(hit.x, hit.y).toLngLat(), hit.z);
   };
 
+  // MapLibre asks for a tile's terrain data and then for the skirt height, tile by tile, so the
+  // tile being drawn is the last one data was asked for.
+  const frameDelta = terrain.getMeshFrameDelta.bind(terrain);
+  const terrainData = terrain.getTerrainData.bind(terrain);
+  let skirtZoom = -1;
+  terrain.getTerrainData = (id) => {
+    const { z, x, y } = id.canonical;
+    // A tile that reaches (or nearly reaches) the edge of the area gets no skirt: the ground past the
+    // edge is not painted, so the skirt would show through it as a band along the edge of the map.
+    const mLon = (tileLon(x + 1, z) - tileLon(x, z)) * EDGE_MARGIN, mLat = (tileLat(y, z) - tileLat(y + 1, z)) * EDGE_MARGIN;
+    const inside = tileLon(x, z) - mLon > grid.west && tileLon(x + 1, z) + mLon < grid.east && tileLat(y + 1, z) - mLat > grid.south && tileLat(y, z) + mLat < grid.north;
+    skirtZoom = inside ? z : -1;
+    return terrainData(id);
+  };
+  // frameDelta(z) is a fifth of the width of a zoom-z tile.
+  terrain.getMeshFrameDelta = (zoom) => (skirtZoom < 0 ? 0 : Math.min(frameDelta(zoom), frameDelta(skirtZoom) * 5 * SKIRT_SHARE * terrain.exaggeration));
+
   // getElevationForLngLat works out the whole tile cover of the view just to learn its finest
   // zoom, on every call, and markers call it every frame. The terrain tile manager computes the same
   // cover (same tile size and zoom range) once per frame, so the zoom is taken from there.
@@ -167,7 +202,9 @@ export function tuneTerrain(map: MLMap, grid: GridSpec) {
     const tf = tr();
     const c = tf.center, cam = tf.getCameraLngLat();
     const half = (renderDistanceKm * 1000) / 2;
-    const dLat = half / M_PER_DEG_LAT, dLon = half / (M_PER_DEG_LAT * Math.cos((c.lat * Math.PI) / 180));
+    // How far the camera is from the point it looks at, in degrees of longitude.
+    const reach = (tf.cameraToCenterDistance / tf.worldSize) * 360 * VIEW_REACH;
+    const dLat = Math.max(half / M_PER_DEG_LAT, reach), dLon = Math.max(half / (M_PER_DEG_LAT * Math.cos((c.lat * Math.PI) / 180)), reach);
     // Window around the look-at point, stretched to reach the camera's ground position.
     const w = Math.max(grid.west, Math.min(c.lng - dLon, cam.lng));
     const e = Math.min(grid.east, Math.max(c.lng + dLon, cam.lng));
