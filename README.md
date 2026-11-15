@@ -34,8 +34,8 @@ walk" in the app loads one such plan: camp → hollow → ridge junction → san
 | **Go** | Plays the planned walk as a simulated astronaut with time, energy and oxygen left, bearing and the walk home. "Use my location" maps your real movement on Earth onto the Mars route. |
 | **Layers** | Base imagery (HiRISE photo, CTX, THEMIS day/night infrared), slope, elevation, hillshade, estimated surface and its uncertainty, mineral indicators, walk cost from the start, walk-limit rings. 2D or 3D with adjustable vertical exaggeration. |
 
-The header shows typical conditions at Curiosity (air temperature range, daylight hours, radiation
-dose) from its REMS and RAD instruments.
+The Explore tab opens with typical conditions at Curiosity (air temperature range, daylight hours,
+radiation dose) from its REMS and RAD instruments.
 
 ## Data sources
 
