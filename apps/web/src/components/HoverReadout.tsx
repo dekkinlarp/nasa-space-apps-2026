@@ -1,7 +1,8 @@
 import { useStore } from "../store";
 import { fmtDist, fmtLonLat, fmtNum } from "../format";
 import { surfaceById } from "../lib";
-import { marsDistanceM } from "../geo";
+import { cellIndex, marsDistanceM } from "../geo";
+import { scienceLayers, scienceRamp } from "../map/MapView";
 
 export function HoverReadout() {
   const hover = useStore((s) => s.hover);
@@ -9,6 +10,12 @@ export function HoverReadout() {
   const start = useStore((s) => s.start);
   const picking = useStore((s) => s.pickingStart);
   const surf = surfaceById(area.config.surfaceClasses, hover?.surfaceId);
+  const sci = useStore((s) => s.sci);
+  const sciData = useStore((s) => s.sciData);
+  const confOn = useStore((s) => s.overlays.confidence.on);
+  const cell = hover ? cellIndex(area.layers.grid, hover.lonLat) : null;
+  const sciOn = scienceLayers(area).filter((l) => sci[l.id]?.on && sciData[l.id]);
+  const conf = confOn && cell != null ? area.layers.confidence?.[cell] : undefined;
   return (
     <div className={`readout ${hover ? "" : "idle"}`}>
       {picking && <div className="readout-hint">Click the map to place the start</div>}
@@ -35,6 +42,24 @@ export function HoverReadout() {
               </span>
             )}
           </div>
+          {(sciOn.length > 0 || conf != null) && (
+            <div className="readout-row">
+              {sciOn.map((l) => {
+                const v = cell != null ? sciData[l.id]![cell] : undefined;
+                return (
+                  <span key={l.id}>
+                    <i className="swatch" style={{ background: scienceRamp(area, l.id)[1]![1] }} />
+                    <b>{(l.name ?? l.id).replace(/\s*\(.*$/, "")}</b> {v != null && Number.isFinite(v) ? (v > 0 ? v.toFixed(4) : "none") : "—"}
+                  </span>
+                );
+              })}
+              {conf != null && (
+                <span>
+                  <b>Surface confidence</b> {conf}/200
+                </span>
+              )}
+            </div>
+          )}
           <div className="readout-ll">{fmtLonLat(hover.lonLat)}</div>
         </>
       ) : (

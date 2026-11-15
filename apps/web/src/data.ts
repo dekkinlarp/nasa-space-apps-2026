@@ -1,5 +1,5 @@
 import type { LayerManifest, LonLat } from "@marsmap/core";
-import type { AppConfig, AreaData, Conditions, DisplayLayers, DrillSite, RoverData, RoverPhoto, Waypoint } from "./types";
+import type { AppConfig, AreaData, Conditions, DataChecks, DisplayLayers, DrillSite, Minerals, RoverData, RoverPhoto, Waypoint } from "./types";
 
 async function getJson<T>(url: string): Promise<T> {
   const r = await fetch(url);
@@ -132,11 +132,16 @@ function parseConditions(raw: Record<string, unknown> | null): Conditions | null
 
 export async function loadArea(areaId: string, synthetic: boolean): Promise<AreaData> {
   const base = `/data/${areaId}`;
-  const [manifest, config, condRaw] = await Promise.all([
+  const [manifest, config, condRaw, minerals, report] = await Promise.all([
     getJson<LayerManifest>(`${base}/layers.json`),
     getJson<AppConfig>(`/api/config?area=${encodeURIComponent(areaId)}`),
     tryJson<Record<string, unknown>>(`${base}/conditions.json`),
+    tryJson<Minerals>(`${base}/minerals.json`),
+    tryJson<DataChecks & { georef?: { rows?: unknown } }>(`${base}/preview/verify-report.json`),
   ]);
+  // The report lists every waypoint; the app only needs the summary.
+  if (report?.georef) delete report.georef.rows;
+  const checks: DataChecks | null = report;
   const g = manifest.grid;
   const n = g.width * g.height;
   const bin = async (id: string) => {
@@ -178,5 +183,16 @@ export async function loadArea(areaId: string, synthetic: boolean): Promise<Area
     elevRef = sample[sample.length >> 1] ?? elevMin;
   }
   const layers: DisplayLayers = { grid: g, elevation, slope, surface, confidence, elevMin, elevMax, elevRef };
-  return { areaId, base, synthetic, manifest, config, layers, rover, conditions: parseConditions(condRaw) };
+  return { areaId, base, synthetic, manifest, config, layers, rover, conditions: parseConditions(condRaw), minerals, checks };
+}
+
+/** Fetch one float32 layer of the manifest on demand (science overlays are loaded when first switched on). */
+export async function loadFloatLayer(area: AreaData, id: string): Promise<Float32Array | null> {
+  const e = area.manifest.layers.find((l) => l.id === id);
+  const g = area.manifest.grid;
+  if (!e || e.dtype !== "float32") return null;
+  const r = await fetch(`${area.base}/${e.file}`);
+  if (!r.ok) return null;
+  const arr = new Float32Array(await r.arrayBuffer());
+  return arr.length === g.width * g.height ? arr : null;
 }

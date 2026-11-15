@@ -5,9 +5,11 @@ import { selectedResult, useStore } from "../store";
 import { measure, pointAt } from "../geo";
 import { fmtDist, fmtNum } from "../format";
 import { nearestPhoto, pointNames, surfaceById } from "../lib";
-import { SLOPE_STOPS } from "../map/rasters";
+import { cssGradient, SLOPE_STOPS } from "../map/rasters";
 import { PhotoThumb } from "./Cards";
-import { profileColor } from "../map/MapView";
+import { profileColor, resizeMapDuring } from "../map/MapView";
+import { BottomPaneIcon } from "./icons";
+import { PANEL_MS } from "../App";
 
 interface Flat {
   d: Float64Array;
@@ -72,6 +74,7 @@ export function ProfileStrip() {
   const ref = useRef<HTMLDivElement>(null);
   const [w, setW] = useState(800);
   const [hoverD, setHoverD] = useState<number | null>(null);
+  const [open, setOpen] = useState(true);
   const flat = useMemo(() => (r ? flatten(r) : null), [r]);
   const names = pointNames(st.start, st.stops, st.returnToStart);
 
@@ -149,22 +152,29 @@ export function ProfileStrip() {
   };
 
   return (
-    <div className="profile">
+    <div className={`profile glass ${open ? "" : "collapsed"}`}>
       <div className="profile-title">
         <span>Elevation</span>
         <span className="dim">
           {r.profile.name} route · {fmtDist(flat.total)} · {Math.round(flat.max - flat.min)} m relief
         </span>
+        <button
+          className="icon-btn"
+          aria-label={open ? "Hide elevation profile" : "Show elevation profile"}
+          title={open ? "Hide elevation profile" : "Show elevation profile"}
+          aria-expanded={open}
+          onClick={() => {
+            setOpen(!open);
+            onLeave();
+            resizeMapDuring(PANEL_MS);
+          }}
+        >
+          <BottomPaneIcon on={open} />
+        </button>
       </div>
       <div className="profile-body">
         <div className="profile-chart" ref={ref}>
           <svg width={w} height={H} onMouseMove={onMove} onMouseLeave={onLeave}>
-            <defs>
-              <linearGradient id="pf" x1="0" x2="0" y1="0" y2="1">
-                <stop offset="0" stopColor={color} stopOpacity="0.45" />
-                <stop offset="1" stopColor={color} stopOpacity="0.02" />
-              </linearGradient>
-            </defs>
             {geom.ticks.map((t) => (
               <g key={t}>
                 <line x1={PL} x2={PL + iw} y1={Y(t)} y2={Y(t)} className="grid-line" />
@@ -174,8 +184,8 @@ export function ProfileStrip() {
               </g>
             ))}
             {over != null && flat.segOffsets[over] != null && <rect x={X(flat.segOffsets[over]!)} y={PT} width={PL + iw - X(flat.segOffsets[over]!)} height={ih} className="over-zone" />}
-            <path d={geom.area} fill="url(#pf)" />
-            <path d={geom.line} fill="none" stroke={color} strokeWidth={2} />
+            <path d={geom.area} fill={color} fillOpacity={0.14} />
+            <path d={geom.line} fill="none" stroke={color} strokeWidth={1.5} strokeLinejoin="round" />
             {flat.segOffsets.map((o, i) =>
               i === 0 ? null : (
                 <g key={i}>

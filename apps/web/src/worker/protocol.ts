@@ -3,7 +3,7 @@ import type { LayerManifest, LonLat, ReachRing, RouteProfile, RouteResult, Surfa
 export type WorkerIn =
   | { type: "init"; base: string; manifest: LayerManifest; surfaceClasses: SurfaceClass[] }
   | { type: "plan"; id: number; points: LonLat[]; dwellS: number[]; params: WalkParams }
-  | { type: "reach"; id: number; start: LonLat; params: WalkParams; profileId: string; budgetsS: number[] };
+  | { type: "reach"; id: number; start: LonLat; params: WalkParams; profileId: string; budgetsS: number[]; dwellS: number };
 
 export type WorkerOut =
   | { type: "ready"; ok: boolean; missing: string[]; profiles: RouteProfile[] }

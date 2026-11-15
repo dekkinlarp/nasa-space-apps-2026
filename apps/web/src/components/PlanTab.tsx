@@ -2,7 +2,7 @@ import { Fragment, useState } from "react";
 import { useShallow } from "zustand/react/shallow";
 import type { RouteResult, RouteSegment, SurfaceClass } from "@marsmap/core";
 import { selectedResult, usableTimeS, useStore } from "../store";
-import { fmtDist, fmtDur, fmtEnergy, fmtLonLat } from "../format";
+import { fmtDist, fmtDur, fmtEnergy, fmtLonLat, fmtO2 } from "../format";
 import { limitMessage, pointNames } from "../lib";
 import { profileColor } from "../map/MapView";
 import { flyTo } from "./ExploreTab";
@@ -20,6 +20,23 @@ function Slider({ label, value, min, max, step, fmt, onChange, hint }: { label: 
       </div>
       <input type="range" min={min} max={max} step={step} value={value} onChange={(e) => onChange(Number(e.target.value))} />
     </label>
+  );
+}
+
+function Meter({ label, used, limit, fmt }: { label: string; used: number; limit: number; fmt: (v: number) => string }) {
+  const f = limit > 0 ? used / limit : 0;
+  return (
+    <div className="meter">
+      <div className="meter-head">
+        <span>{label}</span>
+        <span>
+          <b className={f > 1 ? "bad" : f > 0.85 ? "warnc" : ""}>{fmt(used)}</b> <span className="dim">/ {fmt(limit)}</span>
+        </span>
+      </div>
+      <div className="meter-bar">
+        <i style={{ width: `${Math.min(100, f * 100)}%` }} className={f > 1 ? "bad" : f > 0.85 ? "warnc" : ""} />
+      </div>
+    </div>
   );
 }
 
@@ -197,6 +214,8 @@ export function PlanTab() {
   const usableT = usableTimeS(params);
   const src = ((area.config.walkParams as unknown as { _sources?: Record<string, string> })._sources ?? {}) as Record<string, string | undefined>;
   const usableE = params.energyBudgetKJ * (1 - params.reserveFraction);
+  const o2On = (params.o2BudgetKg ?? 0) > 0 && (params.o2KgPerKJ ?? 0) > 0;
+  const usableO = (params.o2BudgetKg ?? 0) * (1 - params.reserveFraction);
   const msg = sel ? limitMessage(sel, names, params) : null;
   const calculating = planStatus === "calculating" || reachStatus === "calculating";
 
@@ -326,7 +345,7 @@ export function PlanTab() {
           <h4 className="section-h">
             Safety budget
             {!msg && (
-              <span className="head-chip ok" title={`Plan fits the EVA time and energy limits with ${Math.round(params.reserveFraction * 100)}% held in reserve.`}>
+              <span className="head-chip ok" title={`Plan fits the EVA time, energy and oxygen limits with ${Math.round(params.reserveFraction * 100)}% held in reserve.`}>
                 ✓ Fits limits
               </span>
             )}
@@ -341,10 +360,11 @@ export function PlanTab() {
                 Dose <b>{sel.totals.radiationMSv.toFixed(3)} mSv</b>
               </span>
             </div>
+            {o2On && sel.totals.o2Kg != null && <Meter label="Oxygen (breathing + leakage, modelled)" used={sel.totals.o2Kg} limit={usableO} fmt={fmtO2} />}
           </div>
           <div className="go-buttons">
             <button className="btn primary" onClick={() => st.setGo({ mode: "sim", playing: true, elapsedS: 0, alongM: 0, position: start?.lonLat ?? null, gpsError: null })}>
-              ▶ Go (simulated walk)
+              Simulate walk
             </button>
             <button className="btn" onClick={() => st.setGo({ mode: "gps", playing: true, elapsedS: 0, alongM: 0, position: start?.lonLat ?? null, gpsError: null })}>
               Use my location
@@ -386,11 +406,15 @@ export function PlanTab() {
               st.set({ stops: useStore.getState().stops.map((s) => ({ ...s, dwellS: v * 60 })) });
             }}
           />
+          {o2On && (
+            <Slider hint={src.o2BudgetKg} label="Oxygen carried" value={params.o2BudgetKg!} min={0.2} max={1.5} step={0.05} fmt={(v) => `${v.toFixed(2)} kg`} onChange={(v) => st.setParams({ o2BudgetKg: v })} />
+          )}
           <Slider hint={src.reserveFraction} label="Safety reserve" value={params.reserveFraction * 100} min={0} max={50} step={1} fmt={(v) => `${Math.round(v)}%`} onChange={(v) => st.setParams({ reserveFraction: v / 100 })} />
         </div>
         <div className="params-foot">
           <span className="small dim" title={`Usable = limit minus the safety reserve. Max slope is the no-go steepness for routing. Source: ${area.config.walkParamsSource}`}>
-            Usable {fmtMin(usableT)} · {fmtEnergy(usableE)} · slope ≤ {params.maxSlopeDeg}° <span className="info">ⓘ</span>
+            Usable {fmtMin(usableT)} · {fmtEnergy(usableE)}
+            {o2On ? ` · ${fmtO2(usableO)} O₂` : ""} · slope ≤ {params.maxSlopeDeg}° <span className="info">ⓘ</span>
           </span>
           {defaultParams && JSON.stringify(defaultParams) !== JSON.stringify(params) && (
             <button className="link-btn" onClick={() => st.set({ params: defaultParams })}>

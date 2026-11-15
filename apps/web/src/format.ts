@@ -24,6 +24,11 @@ export function fmtEnergy(kj: number): string {
   return kj >= 1000 ? `${(kj / 1000).toFixed(2)} MJ` : `${Math.round(kj)} kJ`;
 }
 
+export function fmtO2(kg: number): string {
+  if (!Number.isFinite(kg)) return "—";
+  return Math.abs(kg) >= 1 ? `${kg.toFixed(2)} kg` : `${Math.round(kg * 1000)} g`;
+}
+
 export function fmtLonLat([lon, lat]: [number, number]): string {
   return `${Math.abs(lat).toFixed(5)}°${lat < 0 ? "S" : "N"}  ${lon.toFixed(5)}°E`;
 }
