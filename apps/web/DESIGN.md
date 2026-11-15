@@ -210,14 +210,25 @@ side panel leaves visible and only lays things out: it ignores the pointer, and 
 pointer back, so the map stays draggable in every gap.
 
 - **Side panel:** 372px (336px under 1100px), 12px from the window edge, with header, tabs and one
-  scrolling tab body. It collapses off the left edge.
+  scrolling tab body. The header is the app name and the site name only. It collapses off the left edge.
+- **Explore tab:** opens with the site facts (position and extent, then the typical sol's conditions with
+  their source behind an info button), then the story, the demo walk and the places.
+- **Plan tab:** top to bottom, the verdict and the three budgets as one block; the walk as one ordered
+  list (start, stops, "Return to start"); the routes as a comparison table; then the Segment details and
+  Walk settings disclosures. "Simulate walk" and "Use my location" sit in a footer under the scrolling body.
 - **Top right:** zoom buttons and the compass dial stack in the corner. The top left holds only the button that brings back a hidden side panel.
 - **Middle:** the point-of-interest card on the right, 340px (300px under 1100px).
-- **Top left:** the hover readout (elevation, slope, surface, distance from start). When it is too narrow for its line, the cut edge fades and blurs and the line slides to its end and back.
-- **Bottom row:** verdict or suit meter, the scale bar, the 2D/3D switch and gesture help on the right. Below it the elevation dock, which starts folded, and at the very foot a slim status bar: the map key (it opens upward), imagery credit, scale bar, and the position under the pointer.
+- **Top left:** the hover readout (elevation, slope, surface, distance from start). It is the one place the elevation under the pointer is shown. When it is too narrow for its line, the cut edge fades and blurs and the line slides to its end and back.
+- **Bottom row:** the suit meter (the Plan tab's stand-in when that tab is out of sight) or the walk panel, then the 2D/3D switch and gesture help on the right. In 3D a settings button joins the switch and opens a popover with vertical exaggeration and draw distance.
+- **Foot:** a slim status bar: the map key (it opens upward), the elevation toggle with the route's length and relief, imagery credit, scale bar, and the position under the pointer. The elevation profile opens above the status bar when asked and takes no room while folded.
+- **Under 1100px** the elevation toggle drops its summary; the relief is written on the open profile instead.
 - **Under 860px** the side panel becomes a bottom sheet (46dvh, 50dvh on phones) that folds to its tab
-  bar; cards move to the left; a one-line verdict rides on the map.
-- **Under 600px** the card takes the full width and the open sheet takes the elevation dock's room.
+  bar; cards move to the left; a one-line verdict rides on the map. The status bar is the sheet's last
+  row, under the Plan tab's footer.
+- **Under 600px** the card takes the full width and the open sheet takes the elevation profile's room.
+
+Each fact has one home. A second place that needs it is a stand-in, shown only while the home is out of
+sight: the suit meter for the Plan tab's verdict, the walk panel for what the crew is doing.
 
 The map is told how much of it is covered, so "centre" means the centre of what the planner can see,
 and a selected place is never left under its own card.
@@ -255,10 +266,13 @@ rounded squares carrying their number.
 - **Style:** 16px tall, 4px radius, 11px text, a hairline border and no fill.
 - **Estimate:** dashed border. **Strong:** brighter border for primary objectives and rover evidence.
   **Warning:** amber border and text, used for "Synthetic test data".
+- No filled pills: a count (the stops on the Plan tab) is a badge like any other.
 
 ### Panels and cards
 - **Material:** glass, with a 12% white edge and a float shadow. The side panel uses thick glass.
-- **Corner:** 12px for bars and readouts, 18px for cards and the side panel.
+- **One component:** every floating surface is a `Panel` (or takes its classes from `panelVariants`; a popover
+  over the map asks for `surface="glass"`). No surface sets its own radius, fill or blur.
+- **Corner:** 12px for bars, readouts and controls on the map; 18px for cards, the walk panel and the side panel.
 - **Padding:** 16px. A card's actions sit in a footer that stays put while the body scrolls.
 
 ### Inputs
@@ -267,11 +281,41 @@ rounded squares carrying their number.
 ### Navigation
 - Three tabs (Explore, Plan, Layers) as a segmented control; the active tab is a lighter fill. On the
   bottom sheet, tapping the active tab folds the sheet.
+- **Segmented controls** are 8px with 2px of padding and a 6px thumb, so the corners are concentric. The
+  2D/3D switch floats on the map, so it sits in a 12px panel with 4px of padding and 8px segments.
+
+### Map labels
+The walk-limit ring label, the turn-back or tightest-point chip, the walker's countdown and a hovered
+place name share one box (`MAP_LABEL_BOX` in `map/mapLabel.ts`): 4px radius, hairline border, thick-glass
+fill, 11px semibold in the app font. Status shows through the border and text colour only (warn, ok, sim).
+The walker's label holds only the work time left at a stop.
+
+### Stop numbers
+One badge in the Plan tab's list, on the map and in the map key (`STOP_BADGE`): a rounded square with a
+6px corner and a 1.5px Ink border on a Well fill; the start is the same shape inverted. 18px in the list,
+22px on the map (30px on touch screens).
+
+### Walk list
+Start, stops and "Return to start" as one ordered list, one line each: grip, number, name, dwell, remove.
+The start row holds the start select and "Pick on map". Stops reorder by dragging or with the arrow keys
+on the grip. What the crew does at a stop is on the place's card and, during a walk, in the walk panel.
+
+### Route table
+One row per route, selectable: a swatch in the route's map colour, its name, and right-aligned columns
+for time, distance, energy and hazard metres. The best figure in each column is in Ink and the rest are
+muted; no colour is added. A route that does not fit says so in red under its name.
+
+### Walk panel
+The mode as plain text in the Sim colour, a Follow toggle and a close button; the clock; one line for what
+is happening and, while the crew works at a stop, their task under it. Then the distance and bearing to
+the next point, what is left of time, energy and oxygen on the suit meter's mini bars, and the walk home.
 
 ### Budget bar (signature)
-One bar per limit (EVA time, energy, oxygen): used segments in colour, what is left in a faint green,
-the safety reserve hatched at the end, a marker for the turn-back time, and a red hatched overrun if
-the plan exceeds the usable budget. Each has an info button and a full text label for screen readers.
+One row per limit (EVA time, energy, oxygen), directly under the verdict: the name, the bar, and used /
+usable. On the bar: used segments in colour, what is left in a faint green, the safety reserve hatched at
+the end, a marker for the turn-back time, and a red hatched overrun if the plan exceeds the usable budget.
+One legend serves all three bars. Each row has an info button, which also gives the split between walking,
+stops and what is left, and a full text label for screen readers.
 
 ### Info button
 A small "i" that opens a popover. Use it for any explanation a reader may need; a `title` tooltip is

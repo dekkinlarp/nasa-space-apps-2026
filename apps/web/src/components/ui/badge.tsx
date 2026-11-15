@@ -17,7 +17,7 @@ const badgeVariants = cva(
         sim: "border-sim/45 text-sim",
         strong: "border-ink-2 text-foreground",
         quiet: "border-border text-muted-foreground",
-        success: "rounded-full border-ok/35 bg-ok/10 font-semibold text-ok",
+        success: "border-ok/55 text-ok",
         secondary:
           "bg-secondary text-secondary-foreground [a]:hover:bg-secondary/80",
         destructive:

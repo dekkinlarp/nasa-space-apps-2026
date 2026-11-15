@@ -4,11 +4,11 @@ import { loadArea, pickArea } from "./data";
 import { startEngine } from "./engine";
 import { getMap, MapView, setMapInsets } from "./map/MapView";
 import { pictureGroup } from "./map/imageryTiles";
-import { CircleHelpIcon } from "lucide-react";
+import { CircleHelpIcon, SlidersHorizontalIcon } from "lucide-react";
 import { SidebarIcon } from "./components/icons";
 import { Button } from "@/components/ui/button";
 import { Badge } from "@/components/ui/badge";
-import { Panel } from "@/components/ui/panel";
+import { Panel, panelVariants } from "@/components/ui/panel";
 import { Popover, PopoverContent, PopoverTrigger } from "@/components/ui/popover";
 import { Segmented } from "@/components/ui/segmented";
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "@/components/ui/select";
@@ -20,7 +20,7 @@ import { EdgeBlur, useScrollEdges } from "@/components/ui/scroll-edge";
 import { cn } from "@/lib/utils";
 import { SiteHeader } from "./components/SiteHeader";
 import { ExploreTab } from "./components/ExploreTab";
-import { PlanTab } from "./components/PlanTab";
+import { PlanFooter, PlanTab } from "./components/PlanTab";
 import { LayersTab } from "./components/LayersTab";
 import { HoverReadout } from "./components/HoverReadout";
 import { PoiCard, WaypointCard } from "./components/Cards";
@@ -45,10 +45,10 @@ export const PANEL_MS = 380;
  * The shell is a full-window map with floating chrome. Three custom properties carry the panel state to
  * everything that has to clear it (the stage, the map controls, the image credit):
  * --stage-left is where the stage starts, --sheet-h the height of the bottom sheet, and --dock the height
- * of the elevation profile, which the root reads off its own descendants with has-[…].
+ * of the elevation profile while it is open, which the root reads off its own descendants with has-[…].
  */
 const SHELL =
-  "app relative h-full overflow-hidden [--dock:0px] has-[.profile:not(.collapsed)]:[--dock:calc(188px+var(--gap))] has-[.profile.collapsed]:[--dock:calc(40px+var(--gap))] sheet:[--stage-left:max(var(--gap),env(safe-area-inset-left))]";
+  "app relative h-full overflow-hidden [--dock:0px] has-[.profile:not(.collapsed)]:[--dock:calc(150px+var(--gap))] sheet:[--stage-left:max(var(--gap),env(safe-area-inset-left))]";
 /** Phones and short landscape screens give the profile's room to the open sheet. */
 const SHELL_OPEN =
   "sheet-open [--sheet-h:0px] [--stage-left:calc(var(--side-w)+var(--gap)*2)] sheet:[--sheet-h:46dvh] phone:[--dock:0px]! phone:[--sheet-h:50dvh] squat:[--dock:0px]! squat:[--sheet-h:56dvh]";
@@ -66,8 +66,12 @@ const sheetPeek = () => (typeof matchMedia === "function" && matchMedia("(pointe
     from applying, and each strip then renders as one solid frosted block. Nothing in it needs the clip.
     The sheet keeps the same gap from the left and right edges as the other panels and sits flush on the bottom edge; the status bar is its last row. */
 const SIDE =
-  "glass-thick glass-host absolute! top-[max(var(--gap),env(safe-area-inset-top))] bottom-(--gap) left-[max(var(--gap),env(safe-area-inset-left))] z-3 min-h-0 w-(--side-w) gap-0 rounded-2xl shadow-float [transition:translate_var(--panel-ms)_var(--spring),visibility_0s] sheet:top-auto sheet:right-[max(var(--gap),env(safe-area-inset-right))] sheet:bottom-0 sheet:h-(--sheet-h) sheet:w-auto sheet:rounded-t-3xl sheet:rounded-b-none sheet:border-b-0 sheet:[transition:height_var(--panel-ms)_var(--spring)]";
+  panelVariants({ size: "thick" }) +
+  " glass-host absolute! top-[max(var(--gap),env(safe-area-inset-top))] bottom-(--gap) left-[max(var(--gap),env(safe-area-inset-left))] z-3 min-h-0 w-(--side-w) gap-0 [transition:translate_var(--panel-ms)_var(--spring),visibility_0s] sheet:top-auto sheet:right-[max(var(--gap),env(safe-area-inset-right))] sheet:bottom-0 sheet:h-(--sheet-h) sheet:w-auto sheet:rounded-t-3xl sheet:rounded-b-none sheet:border-b-0 sheet:[transition:height_var(--panel-ms)_var(--spring)]";
 const SIDE_CLOSED = "wide:invisible wide:-translate-x-[calc(100%+var(--gap)*2)] wide:[transition:translate_var(--panel-ms)_var(--spring),visibility_0s_linear_var(--panel-ms)]";
+
+/** The Plan tab is a scrolling body over a footer that stays put: the tab itself does not scroll. */
+const TAB_SPLIT = "flex min-h-0 flex-col sheet:in-[.sheet-closed]:hidden";
 
 const TAB_BODY =
   "tab-body scrollbar-thin overflow-y-auto px-4 pt-4 pb-10 text-base sheet:touch-pan-y sheet:overscroll-contain sheet:pt-3 sheet:pr-[max(var(--gutter),env(safe-area-inset-right))] sheet:pb-7 sheet:pl-[max(var(--gutter),env(safe-area-inset-left))] sheet:in-[.sheet-closed]:hidden";
@@ -117,7 +121,7 @@ function GestureHint({ view3d }: { view3d: boolean }) {
       <PopoverTrigger render={<Button variant="glass" size="icon-xl" aria-label="Map gestures" title="Map gestures" />}>
         <CircleHelpIcon className="size-[18px]" aria-hidden />
       </PopoverTrigger>
-      <PopoverContent side="top" align="end" sideOffset={8} className="glass bg-glass w-max max-w-[min(380px,calc(100vw-24px))] rounded-xl px-4 py-3 shadow-float-sm ring-0">
+      <PopoverContent surface="glass" side="top" align="end" sideOffset={8} className="w-max max-w-[min(380px,calc(100vw-24px))] px-4 py-3">
         <dl className="m-0 grid gap-1.5 text-sm" onClick={() => setOpen(false)}>
           {rows.map(([k, v]) => (
             <div key={k} className="flex justify-between gap-4">
@@ -188,50 +192,74 @@ function SheetGrabber({ open, full, onGrow, onShrink, sheet }: { open: boolean; 
   );
 }
 
-/** 3D render distance choices: side of the square of ground drawn around where the camera looks, km. */
+/** 3D draw distance choices: side of the square of ground drawn around where the camera looks, km. */
 const RENDER_DISTANCES = [2, 4, 8, 16].map((km) => ({ value: String(km), label: `${km} × ${km} km` }));
 
-/** Bottom-right of the map: how the map is viewed. The vertical-scale slider and render distance appear beside it in 3D. */
-function ViewControls() {
-  const view3d = useStore((s) => s.view3d);
+/**
+ * The 3D settings: vertical exaggeration and how much ground is drawn. They are set rarely, so they wait
+ * behind a button beside the 2D/3D switch instead of holding a bar of their own.
+ */
+function View3dSettings() {
   const ex = useStore((s) => s.exaggeration);
   const renderKm = useStore((s) => s.renderDistanceKm);
+  const set = useStore((s) => s.set);
+  return (
+    <Popover>
+      <PopoverTrigger render={<Button variant="glass" size="icon-xl" aria-label="3D settings" title="3D settings" />}>
+        <SlidersHorizontalIcon className="size-[18px]" aria-hidden />
+      </PopoverTrigger>
+      <PopoverContent surface="glass" side="top" align="end" sideOffset={8} className="w-[264px] max-w-[calc(100vw-24px)] gap-3 px-4 py-3 text-sm">
+        <label className="grid gap-2">
+          <span className="flex justify-between">
+            Vertical exaggeration <span className="text-muted-foreground">×{ex}</span>
+          </span>
+          <Slider aria-label="Vertical exaggeration" min={1} max={10} step={0.5} value={[ex]} onValueChange={(v) => set({ exaggeration: Array.isArray(v) ? v[0]! : v })} />
+        </label>
+        <div className="grid gap-1.5">
+          <div className="flex items-center justify-between gap-3">
+            <span>Draw distance</span>
+            <Select items={RENDER_DISTANCES} value={String(renderKm)} onValueChange={(v) => v && set({ renderDistanceKm: Number(v) })}>
+              <SelectTrigger aria-label="3D draw distance" size="sm" className="w-[104px]">
+                <SelectValue />
+              </SelectTrigger>
+              <SelectContent>
+                {RENDER_DISTANCES.map((it) => (
+                  <SelectItem key={it.value} value={it.value}>
+                    {it.label}
+                  </SelectItem>
+                ))}
+              </SelectContent>
+            </Select>
+          </div>
+          <p className="m-0 text-xs text-muted-foreground">How much ground is drawn in 3D, centred on where you are looking. Smaller is faster on slow devices.</p>
+        </div>
+      </PopoverContent>
+    </Popover>
+  );
+}
+
+/** Bottom-right of the map: how the map is viewed. In 3D a settings button joins the switch. */
+function ViewControls() {
+  const view3d = useStore((s) => s.view3d);
   const set = useStore((s) => s.set);
   const hasElev = useStore((s) => !!s.area?.overview.elevation);
   return (
     <div className="pointer-events-auto flex flex-none items-center gap-2 sheet:basis-full sheet:justify-end">
-      {view3d && (
-        <Panel className="view-ctl flex h-11 items-center gap-3 px-4 text-ink-2 phone:hidden">
-          <span className="text-sm whitespace-nowrap">Vertical ×{ex}</span>
-          <Slider aria-label="Vertical exaggeration" className="w-[110px] sheet:w-20" min={1} max={10} step={0.5} value={[ex]} onValueChange={(v) => set({ exaggeration: Array.isArray(v) ? v[0]! : v })} />
-          <span className="ml-1 text-sm whitespace-nowrap" title="How much ground is drawn in 3D, centred on where you are looking. Smaller is faster on slow devices.">
-            Draw distance
-          </span>
-          <Select items={RENDER_DISTANCES} value={String(renderKm)} onValueChange={(v) => v && set({ renderDistanceKm: Number(v) })}>
-            <SelectTrigger aria-label="3D render distance" size="sm" className="w-[104px]">
-              <SelectValue />
-            </SelectTrigger>
-            <SelectContent>
-              {RENDER_DISTANCES.map((it) => (
-                <SelectItem key={it.value} value={it.value}>
-                  {it.label}
-                </SelectItem>
-              ))}
-            </SelectContent>
-          </Select>
-        </Panel>
-      )}
-      <Segmented
-        aria-label="Map view"
-        value={view3d ? "3d" : "2d"}
-        onValueChange={(v) => set({ view3d: v === "3d" })}
-        options={[
-          { value: "2d", label: "2D" },
-          { value: "3d", label: "3D", disabled: !hasElev },
-        ]}
-        className="glass bg-glass border-glass-edge h-11 p-1 shadow-float-sm"
-        itemClassName="h-full px-4 text-base coarse:h-full"
-      />
+      {view3d && <View3dSettings />}
+      {/* The switch floats on the map, so it sits in a panel: a 12px surface with 4px of padding around 8px segments. */}
+      <Panel className="view-ctl flex h-11 flex-none p-1">
+        <Segmented
+          aria-label="Map view"
+          value={view3d ? "3d" : "2d"}
+          onValueChange={(v) => set({ view3d: v === "3d" })}
+          options={[
+            { value: "2d", label: "2D" },
+            { value: "3d", label: "3D", disabled: !hasElev },
+          ]}
+          className="h-full border-0 bg-transparent p-0"
+          itemClassName="h-full rounded-lg px-4 text-base coarse:h-full"
+        />
+      </Panel>
       <GestureHint view3d={view3d} />
     </div>
   );
@@ -274,7 +302,9 @@ export function App() {
       const side = sideRef.current, dock = dockRef.current;
       if (!side) return;
       const s = side.getBoundingClientRect();
-      const dockH = dock ? dock.getBoundingClientRect().height + 12 : 0;
+      // The dock is the open elevation profile and, on wide screens, the status bar under it.
+      const dockPx = dock?.getBoundingClientRect().height ?? 0;
+      const dockH = dockPx > 0 ? dockPx + 12 : 0;
       if (narrowScreen()) setMapInsets({ top: 56, bottom: (sheetOpen ? s.height : sheetPeek() + STATUS_H) + dockH }, ms);
       else setMapInsets({ top: 56, left: sheetOpen ? s.right : 0, bottom: dockH }, ms);
     };
@@ -385,18 +415,18 @@ export function App() {
           className="tabs flex flex-none gap-2 border-b px-4 pb-3 sheet:pt-2.5 sheet:pr-[max(var(--gutter),env(safe-area-inset-right))] sheet:pl-[max(var(--gutter),env(safe-area-inset-left))] sheet:in-[.sheet-closed]:border-b-0"
           aria-label="Sections"
         >
-          <TabsList className="flex-1 gap-0.5 rounded-[9px] bg-white/6 p-0.5 group-data-horizontal/tabs:h-auto">
+          <TabsList className="flex-1 gap-0.5 rounded-lg bg-white/6 p-0.5 group-data-horizontal/tabs:h-auto">
             {TABS.map((t) => (
               <TabsTrigger
                 key={t.id}
                 value={t.id}
                 // On the bottom sheet, tapping the open tab again folds it; any other tap opens it.
                 onClick={() => (tab === t.id && narrowScreen() && sheetOpen ? foldSheet() : setSheetOpen(true))}
-                className="h-[30px] rounded-[7px] text-sm text-ink-2 coarse:h-[38px] data-active:bg-white/16 data-active:text-foreground data-active:shadow-thumb"
+                className="h-[30px] rounded-md text-sm text-ink-2 coarse:h-[38px] data-active:bg-white/16 data-active:text-foreground data-active:shadow-thumb"
               >
                 {t.label}
                 {t.id === "plan" && planCount > 0 && (
-                  <Badge variant="secondary" className="ml-1 h-4 rounded-lg bg-white/14 px-1.5 text-foreground">
+                  <Badge className="ml-1 text-foreground" aria-label={`${planCount} ${planCount === 1 ? "stop" : "stops"}`}>
                     {planCount}
                   </Badge>
                 )}
@@ -412,8 +442,11 @@ export function App() {
         <TabsContent value="explore" className={TAB_BODY}>
           <ExploreTab />
         </TabsContent>
-        <TabsContent value="plan" className={TAB_BODY}>
-          <PlanTab />
+        <TabsContent value="plan" className={TAB_SPLIT}>
+          <div className={cn(TAB_BODY, "min-h-0 flex-1 pb-5 sheet:pb-4")}>
+            <PlanTab />
+          </div>
+          <PlanFooter />
         </TabsContent>
         <TabsContent value="layers" className={TAB_BODY}>
           <LayersTab />
@@ -444,9 +477,9 @@ export function App() {
             <GoPanel />
             <ViewControls />
           </div>
-          {/* The foot of the map: the elevation dock when there is a route, then the status bar. On the bottom-sheet
-              layout the status bar is the sheet's last row instead. */}
-          <div className="flex min-w-0 flex-col gap-2 empty:hidden" ref={dockRef}>
+          {/* The foot of the map: the elevation profile when it is open, then the status bar, which carries its toggle.
+              On the bottom-sheet layout the status bar is the sheet's last row instead, and this holds the profile alone. */}
+          <div className="flex min-w-0 flex-col empty:hidden sheet:has-[.profile.collapsed]:hidden" ref={dockRef}>
             {hasRoute && <ProfileStrip />}
             {!narrow && <StatusBar />}
           </div>

@@ -57,15 +57,8 @@ export function limitMessage(r: RouteResult, names: string[], params: WalkParams
   if (t.withinLimits) return null;
   const i = t.firstSegmentOverLimit ?? 0;
   const who = names[i + 1] ?? `segment ${i + 1}`;
-  const usableT = params.evaLimitS * (1 - params.reserveFraction);
-  const usableE = params.energyBudgetKJ * (1 - params.reserveFraction);
-  const usableO = (params.o2BudgetKg ?? 0) * (1 - params.reserveFraction);
-  const factor =
-    t.limitingFactor === "oxygen"
-      ? `the oxygen supply (${fmtO2(t.o2Kg ?? NaN)} needed vs ${fmtO2(usableO)} usable after reserve)`
-      : t.limitingFactor === "energy"
-      ? `the energy budget (${fmtEnergy(t.energyKJ)} needed vs ${fmtEnergy(usableE)} usable after reserve)`
-      : `the EVA time budget (${fmtDur(t.totalTimeS)} needed vs ${fmtDur(usableT)} usable after reserve)`;
+  // The numbers are on the budget bars beside this message, so it names the limit and leaves them there.
+  const factor = t.limitingFactor === "oxygen" ? "the oxygen supply" : t.limitingFactor === "energy" ? "the energy budget" : "the EVA time budget";
   return `Reaching ${who} breaks ${factor}. Remove or reorder stops, shorten dwell times, or pick a closer start.`;
 }
 

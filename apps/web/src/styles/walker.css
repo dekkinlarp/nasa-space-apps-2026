@@ -79,14 +79,8 @@
 .walker.idle .w-leg-b { transform: rotate(6deg); }
 .walker.idle .w-body { animation: w-bob 3s ease-in-out infinite; }
 
-/* ---- label above the head while working ---- */
-.walker .w-label {
-  position: absolute; left: 50%; bottom: 74px; transform: translateX(-50%); display: none; align-items: center; gap: 7px;
-  padding: 4px 9px 4px 5px; white-space: nowrap; border-radius: 999px; font: 600 11.5px/1.2 system-ui, sans-serif; color: #f2fbfa;
-  background: rgba(11,10,12,.88); border: 1px solid rgba(54,209,196,.55); box-shadow: 0 4px 14px rgba(0,0,0,.45);
-}
-.walker .w-label::after { content: ""; position: absolute; left: 50%; bottom: -5px; margin-left: -4px; border: 4px solid transparent; border-top-color: rgba(54,209,196,.55); border-bottom: 0; }
-.walker.working .w-label, .walker.idle.done .w-label { display: flex; }
-.walker .w-label small { display: block; font-weight: 500; font-size: 10.5px; color: #9fdcd6; font-variant-numeric: tabular-nums; }
+/* ---- label above the head while working: the work time left. Its box is the shared map label (map/mapLabel.ts). ---- */
+.walker .w-label { position: absolute; left: 50%; bottom: 74px; transform: translateX(-50%); display: none; align-items: center; gap: 5px; }
+.walker.working .w-label { display: flex; }
 .walker .w-ring { flex: none; }
 .walker .w-ring circle:last-child { transition: stroke-dashoffset .25s linear; }

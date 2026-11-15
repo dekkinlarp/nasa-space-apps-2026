@@ -3,7 +3,7 @@ import { ArrowRightIcon, PlayIcon } from "lucide-react";
 import { useStore } from "../store";
 import { getMap } from "../map/MapView";
 import { POI_DOT, POI_TYPE_LABEL, PriorityTag } from "./Cards";
-import { ConditionsLine } from "./SiteHeader";
+import { SiteFacts } from "./SiteHeader";
 import { Badge } from "@/components/ui/badge";
 import { Button } from "@/components/ui/button";
 import { SectionHeading } from "@/components/ui/section-heading";
@@ -81,6 +81,8 @@ export function ExploreTab() {
   };
   return (
     <>
+      {/* Site facts open the tab: where this is, how big, and the conditions a walk plans around. */}
+      <SiteFacts className="mb-4" />
       <section>
         <h2 className="m-0 mb-2 text-xl font-normal tracking-[-0.02em]">Ridge to hollow in one walk</h2>
         <p className="m-0 mb-1.5 text-ink-2">Curiosity drilled here but couldn't dig under the sand or climb the ridges. A crew could do it all in one six-hour EVA.</p>
@@ -182,8 +184,6 @@ export function ExploreTab() {
           {sols.length > 0 && ` from sols ${Math.min(...sols)}–${Math.max(...sols)}`}
           {rover.drillSites.length > 0 && `, with drill holes at ${rover.drillSites.map((d) => d.name).join(", ")}`}. Click a waypoint dot on the map for its sol and photos.
         </p>
-        {/* On the bottom-sheet layout the site header is hidden, so the site facts close the tab instead. */}
-        <ConditionsLine className="mb-3 hidden sheet:block" />
       </section>
     </>
   );

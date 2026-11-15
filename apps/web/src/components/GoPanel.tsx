@@ -1,4 +1,4 @@
-import { useEffect, useMemo, useRef, type ReactNode } from "react";
+import { useEffect, useMemo, useRef } from "react";
 import { oxygenUsedKg, type LonLat } from "@marsmap/core";
 import { selectedResult, usableTimeS, useStore } from "../store";
 import { routePoints } from "../engine";
@@ -8,8 +8,8 @@ import { fmtClock, fmtDist, fmtDur, fmtEnergy, fmtO2 } from "../format";
 import { FollowToggle } from "./GoWalker";
 import { XIcon } from "lucide-react";
 import { Alert } from "@/components/ui/alert";
-import { Badge } from "@/components/ui/badge";
 import { Button } from "@/components/ui/button";
+import { MiniBar } from "@/components/ui/mini-bar";
 import { Panel } from "@/components/ui/panel";
 import { Segmented } from "@/components/ui/segmented";
 import { cn } from "@/lib/utils";
@@ -17,16 +17,6 @@ import { cn } from "@/lib/utils";
 /** On the bottom-sheet layout the Go panel takes the row and replaces the POI card and the hover readout. */
 // sheet:mt-2: on the bottom-sheet layout the view controls wrap onto a line above, and this is the space between.
 const GO_PANEL = "go-panel w-80 max-w-full flex-none sheet:mt-2 sheet:w-auto sheet:flex-1";
-
-/** One reading in the Go panel. */
-function Reading({ label, bad, children }: { label: string; bad?: boolean; children: ReactNode }) {
-  return (
-    <div>
-      <span className="block text-xs text-muted-foreground">{label}</span>
-      <b className={cn("text-sm font-normal", bad && "text-bad")}>{children}</b>
-    </div>
-  );
-}
 
 const SPEEDS = [30, 120, 600, 1800];
 const OFF_ROUTE_M = 25;
@@ -132,47 +122,56 @@ export function GoPanel() {
     const f = s.distanceM > 0 ? Math.max(0, Math.min(1, (go.alongM - segStartAlong) / Math.max(1, measureLen(tl, i)))) : 1;
     energyUsed += s.energyKJ * f;
   }
-  const energyLeft = params.energyBudgetKJ * (1 - params.reserveFraction) - energyUsed;
+  const usableE = params.energyBudgetKJ * (1 - params.reserveFraction);
+  const energyLeft = usableE - energyUsed;
   const cell = reach ? cellIndex(reach.grid, here) : null;
   const homeS = reach && cell != null ? reach.backTimeS[cell] : undefined;
   const homeE = reach && cell != null ? reach.backEnergyKJ[cell] : undefined;
   const o2On = (params.o2BudgetKg ?? 0) > 0 && (params.o2KgPerKJ ?? 0) > 0;
-  const o2Left = (params.o2BudgetKg ?? 0) * (1 - params.reserveFraction) - oxygenUsedKg(params, go.elapsedS, energyUsed);
+  const usableO = (params.o2BudgetKg ?? 0) * (1 - params.reserveFraction);
+  const o2Left = usableO - oxygenUsedKg(params, go.elapsedS, energyUsed);
   const homeO2 = homeS != null && homeE != null && Number.isFinite(homeS) ? oxygenUsedKg(params, homeS, homeE) : undefined;
   const turnBack =
     homeS != null && Number.isFinite(homeS) && (timeLeft < homeS || (homeE != null && energyLeft < homeE) || (o2On && homeO2 != null && o2Left < homeO2));
   const brg = bearingDeg(here, nextPt);
+  // While the crew works at a stop, what they are there to do: the place's own crew task.
+  const workStop = pos?.dwelling ? stops[seg] : undefined;
+  const workPoi = workStop?.poiId ? area.config.pois.find((p) => p.id === workStop.poiId) : undefined;
+  const task = workStop ? (workPoi?.humanCan?.trim() || workPoi?.summary || "Custom stop: observe and sample").replace(/\.$/, "") : null;
 
   return (
     <Panel size="lg" className={cn(GO_PANEL, "p-4 phone:p-3")}>
-      <div className="flex items-center justify-between">
-        <Badge variant="sim">{go.mode === "sim" ? "Simulated position" : "Your location, mapped onto Mars"}</Badge>
+      <div className="flex items-center gap-1.5">
+        {/* Plain text in the simulated-position colour: the same colour as the walker and its line on the map. */}
+        <span className="mr-auto min-w-0 truncate text-xs text-sim">{go.mode === "sim" ? "Simulated position" : "Your location, mapped onto Mars"}</span>
         <FollowToggle />
-        <Button variant="ghost" size="icon-xs" className="text-muted-foreground" onClick={() => setGo({ mode: "off", playing: false, position: null })} title="Stop" aria-label="Stop">
+        <Button variant="ghost" size="icon-xs" className="text-muted-foreground" onClick={() => setGo({ mode: "off", playing: false, position: null })} title="Stop" aria-label="Stop the walk">
           <XIcon />
         </Button>
       </div>
       <div className="mt-2 text-3xl font-normal tracking-[-0.03em] phone:mt-0.5 phone:text-2xl">{fmtClock(go.elapsedS)}</div>
-      <div className="mb-2 text-ink-2">{done ? "Walk complete" : pos?.dwelling ? `Working at ${names[seg + 1] ?? "stop"}` : `Next: ${names[Math.min(nextIdx, names.length - 1)] ?? "end"}`}</div>
+      {/* One line for what is happening now, and under it the crew task while they work at a stop. */}
+      <div className="text-ink-2">{done ? "Walk complete" : pos?.dwelling ? `Working at ${names[seg + 1] ?? "stop"}` : `Next: ${names[Math.min(nextIdx, names.length - 1)] ?? "end"}`}</div>
+      {task && !done && <div className="mt-0.5 line-clamp-2 text-sm text-muted-foreground">{task}</div>}
       {!done && (
-        <div className="grid grid-cols-2 gap-x-2.5 gap-y-1.5 border-t pt-2 sheet:grid-cols-3">
-          <Reading label="To next">{fmtDist(marsDistanceM(here, nextPt))}</Reading>
-          <Reading label="Bearing">
-            {Math.round(brg)}° {COMPASS[Math.round(brg / 45) % 8]}
-          </Reading>
-          <Reading label="Time left" bad={timeLeft < 0}>
-            {fmtDur(timeLeft)}
-          </Reading>
-          <Reading label="Energy left" bad={energyLeft < 0}>
-            {fmtEnergy(energyLeft)}
-          </Reading>
-          {o2On && (
-            <Reading label="Oxygen left" bad={o2Left < 0}>
-              {fmtO2(o2Left)}
-            </Reading>
-          )}
-          <Reading label="Walk home">{homeS != null && Number.isFinite(homeS) ? fmtDur(homeS) : "—"}</Reading>
-          {go.mode === "gps" && <Reading label="GPS ±">{go.gpsAccuracyM != null ? `${Math.round(go.gpsAccuracyM)} m` : "…"}</Reading>}
+        <div className="mt-2 border-t pt-2 text-xs">
+          <div className="flex items-baseline justify-between gap-2">
+            <span className="text-muted-foreground">To the next point</span>
+            <span className="text-sm">
+              {fmtDist(marsDistanceM(here, nextPt))} · {Math.round(brg)}° {COMPASS[Math.round(brg / 45) % 8]}
+            </span>
+          </div>
+          {/* What is left of each budget, on the bars the suit meter uses. */}
+          <div className="mt-1.5">
+            <MiniBar label="Time left" f={go.elapsedS / (usable || 1)} value={fmtDur(timeLeft)} />
+            <MiniBar label="Energy left" f={energyUsed / (usableE || 1)} value={fmtEnergy(energyLeft)} />
+            {o2On && <MiniBar label="O₂ left" f={1 - o2Left / (usableO || 1)} value={fmtO2(o2Left)} />}
+          </div>
+          <div className="mt-1.5 flex items-baseline justify-between gap-2 border-t pt-1.5">
+            <span className="text-muted-foreground">Walk home</span>
+            <span className="text-sm">{homeS != null && Number.isFinite(homeS) ? fmtDur(homeS) : "—"}</span>
+          </div>
+          {go.mode === "gps" && <div className="mt-1 text-muted-foreground">GPS accurate to {go.gpsAccuracyM != null ? `±${Math.round(go.gpsAccuracyM)} m` : "…"}</div>}
         </div>
       )}
       {turnBack && !done && <Alert variant="destructive">Turn back: remaining budget is less than the walk home from here.</Alert>}

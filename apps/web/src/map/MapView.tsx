@@ -2,6 +2,7 @@ import { CompassControl } from "./compassControl";
 import { useEffect, useRef, useState } from "react";
 import { createPortal } from "react-dom";
 import maplibregl, { type GeoJSONSource, type ImageSource, type Map as MLMap } from "maplibre-gl";
+import { MAP_LABEL, MAP_LABEL_BOX, MAP_LABEL_TONE, STOP_BADGE, STOP_BADGE_NUMBER, STOP_BADGE_START } from "./mapLabel";
 import type { GridSpec, LonLat, ReachRing, RouteResult } from "@marsmap/core";
 import { selectedResult, useStore, type LayerState, type OverlayId } from "../store";
 import type { AreaData, DisplayLayers, Poi } from "../types";
@@ -382,15 +383,15 @@ const POI_FILL: Record<string, string> = {
 /** MapLibre makes markers position: absolute, which also anchors the label. */
 const POI_PIN = "poi-pin group/pin flex size-3.5 cursor-pointer items-center gap-1.5 hover:z-3 [&.selected]:z-3";
 const POI_DOT = "block size-3 rounded-full border-[1.5px] border-well shadow-[0_0_0_1px_rgba(255,255,255,0.75)] transition-transform duration-[120ms] ease-out-quint group-[:is(:hover,.selected)]/pin:scale-120 coarse:size-4";
-/** One label style for everything named on the map: 11px semibold, white, dark halo. */
-const MAP_LABEL = "text-[11px]/4 font-semibold whitespace-nowrap";
 /** Sits beside the dot (further out once the pin carries a stop number), flips to the left near an edge,
-    hides when it would collide, and becomes a boxed full name on hover or when selected. */
-const POI_LABEL = `poi-label ${MAP_LABEL} pointer-events-none absolute -top-px left-[19px] text-white text-shadow-[0_0_2px_#000,0_0_4px_#000,0_1px_6px_#000] group-[.in-plan]/pin:left-[23px] group-[.flip]/pin:right-[19px] group-[.flip]/pin:left-auto group-[.in-plan.flip]/pin:right-[23px] group-[.in-plan.flip]/pin:left-auto group-[.lbl-off:not(:hover,.selected)]/pin:invisible group-[:is(:hover,.selected)]/pin:-top-0.5 group-[:is(:hover,.selected)]/pin:rounded-sm group-[:is(:hover,.selected)]/pin:border group-[:is(:hover,.selected)]/pin:border-input group-[:is(:hover,.selected)]/pin:bg-[rgba(15,12,11,0.9)] group-[:is(:hover,.selected)]/pin:px-1.5 group-[:is(:hover,.selected)]/pin:text-shadow-none [.lowzoom_&]:hidden [.lowzoom_.poi-pin:hover_&]:inline`;
-const STOP_MARKER = "stop-marker grid size-[22px] cursor-grab place-items-center rounded-lg border-[1.5px] text-[11px] font-semibold coarse:size-[30px] coarse:text-base";
-const STOP_NUMBER = `${STOP_MARKER} border-white bg-well text-white shadow-[0_0_0_1px_rgba(0,0,0,0.6)]`;
-const STOP_START = `${STOP_MARKER} border-well bg-white text-well shadow-[0_0_0_1px_rgba(255,255,255,0.8)]`;
-const RING_LABEL = `ring-label ${MAP_LABEL} pointer-events-none cursor-help rounded-sm border bg-[rgba(15,17,20,0.86)] px-[5px]`;
+    hides when it would collide, and becomes a boxed full name on hover or when selected: the box is MAP_LABEL_BOX
+    (map/mapLabel.ts) spelled out behind the group variant. */
+const POI_LABEL = `poi-label ${MAP_LABEL} pointer-events-none absolute -top-px left-[19px] text-white text-shadow-[0_0_2px_#000,0_0_4px_#000,0_1px_6px_#000] group-[.in-plan]/pin:left-[23px] group-[.flip]/pin:right-[19px] group-[.flip]/pin:left-auto group-[.in-plan.flip]/pin:right-[23px] group-[.in-plan.flip]/pin:left-auto group-[.lbl-off:not(:hover,.selected)]/pin:invisible group-[:is(:hover,.selected)]/pin:-top-0.5 group-[:is(:hover,.selected)]/pin:rounded-sm group-[:is(:hover,.selected)]/pin:border group-[:is(:hover,.selected)]/pin:border-input group-[:is(:hover,.selected)]/pin:bg-glass-thick group-[:is(:hover,.selected)]/pin:px-1.5 group-[:is(:hover,.selected)]/pin:text-shadow-none [.lowzoom_&]:hidden [.lowzoom_.poi-pin:hover_&]:inline`;
+/** Stop markers carry the same badge as the stop numbers in the Plan tab's list, larger and with a keyline for the ground. */
+const STOP_MARKER = `stop-marker ${STOP_BADGE} size-[22px] cursor-grab text-[11px] coarse:size-[30px] coarse:text-base`;
+const STOP_NUMBER = `${STOP_MARKER} ${STOP_BADGE_NUMBER} shadow-[0_0_0_1px_rgba(0,0,0,0.6)]`;
+const STOP_START = `${STOP_MARKER} ${STOP_BADGE_START} shadow-[0_0_0_1px_rgba(255,255,255,0.8)]`;
+const RING_LABEL = `ring-label ${MAP_LABEL_BOX} pointer-events-none cursor-help`;
 
 function poiEl(p: Poi): HTMLElement {
   const el = document.createElement("div");
@@ -848,7 +849,7 @@ export function MapView() {
       el.title = isLimit
         ? `Walk limit: the farthest you can go, work one stop and still get home with the reserve intact on time, energy and oxygen${r.limitedBy ? `. Here ${r.limitedBy} runs out first` : ""}`
         : `Reachable and back to the start in ${fmtDur(r.budgetS)} of walking (round trip)`;
-      el.className += isLimit ? " border-warn/55 text-warn" : " border-input text-ink-2";
+      el.className += ` ${isLimit ? MAP_LABEL_TONE.warn : MAP_LABEL_TONE.neutral}`;
       el.setAttribute("aria-label", el.title);
       ringMarkers.current.push(new maplibregl.Marker({ element: el, anchor: "bottom" }).setLngLat(outline[0] as [number, number]).addTo(map));
       el.tabIndex = -1;

@@ -8,6 +8,7 @@ import { ChevronDownIcon } from "lucide-react";
 import { Panel } from "@/components/ui/panel";
 import { POI_DOT } from "./Cards";
 import { cn } from "@/lib/utils";
+import { STOP_BADGE, STOP_BADGE_NUMBER, STOP_BADGE_START } from "../map/mapLabel";
 
 /** v2: the key now starts collapsed; an "open" choice saved by older builds is ignored. */
 const LS_KEY = "marsmap.legendOpen.v2";
@@ -40,8 +41,9 @@ function Section({ title, tip, children }: { title?: string; tip?: string; child
   );
 }
 
-const dot = "inline-block size-[9px] rounded-full border-[1.5px] border-[#1a1210] shadow-[0_0_0_1px_rgba(255,255,255,.15)]";
-const marker = "grid size-4 place-items-center border-[1.5px] border-white text-[9px] font-extrabold text-white shadow-[0_1px_4px_rgba(0,0,0,.6)]";
+const dot = "inline-block size-[9px] rounded-full border-[1.5px] border-well shadow-[0_0_0_1px_rgba(255,255,255,.15)]";
+/** The start and stop markers in miniature: the same badge as on the map and in the Plan tab. */
+const marker = cn(STOP_BADGE, "size-4 rounded-sm text-[9px]");
 
 function Row({ sw, children, tip }: { sw: ReactNode; children: ReactNode; tip?: string }) {
   return (
@@ -114,7 +116,7 @@ export function MapLegend() {
         <Panel className="map-legend scrollbar-thin absolute bottom-full -left-2.5 z-4 mb-2.5 max-h-[min(60dvh,440px)] w-[164px] overflow-y-auto bg-popover! px-3 py-2 text-sm text-foreground sheet:max-h-[34dvh]">
           {sel && (
             <Section title="Route slope" tip={`Route coloured by slope underfoot. Hazard from ${b.caution}°, no entry over ${b.max}°.`}>
-              <div className="m-0.5 flex h-1.5 overflow-hidden rounded-[3px] shadow-[0_0_0_2px_#120c0a]">
+              <div className="m-0.5 flex h-1.5 overflow-hidden rounded-[3px] shadow-[0_0_0_2px_var(--well)]">
                 <span className="flex-1" style={{ background: C.easy }} />
                 <span className="flex-1" style={{ background: C.moderate }} />
                 <span className="flex-1" style={{ background: C.caution }} />
@@ -150,12 +152,12 @@ export function MapLegend() {
           {(start || stops.length > 0) && (
             <Section>
               {start && (
-                <Row sw={<span className={cn(marker, "rounded-sm bg-[#1f8a4c]")}>S</span>} tip="Start point. Drag it on the map to move it.">
+                <Row sw={<span className={cn(marker, STOP_BADGE_START)}>S</span>} tip="Start point. Drag it on the map to move it.">
                   Start
                 </Row>
               )}
               {stops.length > 0 && (
-                <Row sw={<span className={cn(marker, "rounded-full bg-mars-deep")}>1</span>} tip="Stops, numbered in walking order. Drag to move.">
+                <Row sw={<span className={cn(marker, STOP_BADGE_NUMBER)}>1</span>} tip="Stops, numbered in walking order. Drag to move.">
                   Stops
                 </Row>
               )}

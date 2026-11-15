@@ -2,7 +2,8 @@ import type * as React from "react";
 import { ToggleGroup, ToggleGroupItem } from "@/components/ui/toggle-group";
 import { cn } from "@/lib/utils";
 
-/** A segmented control: a few peer options, exactly one picked. The thumb marks the one in effect. */
+/** A segmented control: a few peer options, exactly one picked. The thumb marks the one in effect.
+ *  An 8px control with 2px of padding, so the thumb is 6px and the corners stay concentric. */
 function Segmented<T extends string>({
   value,
   onValueChange,
@@ -25,7 +26,7 @@ function Segmented<T extends string>({
       // Single choice: pressing the picked option again keeps it, rather than leaving none.
       onValueChange={(v: string[]) => v[0] != null && onValueChange(v[0] as T)}
       spacing={0.5}
-      className={cn("rounded-xl border border-input bg-white/6 p-[3px]", className)}
+      className={cn("rounded-lg border border-input bg-white/6 p-0.5", className)}
     >
       {options.map((o) => (
         <ToggleGroupItem
@@ -33,7 +34,7 @@ function Segmented<T extends string>({
           value={o.value}
           disabled={o.disabled}
           className={cn(
-            "h-[26px] min-w-0 rounded-[9px] px-3 text-sm text-muted-foreground coarse:h-9 hover:bg-transparent hover:text-foreground aria-pressed:bg-white/18 aria-pressed:text-foreground aria-pressed:shadow-thumb",
+            "h-[26px] min-w-0 rounded-md px-3 text-sm text-muted-foreground coarse:h-9 hover:bg-transparent hover:text-foreground aria-pressed:bg-white/18 aria-pressed:text-foreground aria-pressed:shadow-thumb",
             itemClassName,
           )}
         >

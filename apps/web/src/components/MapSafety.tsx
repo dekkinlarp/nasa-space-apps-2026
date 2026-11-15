@@ -8,26 +8,10 @@ import { fmtEnergy, fmtO2 } from "../format";
 import { fmtMin as fmtDur } from "./SafetyBudget";
 import { getMap, RELAYOUT_LABELS } from "../map/MapView";
 import { PNR_METHOD_NOTE, usePnr } from "../usePnr";
+import { MAP_LABEL_BOX, MAP_LABEL_TONE } from "../map/mapLabel";
+import { MiniBar } from "@/components/ui/mini-bar";
 import { Panel } from "@/components/ui/panel";
 import { cn } from "@/lib/utils";
-
-/** Status colours for a used fraction: caution from 85 %, over at 100 %. */
-const level = (f: number) => (f > 1 ? "bad" : f > 0.85 ? "warn" : "ok");
-const TEXT = { ok: "", warn: "text-warn", bad: "text-bad" } as const;
-const FILL = { ok: "bg-ok", warn: "bg-warn", bad: "bg-bad" } as const;
-
-function MiniBar({ label, f, text }: { label: string; f: number; text: string }) {
-  const st = level(f);
-  return (
-    <div className="mt-[3px] grid cursor-help grid-cols-[62px_1fr_34px] items-center gap-1.5" title={text}>
-      <span className="text-muted-foreground">{label}</span>
-      <span className="h-[5px] overflow-hidden rounded-[3px] bg-well shadow-[inset_0_0_0_1px_var(--seam)]">
-        <i className={cn("block h-full rounded-[3px]", FILL[st])} style={{ width: `${Math.min(100, f * 100)}%` }} />
-      </span>
-      <span className={cn("text-right font-semibold", TEXT[st])}>{Math.round(f * 100)}%</span>
-    </div>
-  );
-}
 
 export function MapSafety({ planVisible }: { planVisible: boolean }) {
   const results = useStore((s) => s.results);
@@ -51,12 +35,12 @@ export function MapSafety({ planVisible }: { planVisible: boolean }) {
       pnr.kind === "pnr"
         ? `Point of no return: turn back by ${fmtDur(pnr.elapsedS)} elapsed${pnr.atStop ? " (leave this stop by then)" : ""}.`
         : `Tightest point of the walk: turning back here still leaves ${fmtDur(pnr.marginS)} spare.`;
-    // A chip on a stem with a diamond at the spot; at a stop the stop's own marker is the spot.
+    // A map label on a stem with a diamond at the spot; at a stop the stop's own marker is the spot.
     el.innerHTML =
-      `<div class="flex items-center gap-[5px] rounded-sm border bg-[rgba(15,12,11,0.9)] pr-[7px] pl-[5px] whitespace-nowrap shadow-[0_2px_8px_rgba(0,0,0,0.6)] ${isPnr ? "border-warn" : "border-[rgba(111,212,138,0.7)]"}">` +
-      `<svg class="size-3 flex-none ${isPnr ? "text-warn" : "text-ok"}" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.5" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><path d="M9 14 4 9l5-5"/><path d="M4 9h10.5a5.5 5.5 0 0 1 5.5 5.5a5.5 5.5 0 0 1-5.5 5.5H11"/></svg><b class="text-[11px]/4 font-semibold ${isPnr ? "text-[#ffe7a8]" : "text-[#c9f0d3]"}"></b></div>` +
+      `<div class="pnr-chip flex items-center gap-[5px] ${MAP_LABEL_BOX} ${isPnr ? MAP_LABEL_TONE.warn : MAP_LABEL_TONE.ok}">` +
+      `<svg class="size-3 flex-none" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.5" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><path d="M9 14 4 9l5-5"/><path d="M4 9h10.5a5.5 5.5 0 0 1 5.5 5.5a5.5 5.5 0 0 1-5.5 5.5H11"/></svg><b class="font-semibold"></b></div>` +
       `<div class="h-2 w-0.5 ${isPnr ? "bg-warn" : "bg-ok"}"></div>` +
-      (pnr.atStop ? "" : `<div class="-mb-[5px] size-2.5 rotate-45 border-2 border-[#120c0a] ${isPnr ? "bg-warn shadow-[0_0_0_1.5px_var(--warn),0_2px_6px_rgba(0,0,0,0.7)]" : "bg-ok shadow-[0_0_0_1.5px_var(--ok),0_2px_6px_rgba(0,0,0,0.7)]"}"></div>`);
+      (pnr.atStop ? "" : `<div class="-mb-[5px] size-2.5 rotate-45 border-2 border-well ${isPnr ? "bg-warn shadow-[0_0_0_1.5px_var(--warn)]" : "bg-ok shadow-[0_0_0_1.5px_var(--ok)]"}"></div>`);
     el.querySelector("b")!.textContent = label;
     // A note on the map, not a control: named for screen readers, kept out of the tab order.
     el.setAttribute("aria-label", `${label}. ${detail}`);
@@ -109,14 +93,14 @@ export function MapSafety({ planVisible }: { planVisible: boolean }) {
   );
   return (
     <>
-      {/* Phones and tablets: the sheet's verdict is a scroll away, so one line of it rides on the map. */}
-      <Panel className={cn("map-safety mt-2 hidden h-9 min-w-0 flex-none items-center gap-1.5 px-3 text-sm sheet:flex", !ok && "border-bad/55")} role="status">
+      {/* Phones and tablets: one line of the verdict rides on the map while the Plan tab, its home, is folded or on another tab. */}
+      {!planVisible && <Panel className={cn("map-safety mt-2 hidden h-9 min-w-0 flex-none items-center gap-1.5 px-3 text-sm sheet:flex", !ok && "border-bad/55")} role="status">
         {ok ? <CheckIcon className="size-4 flex-none text-ok" aria-hidden /> : <TriangleAlertIcon className="size-4 flex-none text-bad" aria-hidden />}
         <b className="font-semibold whitespace-nowrap">{ok ? "Fits the limits" : over}</b>
         <span className="truncate text-muted-foreground">
           {fmtMin(t.totalTimeS)} of {fmtMin(usableT)}
         </span>
-      </Panel>
+      </Panel>}
       {!planVisible && full}
     </>
   );
