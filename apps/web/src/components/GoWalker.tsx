@@ -226,13 +226,16 @@ export function GoWalker() {
       }
 
       // Gentle camera follow (skipped while the map is animating or being zoomed by the user).
+      // Eased in lon/lat, not screen pixels: the map has padding for the floating panels, so the
+      // camera centre is not the container's middle, and steering toward the middle made it oscillate.
       if (useWalkerUi.getState().follow && !map.isMoving()) {
-        const c = map.getContainer();
-        const cx = c.clientWidth / 2, cy = c.clientHeight / 2;
-        const off = Math.hypot(a.x - cx, a.y - cy);
+        const center = map.getCenter();
+        const cp = map.project(center);
+        const off = Math.hypot(a.x - cp.x, a.y - cp.y);
         if (off > 1.5) {
-          const k = off > Math.max(cx, cy) ? 1 : 1 - Math.exp(-dt * 2.2);
-          map.jumpTo({ center: map.unproject([cx + (a.x - cx) * k, cy + (a.y - cy) * k]) });
+          const c = map.getContainer();
+          const k = off > Math.max(c.clientWidth, c.clientHeight) / 2 ? 1 : 1 - Math.exp(-dt * 2.2);
+          map.jumpTo({ center: [center.lng + (here[0] - center.lng) * k, center.lat + (here[1] - center.lat) * k] });
         }
       }
     };
