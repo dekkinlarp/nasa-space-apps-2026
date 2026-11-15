@@ -25,7 +25,7 @@ export function SiteHeader({ onCollapse }: { onCollapse: () => void }) {
     </div>
     <header className="site-head flex-none px-4 pt-3 pb-3 sheet:hidden">
       <div className="flex min-h-7 items-center gap-2">
-        <span className="text-sm font-medium text-ink-2">Martian Map</span>
+        <span className="text-sm font-medium text-ink-2">EVAres</span>
         {/* Routing is ready almost always, so only the exceptions are shown. */}
         {!engine.ready && (
           <span className={cn("ml-auto flex items-center gap-1.5 text-xs", engine.error ? "text-bad" : "text-muted-foreground")} role="status">

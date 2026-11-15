@@ -3,7 +3,7 @@
   "version": "0.1.0",
   "private": true,
   "type": "module",
-  "description": "Data pipeline: downloads and derives everything the Martian Map app needs into data/<areaId>/",
+  "description": "Data pipeline: downloads and derives everything the EVAres app needs into data/<areaId>/",
   "scripts": {
     "all": "vite-node --script src/all.ts",
     "elevation": "vite-node --script src/elevation.ts",

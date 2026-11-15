@@ -1,4 +1,4 @@
-# Martian Map — EVA planner for the Gale Crater boxwork
+# EVAres — EVA planner for the Gale Crater boxwork
 
 NASA Space Apps 2026, challenge "Interplanetary Survival Guide: Martian Map".
 

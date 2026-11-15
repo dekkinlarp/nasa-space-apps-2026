@@ -1,5 +1,5 @@
 ---
-name: Martian Map
+name: EVAres
 description: A planning map for an astronaut walk at Gale Crater, with every claim labelled by what it rests on.
 colors:
   void: "#08090b"
@@ -124,7 +124,7 @@ components:
     padding: "0 6px"
 ---
 
-# Design System: Martian Map
+# Design System: EVAres
 
 ## Overview
 

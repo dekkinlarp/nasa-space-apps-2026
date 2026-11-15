@@ -17,7 +17,7 @@ audience but not the one the tool is shaped around.
 
 ## Product Purpose
 
-Martian Map is a planning tool for an astronaut walk at Gale Crater. It covers a 33 x 40 km region,
+EVAres is a planning tool for an astronaut walk at Gale Crater. It covers a 33 x 40 km region,
 all of Curiosity's drive from Bradbury Landing to the boxwork ridges. The planner gives walking routes
 with time, distance, slope, surface, energy, oxygen and radiation per segment, shows where orbital
 data sees water-formed minerals, and draws how far a crew can walk and still get home.
@@ -61,7 +61,7 @@ Undecided: whether the app stays dark only. It is dark only today; the user did 
 
 ## Brand Commitments
 
-The name is Martian Map. No logo, tagline or voice guide has been made binding.
+The name is EVAres (EVA + Ares), written with that capitalisation. The mark is a shaded Mars with one orbit line and a moon (`public/favicon.svg`). The link-preview image and icons are rendered from `brand/` and follow the demo deck's cover slide. The package names, the Worker name (`marsmap`) and the deployed URL keep the earlier working name.
 
 ## Evidence on Hand
 
