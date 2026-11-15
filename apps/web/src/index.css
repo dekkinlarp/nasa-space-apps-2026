@@ -129,6 +129,14 @@
   --shadow-plate:
     0 2px 3px rgba(0, 0, 0, 0.55), 0 0 0 1px rgba(0, 0, 0, 0.85), inset 0 1px 0 rgba(255, 255, 255, 0.24), inset 0 4px 5px -2px rgba(255, 255, 255, 0.09),
     inset 0 -1px 0 rgba(0, 0, 0, 0.7);
+  /* A dot on the map (a place pin, a post's foot) is a small dome lit from above, to match the plates: a dark
+     keyline, a light ring so it holds on dark ground, a short shadow on the ground, a highlight under its top
+     edge and shade under its lower half. Drawn with shadows only, so the dome's colour stays one token.
+     The small form is for the same dot at 8 to 10px in a list or the map key. */
+  --shadow-dome:
+    0 0 0 1px rgba(0, 0, 0, 0.85), 0 0 0 2px rgba(255, 255, 255, 0.5), 0 3px 4px 1px rgba(0, 0, 0, 0.5), inset 0 2px 2px -1px rgba(255, 255, 255, 0.7),
+    inset 0 -3px 3px -1px rgba(0, 0, 0, 0.4);
+  --shadow-dome-sm: 0 0 0 1px rgba(0, 0, 0, 0.85), 0 1px 2px 1px rgba(0, 0, 0, 0.4), inset 0 1.5px 1.5px -1px rgba(255, 255, 255, 0.7), inset 0 -2px 2px -1px rgba(0, 0, 0, 0.4);
   /* The track a thumb runs in, and a field to type in, are sunk: shaded under their top edge. */
   --inset-shadow-sunk: inset 0 1px 2px rgba(0, 0, 0, 0.45);
 

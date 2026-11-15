@@ -354,6 +354,14 @@ raised controls and the segmented meters: lit from above, drawn with shadows onl
   own covered-marker opacity).
 - The walker's label holds only the work time left at a stop.
 
+### Map dots
+A dot on the map is a small dome lit from above, to match the plates (`shadow-dome`): a dark keyline, a light
+ring so it holds on dark ground, a short shadow on the ground, a highlight under its top edge and shade under
+its lower half. The place pins, the foot of a plate's post and the rover's waypoints all use it; the waypoints
+are an image of the same dome, since they are drawn on the map canvas. The same dots in the map key, the
+Explore list and a place card take the small form (`shadow-dome-sm`). The dome is drawn with shadows only, so
+its colour stays the one token that says what kind of place it is.
+
 ### Map lines
 Lines are flat, thin and keylined, with no glow. Their colours are the tokens, read once in
 `map/mapPalette.ts` because MapLibre paint cannot use CSS variables. A broken line means estimated, modelled

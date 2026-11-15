@@ -42,7 +42,8 @@ function Section({ title, tip, children }: { title?: string; tip?: string; child
   );
 }
 
-const dot = "inline-block size-[9px] rounded-full border-[1.5px] border-well shadow-[0_0_0_1px_rgba(255,255,255,.15)]";
+/** The pins and waypoints in miniature: the same lit dome as on the map. */
+const dot = "inline-block size-[9px] rounded-full shadow-dome-sm";
 /** The start and stop markers in miniature: the same badge as on the map and in the Plan tab. */
 const marker = cn(STOP_BADGE, "size-4 rounded-sm text-[9px]");
 

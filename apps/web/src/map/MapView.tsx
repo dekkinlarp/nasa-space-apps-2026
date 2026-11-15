@@ -429,6 +429,45 @@ function windowBrackets(c: [number, number][]): GeoJSON.FeatureCollection {
   return { type: "FeatureCollection", features: [corner(nw, 1, -1), corner(ne, -1, -1), corner(se, -1, 1), corner(sw, 1, 1)] };
 }
 
+/**
+ * A waypoint of the rover's track: the same lit dome as a place pin, drawn as an image because the track's
+ * dots are on the map canvas. 20 px across at twice the screen's pixels, so 10 px on screen at full size.
+ */
+const DOME_IMG = "rover-dome";
+function domeImage(fill: string, casing: string): ImageData | null {
+  const S = 28;
+  const c = document.createElement("canvas");
+  c.width = S;
+  c.height = S;
+  const g = c.getContext("2d");
+  if (!g) return null;
+  const cx = S / 2, cy = S / 2 - 1, r = 9;
+  // The shadow it casts on the ground, then the keyline, the dome, a highlight under its top edge and shade below.
+  g.fillStyle = "rgba(0,0,0,0.4)";
+  g.beginPath();
+  g.ellipse(cx, cy + 4, r + 1, r - 1, 0, 0, Math.PI * 2);
+  g.fill();
+  g.fillStyle = casing;
+  g.beginPath();
+  g.arc(cx, cy, r + 2, 0, Math.PI * 2);
+  g.fill();
+  g.fillStyle = fill;
+  g.beginPath();
+  g.arc(cx, cy, r, 0, Math.PI * 2);
+  g.fill();
+  g.save();
+  g.clip();
+  const shade = g.createLinearGradient(0, cy - r, 0, cy + r);
+  shade.addColorStop(0, "rgba(255,255,255,0.75)");
+  shade.addColorStop(0.3, "rgba(255,255,255,0)");
+  shade.addColorStop(0.6, "rgba(0,0,0,0)");
+  shade.addColorStop(1, "rgba(0,0,0,0.45)");
+  g.fillStyle = shade;
+  g.fillRect(0, 0, S, S);
+  g.restore();
+  return g.getImageData(0, 0, S, S);
+}
+
 /** The bar drawn across the selected route every 100 m: ink with a black keyline, 14 x 4 px. */
 const TICK_IMG = "route-tick";
 function tickImage(ink: string, casing: string): ImageData | null {
@@ -569,7 +608,7 @@ export function poiShortName(p: Poi): string {
  * Markers are built by hand for MapLibre, so their styles are utility strings rather than JSX.
  * The class names in front (poi-pin, poi-label, stop-marker…) are hooks the label placement reads,
  * and the pin's state classes (selected, in-plan, flip, lbl-off) drive the group-[…]/pin variants.
- * Crisp shapes with a dark keyline and a light ring, legible on bright and dark ground.
+ * Domed shapes with a dark keyline and a light ring, legible on bright and dark ground.
  */
 const POI_FILL: Record<string, string> = {
   "drill-site": "bg-poi-drill-site",
@@ -579,7 +618,8 @@ const POI_FILL: Record<string, string> = {
 };
 /** MapLibre makes markers position: absolute, which also anchors the label. */
 const POI_PIN = "poi-pin group/pin flex size-3.5 cursor-pointer items-center gap-1.5 hover:z-[100000]! [&.selected]:z-[100000]!";
-const POI_DOT = "block size-3 rounded-full border-[1.5px] border-well shadow-[0_0_0_1px_rgba(255,255,255,0.75)] transition-transform duration-[120ms] ease-out-quint group-[:is(:hover,.selected)]/pin:scale-120 coarse:size-4";
+/** A pin is a small dome lit from above (shadow-dome in index.css), in the colour of its kind of place. */
+const POI_DOT = "block size-3 rounded-full shadow-dome transition-transform duration-[120ms] ease-out-quint group-[:is(:hover,.selected)]/pin:scale-120 coarse:size-4";
 /** A place name is a plate (MAP_LABEL_BOX). In 2D it sits beside the dot (further out once the pin carries a stop
     number) and flips to the left near an edge. In 3D it stands on a post above the dot, which is the post's foot.
     Either way it hides when it would collide, and shows the full name on hover or when selected. */
@@ -824,7 +864,10 @@ export function MapView() {
         type: "geojson",
         data: { type: "FeatureCollection", features: area.rover.waypoints.map((w, i) => ({ type: "Feature", properties: { i, sol: w.sol }, geometry: { type: "Point", coordinates: w.lonLat } })) },
       });
-      map.addLayer({ id: "waypoints", type: "circle", source: "waypoints", paint: { "circle-radius": ["interpolate", ["linear"], ["zoom"], 13, 2, 18, 4.5], "circle-color": C.rover, "circle-stroke-color": C.casing, "circle-stroke-width": 1.5, "circle-pitch-alignment": "map", "circle-pitch-scale": "map" } });
+      // Waypoints are domes like the place pins: an image, standing up to the viewer, growing as the map zooms in.
+      const dome = domeImage(C.rover, C.casing);
+      if (dome && !map.hasImage(DOME_IMG)) map.addImage(DOME_IMG, dome, { pixelRatio: 2 });
+      map.addLayer({ id: "waypoints", type: "symbol", source: "waypoints", layout: { "icon-image": DOME_IMG, "icon-size": ["interpolate", ["linear"], ["zoom"], 13, 0.45, 18, 1], "icon-allow-overlap": true, "icon-ignore-placement": true, "icon-pitch-alignment": "viewport" } });
 
       map.addSource("routes", { type: "geojson", data: EMPTY_FC });
       // The routes not chosen: grey hairlines on a thin casing. The one pointed at in the route table is brightened (see hoverProfile).
@@ -1032,8 +1075,7 @@ export function MapView() {
     const fade = isTrackFaded(tab, overlays.track) ? TRACK_PLAN_FADE : 1;
     map.setPaintProperty("track", "line-opacity", overlays.track.opacity * fade);
     map.setPaintProperty("track-casing", "line-opacity", 0.5 * fade);
-    map.setPaintProperty("waypoints", "circle-opacity", overlays.track.opacity * fade);
-    map.setPaintProperty("waypoints", "circle-stroke-opacity", fade);
+    map.setPaintProperty("waypoints", "icon-opacity", overlays.track.opacity * fade);
   }, [ready, overlays, reach, area, tab, detail]);
 
   // ---------- contour lines (traced the first time they are switched on, and again when the window moves) ----------

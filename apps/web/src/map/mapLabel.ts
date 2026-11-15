@@ -30,7 +30,7 @@ export const mapLabelDot = (mark: keyof typeof MAP_LABEL_MARK) =>
 
 /** The post a plate stands on in 3D, and the mark at its foot. Both are absent in 2D. */
 export const MAP_LABEL_POST = "map-post hidden [.map-3d_&]:block";
-export const MAP_LABEL_BASE = "hidden size-1.5 flex-none -mb-[3px] rounded-full bg-ink-2 shadow-[0_0_0_1px_rgba(0,0,0,0.75)] [.map-3d_&]:block";
+export const MAP_LABEL_BASE = "hidden size-1.5 flex-none -mb-[3px] rounded-full bg-ink-2 shadow-dome-sm [.map-3d_&]:block";
 
 /** A stop's number, in the Plan tab's list and on the map: the same corner and border, at the size each place needs. */
 export const STOP_BADGE = "grid flex-none place-items-center rounded-md border-[1.5px] font-semibold";

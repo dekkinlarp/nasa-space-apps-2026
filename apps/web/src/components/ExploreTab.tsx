@@ -226,7 +226,7 @@ export function ExploreTab() {
                   <span className="absolute inset-0 overflow-hidden rounded-[7px] bg-well after:absolute after:inset-0 after:rounded-[inherit] after:inset-ring after:inset-ring-white/18">
                     {thumbs[p.id] && <img src={thumbs[p.id]!} alt="" draggable={false} className="size-full object-cover" />}
                   </span>
-                  <i className={cn("absolute -right-1 -bottom-1 size-2.5 rounded-full border-[1.5px] border-well", POI_DOT[p.type], p.type === "start" && "rounded-[2px]")} />
+                  <i className={cn("absolute -right-1 -bottom-1 size-2.5 rounded-full shadow-dome-sm", POI_DOT[p.type], p.type === "start" && "rounded-[2px]")} />
                 </span>
                 <span className="block min-w-0 flex-1">
                   <span className="block truncate font-medium">{placeName(p)}</span>
