@@ -3,6 +3,10 @@ import { selectedResult, useStore } from "../store";
 import { fmtDur } from "../format";
 import { getMap, isTrackFaded, profileColor, RELAYOUT_LABELS, RING_COLOR, RING_LIMIT_COLOR } from "../map/MapView";
 import { ROUTE_SLOPE_COLORS, slopeBands } from "../map/routeSlope";
+import { ChevronDownIcon } from "lucide-react";
+import { Panel } from "@/components/ui/panel";
+import { POI_DOT } from "./Cards";
+import { cn } from "@/lib/utils";
 
 /** v2: the key now starts collapsed; an "open" choice saved by older builds is ignored. */
 const LS_KEY = "marsmap.legendOpen.v2";
@@ -10,25 +14,39 @@ const LS_KEY = "marsmap.legendOpen.v2";
 /** A short line sample, optionally dashed, with a dark casing like the map lines. */
 function LineSwatch({ color, dash, casing, width = 3, opacity = 1 }: { color: string; dash?: string; casing?: string; width?: number; opacity?: number }) {
   return (
-    <svg className="lg-sw" width="26" height="10" viewBox="0 0 26 10" aria-hidden>
+    <svg className="block" width="26" height="10" viewBox="0 0 26 10" aria-hidden>
       {casing && <line x1="2" y1="5" x2="24" y2="5" stroke={casing} strokeWidth={width + 3} strokeLinecap="round" />}
       <line x1="2" y1="5" x2="24" y2="5" stroke={color} strokeWidth={width} strokeDasharray={dash} strokeLinecap={dash ? "butt" : "round"} opacity={opacity} />
     </svg>
   );
 }
 
+/** [dot colour, label, tooltip]: the same colours as the pins on the map. */
 const POI_KEY: [string, string, string][] = [
-  ["#ff7a2f", "Drill site", "Where Curiosity drilled a sample"],
-  ["#b58cff", "Target", "Science target a crew could visit"],
-  ["#4fc3f7", "Viewpoint", "Viewpoint over the boxwork"],
-  ["#6fd48a", "Start spot", "Suggested start: a past Curiosity stop"],
+  [POI_DOT["drill-site"]!, "Drill site", "Where Curiosity drilled a sample"],
+  [POI_DOT["science-target"]!, "Target", "Science target a crew could visit"],
+  [POI_DOT.viewpoint!, "Viewpoint", "Viewpoint over the boxwork"],
+  [POI_DOT.start!, "Start spot", "Suggested start: a past Curiosity stop"],
 ];
+
+/** A group of key rows, ruled off from the one above. */
+function Section({ title, tip, children }: { title?: string; tip?: string; children: ReactNode }) {
+  return (
+    <div className="border-t pt-1.5 pb-0.5 first:border-t-0 first:pt-0" title={tip}>
+      {title && <div className="caps mb-1 text-[10px] text-muted-foreground">{title}</div>}
+      {children}
+    </div>
+  );
+}
+
+const dot = "inline-block size-[9px] rounded-full border-[1.5px] border-[#1a1210] shadow-[0_0_0_1px_rgba(255,255,255,.15)]";
+const marker = "grid size-4 place-items-center border-[1.5px] border-white text-[9px] font-extrabold text-white shadow-[0_1px_4px_rgba(0,0,0,.6)]";
 
 function Row({ sw, children, tip }: { sw: ReactNode; children: ReactNode; tip?: string }) {
   return (
-    <div className="lg-row" title={tip}>
-      <span className="lg-key">{sw}</span>
-      <span className="lg-text">{children}</span>
+    <div className="mb-1 flex cursor-help items-center gap-2" title={tip}>
+      <span className="flex min-h-3.5 w-7 flex-none items-center justify-center">{sw}</span>
+      <span className="whitespace-nowrap text-foreground">{children}</span>
     </div>
   );
 }
@@ -77,25 +95,27 @@ export function MapLegend() {
   const trackFaded = isTrackFaded(tab, overlays.track);
 
   return (
-    <div className={`map-legend ${open ? "open" : ""}`}>
-      <button className="lg-head" onClick={toggle} aria-expanded={open} title={open ? "Hide map key" : "Show what the lines and markers mean"}>
+    <Panel className={cn("map-legend text-sm", open && "open")}>
+      <button
+        className="caps flex h-9 w-full cursor-pointer items-center justify-between gap-2 px-3 text-foreground hover:text-foreground"
+        onClick={toggle}
+        aria-expanded={open}
+        title={open ? "Hide map key" : "Show what the lines and markers mean"}
+      >
         <span>Key</span>
-        <span className="lg-chev" aria-hidden>
-          ▾
-        </span>
+        <ChevronDownIcon className={cn("size-3 text-muted-foreground transition-transform", !open && "-rotate-90")} aria-hidden />
       </button>
       {open && (
-        <div className="lg-body">
+        <div className="px-3 pb-2">
           {sel && (
-            <div className="lg-sec" title={`Route coloured by slope underfoot. Hazard from ${b.caution}°, no entry over ${b.max}°.`}>
-              <div className="lg-h">Route slope</div>
-              <div className="lg-ramp">
-                <span style={{ background: C.easy }} />
-                <span style={{ background: C.moderate }} />
-                <span style={{ background: C.caution }} />
-                <span style={{ background: C.limit }} />
+            <Section title="Route slope" tip={`Route coloured by slope underfoot. Hazard from ${b.caution}°, no entry over ${b.max}°.`}>
+              <div className="m-0.5 flex h-1.5 overflow-hidden rounded-[3px] shadow-[0_0_0_2px_#120c0a]">
+                <span className="flex-1" style={{ background: C.easy }} />
+                <span className="flex-1" style={{ background: C.moderate }} />
+                <span className="flex-1" style={{ background: C.caution }} />
+                <span className="flex-1" style={{ background: C.limit }} />
               </div>
-              <div className="lg-ramp-ticks">
+              <div className="relative mx-0.5 mb-1 h-3.5 text-[10px] text-muted-foreground *:absolute *:-translate-x-1/2">
                 <span style={{ left: "25%" }}>{b.easyBelow}°</span>
                 <span style={{ left: "50%" }}>{b.caution}°</span>
                 <span style={{ left: "75%" }}>{b.max}°</span>
@@ -103,7 +123,7 @@ export function MapLegend() {
               {alts.length > 0 && (
                 <Row
                   sw={
-                    <span className="lg-multi">
+                    <span className="flex flex-col items-center gap-px">
                       {alts.map((a) => (
                         <LineSwatch key={a.id} color={a.color} opacity={0.5} width={3} />
                       ))}
@@ -119,26 +139,26 @@ export function MapLegend() {
                   Past limit
                 </Row>
               )}
-            </div>
+            </Section>
           )}
 
           {(start || stops.length > 0) && (
-            <div className="lg-sec">
+            <Section>
               {start && (
-                <Row sw={<span className="lg-marker lg-start">S</span>} tip="Start point. Drag it on the map to move it.">
+                <Row sw={<span className={cn(marker, "rounded-sm bg-[#1f8a4c]")}>S</span>} tip="Start point. Drag it on the map to move it.">
                   Start
                 </Row>
               )}
               {stops.length > 0 && (
-                <Row sw={<span className="lg-marker lg-stop">1</span>} tip="Stops, numbered in walking order. Drag to move.">
+                <Row sw={<span className={cn(marker, "rounded-full bg-mars-deep")}>1</span>} tip="Stops, numbered in walking order. Drag to move.">
                   Stops
                 </Row>
               )}
-            </div>
+            </Section>
           )}
 
           {showRings && (
-            <div className="lg-sec">
+            <Section>
               {ringBudgets.length > 1 && (
                 <Row
                   sw={<LineSwatch color={RING_COLOR} dash="4 3" width={2} />}
@@ -158,17 +178,17 @@ export function MapLegend() {
                   Walk limit
                 </Row>
               )}
-            </div>
+            </Section>
           )}
 
           {(showTrack || overlays.pois.on) && (
-            <div className="lg-sec">
+            <Section>
               {showTrack && (
                 <Row
                   sw={
-                    <span className="lg-track" style={{ opacity: trackFaded ? 0.45 : 1 }}>
+                    <span className="relative block h-2.5 w-[26px]" style={{ opacity: trackFaded ? 0.45 : 1 }}>
                       <LineSwatch color="#f5f0e6" dash="3 2" casing="rgba(0,0,0,.5)" width={1.6} />
-                      <span className="lg-dot" style={{ background: "#f5f0e6" }} />
+                      <span className={cn(dot, "absolute top-px left-[9px]")} style={{ background: "#f5f0e6" }} />
                     </span>
                   }
                   tip={`Curiosity's localized drive${lastSol ? ` to sol ${lastSol}` : ""}. ${trackFaded ? "Faded while planning." : "Click a stop for photos."}`}
@@ -177,15 +197,15 @@ export function MapLegend() {
                 </Row>
               )}
               {overlays.pois.on &&
-                POI_KEY.map(([color, label, tip]) => (
-                  <Row key={label} sw={<span className={`lg-dot ${label === "Start spot" ? "sq" : ""}`} style={{ background: color }} />} tip={tip}>
+                POI_KEY.map(([cls, label, tip]) => (
+                  <Row key={label} sw={<span className={cn(dot, cls, label === "Start spot" && "rounded-[2px]")} />} tip={tip}>
                     {label}
                   </Row>
                 ))}
-            </div>
+            </Section>
           )}
         </div>
       )}
-    </div>
+    </Panel>
   );
 }

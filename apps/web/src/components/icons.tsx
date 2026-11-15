@@ -20,12 +20,3 @@ export function BottomPaneIcon({ on }: { on: boolean }) {
     </svg>
   );
 }
-
-/** Points left as drawn; the stylesheet turns it for the bottom sheet. */
-export function Chevron() {
-  return (
-    <svg className="chev" width="12" height="12" viewBox="0 0 12 12" aria-hidden>
-      <path d="M7.5 2.5 4 6l3.5 3.5" fill="none" stroke="currentColor" strokeWidth="1.5" strokeLinecap="round" strokeLinejoin="round" />
-    </svg>
-  );
-}

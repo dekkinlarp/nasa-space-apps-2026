@@ -18,7 +18,8 @@ import { bearingDeg, marsDistanceM, MARS_RADIUS_M, offsetLonLat } from "../geo";
 import { getMap } from "../map/MapView";
 import { GROUND_SVG, WALKER_SVG, bootPrintImage } from "./walkerArt";
 import { cycleSeconds, headingAlong, lerpAngle, meanSpeed, routePrints, trackPrints, walkedLine, walkerFrame, type Print, type WalkerState } from "./walkerMath";
-import "./walker.css";
+import { Button } from "@/components/ui/button";
+import { cn } from "@/lib/utils";
 
 /** UI state for the walker that is not part of the plan: whether the camera follows it. */
 export const useWalkerUi = create<{ follow: boolean; setFollow: (f: boolean) => void }>((set) => ({
@@ -257,8 +258,15 @@ export function FollowToggle() {
   const follow = useWalkerUi((s) => s.follow);
   const setFollow = useWalkerUi((s) => s.setFollow);
   return (
-    <button className={`btn go-follow${follow ? " active" : ""}`} onClick={() => setFollow(!follow)} title={follow ? "Camera follows the walker. Click (or drag the map) to pan freely." : "Camera stays put. Click to follow the walker."}>
+    <Button
+      variant="secondary"
+      size="xs"
+      className={cn("mr-1.5 ml-auto px-[9px]", follow && "border-sim/70 text-sim")}
+      aria-pressed={follow}
+      onClick={() => setFollow(!follow)}
+      title={follow ? "Camera follows the walker. Click (or drag the map) to pan freely." : "Camera stays put. Click to follow the walker."}
+    >
       {follow ? "◎ Following" : "◎ Follow"}
-    </button>
+    </Button>
   );
 }

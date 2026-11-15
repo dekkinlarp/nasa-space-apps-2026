@@ -2,6 +2,7 @@ import { createReadStream, cpSync, existsSync, mkdirSync, readFileSync, rmSync, 
 import { extname, join, normalize, relative, resolve, sep } from "node:path";
 import { cloudflare } from "@cloudflare/vite-plugin";
 import react from "@vitejs/plugin-react";
+import tailwindcss from "@tailwindcss/vite";
 import { defineConfig, type Plugin } from "vite";
 
 const ROOT = resolve(import.meta.dirname, "../..");
@@ -68,7 +69,8 @@ function mapData(): Plugin {
 
 export default defineConfig({
   // One dev server and one build for the React app and the Worker (which runs in workerd).
-  plugins: [mapData(), react(), cloudflare({ configPath: "../../wrangler.jsonc" })],
+  plugins: [mapData(), react(), tailwindcss(), cloudflare({ configPath: "../../wrangler.jsonc" })],
+  resolve: { alias: { "@": resolve(import.meta.dirname, "src") } },
   server: { port: 5173, host: true },
   preview: { port: 5173 },
   worker: { format: "es" },

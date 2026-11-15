@@ -1,7 +1,12 @@
 import { useState } from "react";
 import { useStore } from "../store";
 import { getMap } from "../map/MapView";
-import { POI_TYPE_LABEL, PriorityTag } from "./Cards";
+import { POI_DOT, POI_TYPE_LABEL, PriorityTag } from "./Cards";
+import { Badge } from "@/components/ui/badge";
+import { Button } from "@/components/ui/button";
+import { SectionHeading } from "@/components/ui/section-heading";
+import { Stat, StatGrid } from "@/components/ui/stat";
+import { cn } from "@/lib/utils";
 import type { Poi, PoiType } from "../types";
 
 const ORDER: PoiType[] = ["drill-site", "science-target", "viewpoint", "start"];
@@ -67,38 +72,41 @@ export function ExploreTab() {
     flyTo(p.lon, p.lat);
   };
   return (
-    <div className="tab-body">
-      <section className="story">
-        <h2>Ridge to hollow in one walk</h2>
-        <p className="story-lead">
-          Curiosity drilled here but couldn't dig under the sand or climb the ridges. A crew could do it all in one six-hour EVA.
-        </p>
+    <>
+      <section>
+        <h2 className="m-0 mb-2 text-xl font-normal tracking-[-0.02em]">Ridge to hollow in one walk</h2>
+        <p className="m-0 mb-1.5 text-ink-2">Curiosity drilled here but couldn't dig under the sand or climb the ridges. A crew could do it all in one six-hour EVA.</p>
         {more && (
           <>
-            <p>
+            <p className="m-0 mb-3 text-ink-2">
               The boxwork is a web of low ridges left where ancient groundwater flowed through fractures and hardened the rock. Curiosity spent most of a
               year here and drilled three ~6 cm holes: clay in a ridge, carbonate in a hollow. Its wheels slipped in the sand-filled hollows, and the big
               questions stayed open.
             </p>
-            <p>
+            <p className="m-0 mb-3 text-ink-2">
               A crew can cross from ridge to hollow, sample ridge walls, dig under the sand and trace the network in a single six-hour EVA. Pick a start,
               add stops, and the planner checks the walk against time, energy, oxygen and slope limits.
             </p>
           </>
         )}
-        <button className="link-btn inline more-btn" onClick={() => setMore(!more)} aria-expanded={more}>
+        <Button variant="link" size="inline" className="mb-3 flex text-2xs" onClick={() => setMore(!more)} aria-expanded={more}>
           {more ? "Less" : "More"}
-        </button>
-        <button className="btn primary demo-btn" onClick={demoReady ? runDemo : undefined} disabled={!demoReady}>
-          <span className="demo-play">▶</span>
-          <span>
-            <b>Try the boxwork walk</b>
-            <span className="demo-sub">Camp → hollow → ridge junction → sand dig</span>
+        </Button>
+        {/* The demo walk is the one coloured action in the panel. */}
+        <Button
+          className="h-auto w-full justify-start gap-2.5 rounded-xl bg-linear-135 from-[#d4521a] to-mars-deep px-3 py-2.5 text-left text-white shadow-[0_4px_18px_rgba(255,122,47,0.25)] hover:from-[#e5602a] hover:to-[#d4521a] hover:bg-transparent"
+          onClick={demoReady ? runDemo : undefined}
+          disabled={!demoReady}
+        >
+          <span className="grid size-[30px] flex-none place-items-center rounded-full bg-white/16 pl-0.5 text-sm">▶</span>
+          <span className="min-w-0">
+            <b className="block text-[14px] tracking-[0.01em]">Try the boxwork walk</b>
+            <span className="block truncate text-2xs font-medium text-white/78">Camp → hollow → ridge junction → sand dig</span>
           </span>
-        </button>
-        <button className="btn ghost-btn" onClick={() => set({ tab: "plan" })}>
+        </Button>
+        <Button variant="secondary" className="mt-2 h-9 w-full bg-transparent" onClick={() => set({ tab: "plan" })}>
           Plan an EVA →
-        </button>
+        </Button>
       </section>
 
       {ORDER.map((type) => {
@@ -106,22 +114,30 @@ export function ExploreTab() {
         if (!list.length) return null;
         return (
           <section key={type}>
-            <h4 className="section-h">{POI_TYPE_LABEL[type]}s</h4>
-            <ul className="poi-list">
+            <SectionHeading className="mt-[22px]">{POI_TYPE_LABEL[type]}s</SectionHeading>
+            <ul className="-mx-2 list-none p-0">
               {list.map((p) => (
-                <li key={p.id} className={selected?.id === p.id ? "active" : ""} onClick={() => pick(p)} title={p.summary}>
-                  <i className={`poi-dot-sm t-${p.type}`} />
-                  <div>
-                    <div className="poi-name">
+                <li
+                  key={p.id}
+                  className={cn(
+                    "flex cursor-pointer gap-2.5 rounded-lg p-2 transition-colors coarse:py-[11px] hover:bg-white/5",
+                    selected?.id === p.id && "bg-white/11 hover:bg-white/11",
+                  )}
+                  onClick={() => pick(p)}
+                  title={p.summary}
+                >
+                  <i className={cn("mt-1.5 size-2 flex-none rounded-full", POI_DOT[p.type], p.type === "start" && "rounded-[1px]")} />
+                  <div className="min-w-0">
+                    <div className="flex flex-wrap items-center gap-x-1.5 gap-y-0.5 font-medium">
                       {p.name}
                       <PriorityTag poi={p} tiny />
                       {p.positionSource === "illustrative" && (
-                        <span className="badge est tiny" title="Position is illustrative, not a surveyed target">
+                        <Badge variant="estimate" title="Position is illustrative, not a surveyed target">
                           illustrative
-                        </span>
+                        </Badge>
                       )}
                     </div>
-                    <div className="poi-sum">{p.summary}</div>
+                    <div className="line-clamp-1 text-sm text-muted-foreground">{p.summary}</div>
                   </div>
                 </li>
               ))}
@@ -131,31 +147,21 @@ export function ExploreTab() {
       })}
 
       <section>
-        <h4 className="section-h">Curiosity in this area</h4>
-        <dl className="stats compact">
-          <div>
-            <dt>Waypoints</dt>
-            <dd>{rover.waypoints.length}</dd>
-          </div>
+        <SectionHeading>Curiosity in this area</SectionHeading>
+        <StatGrid className="gap-y-1.5">
+          <Stat label="Waypoints">{rover.waypoints.length}</Stat>
           {sols.length > 0 && (
-            <div>
-              <dt>Sols</dt>
-              <dd>
-                {Math.min(...sols)}–{Math.max(...sols)}
-              </dd>
-            </div>
+            <Stat label="Sols">
+              {Math.min(...sols)}–{Math.max(...sols)}
+            </Stat>
           )}
-          <div>
-            <dt>Rover photos</dt>
-            <dd>{rover.photos.length}</dd>
-          </div>
-          <div>
-            <dt title="Drill sites from the rover data">Drill sites</dt>
-            <dd>{rover.drillSites.map((d) => d.name).join(", ") || "—"}</dd>
-          </div>
-        </dl>
-        <p className="small dim">Click a waypoint dot for its sol and photos.</p>
+          <Stat label="Rover photos">{rover.photos.length}</Stat>
+          <Stat label="Drill sites" labelTitle="Drill sites from the rover data">
+            {rover.drillSites.map((d) => d.name).join(", ") || "—"}
+          </Stat>
+        </StatGrid>
+        <p className="my-3 text-sm text-muted-foreground">Click a waypoint dot for its sol and photos.</p>
       </section>
-    </div>
+    </>
   );
 }

@@ -90,7 +90,3 @@
 .walker .w-label small { display: block; font-weight: 500; font-size: 10.5px; color: #9fdcd6; font-variant-numeric: tabular-nums; }
 .walker .w-ring { flex: none; }
 .walker .w-ring circle:last-child { transition: stroke-dashoffset .25s linear; }
-
-/* Camera-follow toggle in the Go panel. */
-.go-follow.active { border-color: rgba(54,209,196,.7); color: #36d1c4; }
-.go-head .go-follow { margin-left: auto; margin-right: 6px; padding: 3px 9px; font-size: 11px; }

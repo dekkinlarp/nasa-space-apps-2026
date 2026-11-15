@@ -6,17 +6,23 @@ import { fmtEnergy, fmtO2 } from "../format";
 import { fmtMin as fmtDur } from "./SafetyBudget";
 import { getMap, RELAYOUT_LABELS } from "../map/MapView";
 import { PNR_METHOD_NOTE, usePnr } from "../usePnr";
-import "./safety.css";
+import { Panel } from "@/components/ui/panel";
+import { cn } from "@/lib/utils";
+
+/** Status colours for a used fraction: caution from 85 %, over at 100 %. */
+const level = (f: number) => (f > 1 ? "bad" : f > 0.85 ? "warn" : "ok");
+const TEXT = { ok: "", warn: "text-warn", bad: "text-bad" } as const;
+const FILL = { ok: "bg-ok", warn: "bg-warn", bad: "bg-bad" } as const;
 
 function MiniBar({ label, f, text }: { label: string; f: number; text: string }) {
-  const st = f > 1 ? "bad" : f > 0.85 ? "warn" : "ok";
+  const st = level(f);
   return (
-    <div className={`mini is-${st}`} title={text}>
-      <span className="mini-k">{label}</span>
-      <span className="mini-bar">
-        <i style={{ width: `${Math.min(100, f * 100)}%` }} />
+    <div className="mt-[3px] grid cursor-help grid-cols-[62px_1fr_34px] items-center gap-1.5" title={text}>
+      <span className="text-muted-foreground">{label}</span>
+      <span className="h-[5px] overflow-hidden rounded-[3px] bg-well shadow-[inset_0_0_0_1px_var(--seam)]">
+        <i className={cn("block h-full rounded-[3px]", FILL[st])} style={{ width: `${Math.min(100, f * 100)}%` }} />
       </span>
-      <span className="mini-v">{Math.round(f * 100)}%</span>
+      <span className={cn("text-right font-semibold", TEXT[st])}>{Math.round(f * 100)}%</span>
     </div>
   );
 }
@@ -63,10 +69,13 @@ export function MapSafety() {
   const fo = t.o2UsedFraction;
   const over = t.limitingFactor === "oxygen" ? "Over O₂" : t.limitingFactor === "energy" ? "Over energy" : "Over time";
   return (
-    <div className={`map-safety ${ok ? "is-ok" : "is-bad"}`}>
-      <div className="ms-head">
-        <span className="ms-title">Suit</span>
-        <span className={`ms-state ${ok ? "is-ok" : "is-bad"}`} title={ok ? "Time, energy and oxygen all inside the usable budget" : `Over the usable ${t.limitingFactor ?? ""} budget`}>
+    <Panel className={cn("w-[190px] flex-none px-2.5 pt-1.5 pb-[7px] text-[11.5px] sheet:hidden", !ok && "border-bad/55")}>
+      <div className="mb-1 flex items-center justify-between">
+        <span className="text-[12px] font-bold">Suit</span>
+        <span
+          className={cn("cursor-help text-xs font-semibold", ok ? "text-ok" : "text-bad")}
+          title={ok ? "Time, energy and oxygen all inside the usable budget" : `Over the usable ${t.limitingFactor ?? ""} budget`}
+        >
           {ok ? "Within limits" : over}
         </span>
       </div>
@@ -77,13 +86,13 @@ export function MapSafety() {
       )}
       {pnr && (
         <div
-          className={`ms-pnr ${pnr.kind}`}
+          className="mt-[5px] flex cursor-help items-baseline justify-between border-t pt-[5px]"
           title={`${pnr.kind === "pnr" ? "Point of no return (marked on the map): turn back by this elapsed time." : "Spare time if you turn back at the tightest point (marked on the map)."}\n\n${PNR_METHOD_NOTE}`}
         >
-          <span className="mini-k">{pnr.kind === "pnr" ? "Turn back" : "Margin"}</span>
-          <b>{pnr.kind === "pnr" ? `by ${fmtDur(pnr.elapsedS)}` : fmtDur(pnr.marginS)}</b>
+          <span className="text-muted-foreground">{pnr.kind === "pnr" ? "Turn back" : "Margin"}</span>
+          <b className={cn("font-semibold", pnr.kind === "pnr" ? "text-warn" : "text-ok")}>{pnr.kind === "pnr" ? `by ${fmtDur(pnr.elapsedS)}` : fmtDur(pnr.marginS)}</b>
         </div>
       )}
-    </div>
+    </Panel>
   );
 }

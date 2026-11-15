@@ -1,4 +1,4 @@
-import { useEffect, useMemo, useRef } from "react";
+import { useEffect, useMemo, useRef, type ReactNode } from "react";
 import { oxygenUsedKg, type LonLat } from "@marsmap/core";
 import { selectedResult, usableTimeS, useStore } from "../store";
 import { routePoints } from "../engine";
@@ -6,6 +6,23 @@ import { buildTimeline, pointNames, positionAt } from "../lib";
 import { bearingDeg, cellIndex, marsDistanceM, nearestOnLine, offsetLonLat } from "../geo";
 import { fmtClock, fmtDist, fmtDur, fmtEnergy, fmtO2 } from "../format";
 import { FollowToggle } from "./GoWalker";
+import { XIcon } from "lucide-react";
+import { Alert } from "@/components/ui/alert";
+import { Badge } from "@/components/ui/badge";
+import { Button } from "@/components/ui/button";
+import { Panel } from "@/components/ui/panel";
+import { Segmented } from "@/components/ui/segmented";
+import { cn } from "@/lib/utils";
+
+/** One reading in the Go panel. */
+function Reading({ label, bad, children }: { label: string; bad?: boolean; children: ReactNode }) {
+  return (
+    <div>
+      <span className="caps block text-muted-foreground">{label}</span>
+      <b className={cn("text-sm font-normal", bad && "text-bad")}>{children}</b>
+    </div>
+  );
+}
 
 const SPEEDS = [30, 120, 600, 1800];
 const OFF_ROUTE_M = 25;
@@ -82,12 +99,12 @@ export function GoPanel() {
   if (go.mode === "off") return null;
   if (!r || !tl || !rp) {
     return (
-      <div className="go-panel">
-        <div className="small">No route to follow.</div>
-        <button className="btn" onClick={() => setGo({ mode: "off" })}>
+      <Panel size="lg" className="go-panel grid gap-2 p-4">
+        <div className="text-sm">No route to follow.</div>
+        <Button variant="secondary" onClick={() => setGo({ mode: "off" })}>
           Close
-        </button>
-      </div>
+        </Button>
+      </Panel>
     );
   }
 
@@ -123,72 +140,55 @@ export function GoPanel() {
   const brg = bearingDeg(here, nextPt);
 
   return (
-    <div className="go-panel">
-      <div className="go-head">
-        <span className="badge sim">{go.mode === "sim" ? "Simulated position" : "Your location, mapped onto Mars"}</span>
+    <Panel size="lg" className="go-panel p-4 phone:p-3">
+      <div className="flex items-center justify-between">
+        <Badge variant="sim">{go.mode === "sim" ? "Simulated position" : "Your location, mapped onto Mars"}</Badge>
         <FollowToggle />
-        <button className="icon-btn" onClick={() => setGo({ mode: "off", playing: false, position: null })} title="Stop">
-          ×
-        </button>
+        <Button variant="ghost" size="icon-xs" className="text-muted-foreground" onClick={() => setGo({ mode: "off", playing: false, position: null })} title="Stop" aria-label="Stop">
+          <XIcon />
+        </Button>
       </div>
-      <div className="go-clock">{fmtClock(go.elapsedS)}</div>
-      <div className="go-sub">{done ? "Walk complete" : pos?.dwelling ? `Working at ${names[seg + 1] ?? "stop"}` : `Next: ${names[Math.min(nextIdx, names.length - 1)] ?? "end"}`}</div>
+      <div className="mt-2 text-3xl font-normal tracking-[-0.03em] phone:mt-0.5 phone:text-2xl">{fmtClock(go.elapsedS)}</div>
+      <div className="mb-2 text-ink-2">{done ? "Walk complete" : pos?.dwelling ? `Working at ${names[seg + 1] ?? "stop"}` : `Next: ${names[Math.min(nextIdx, names.length - 1)] ?? "end"}`}</div>
       {!done && (
-        <div className="go-grid">
-          <div>
-            <span>To next</span>
-            <b>{fmtDist(marsDistanceM(here, nextPt))}</b>
-          </div>
-          <div>
-            <span>Bearing</span>
-            <b>
-              {Math.round(brg)}° {COMPASS[Math.round(brg / 45) % 8]}
-            </b>
-          </div>
-          <div>
-            <span>Time left</span>
-            <b className={timeLeft < 0 ? "bad" : ""}>{fmtDur(timeLeft)}</b>
-          </div>
-          <div>
-            <span>Energy left</span>
-            <b className={energyLeft < 0 ? "bad" : ""}>{fmtEnergy(energyLeft)}</b>
-          </div>
+        <div className="grid grid-cols-2 gap-x-2.5 gap-y-1.5 border-t pt-2 sheet:grid-cols-3">
+          <Reading label="To next">{fmtDist(marsDistanceM(here, nextPt))}</Reading>
+          <Reading label="Bearing">
+            {Math.round(brg)}° {COMPASS[Math.round(brg / 45) % 8]}
+          </Reading>
+          <Reading label="Time left" bad={timeLeft < 0}>
+            {fmtDur(timeLeft)}
+          </Reading>
+          <Reading label="Energy left" bad={energyLeft < 0}>
+            {fmtEnergy(energyLeft)}
+          </Reading>
           {o2On && (
-            <div>
-              <span>Oxygen left</span>
-              <b className={o2Left < 0 ? "bad" : ""}>{fmtO2(o2Left)}</b>
-            </div>
+            <Reading label="Oxygen left" bad={o2Left < 0}>
+              {fmtO2(o2Left)}
+            </Reading>
           )}
-          <div>
-            <span>Walk home</span>
-            <b>{homeS != null && Number.isFinite(homeS) ? fmtDur(homeS) : "—"}</b>
-          </div>
-          {go.mode === "gps" && (
-            <div>
-              <span>GPS ±</span>
-              <b>{go.gpsAccuracyM != null ? `${Math.round(go.gpsAccuracyM)} m` : "…"}</b>
-            </div>
-          )}
+          <Reading label="Walk home">{homeS != null && Number.isFinite(homeS) ? fmtDur(homeS) : "—"}</Reading>
+          {go.mode === "gps" && <Reading label="GPS ±">{go.gpsAccuracyM != null ? `${Math.round(go.gpsAccuracyM)} m` : "…"}</Reading>}
         </div>
       )}
-      {turnBack && !done && <div className="alert bad">Turn back: remaining budget is less than the walk home from here.</div>}
-      {go.mode === "gps" && go.offRouteM != null && go.offRouteM > OFF_ROUTE_M && <div className="alert warn">Off route by {Math.round(go.offRouteM)} m</div>}
-      {go.gpsError && <div className="alert bad">{go.gpsError}</div>}
+      {turnBack && !done && <Alert variant="destructive">Turn back: remaining budget is less than the walk home from here.</Alert>}
+      {go.mode === "gps" && go.offRouteM != null && go.offRouteM > OFF_ROUTE_M && <Alert variant="warning">Off route by {Math.round(go.offRouteM)} m</Alert>}
+      {go.gpsError && <Alert variant="destructive">{go.gpsError}</Alert>}
       {go.mode === "sim" && (
-        <div className="go-controls">
-          <button className="btn" onClick={() => setGo(done ? { elapsedS: 0, playing: true } : { playing: !go.playing })}>
+        <div className="mt-3 flex items-center justify-between gap-2">
+          <Button variant="secondary" onClick={() => setGo(done ? { elapsedS: 0, playing: true } : { playing: !go.playing })}>
             {done ? "Replay" : go.playing ? "Pause" : "Play"}
-          </button>
-          <div className="seg-ctl">
-            {SPEEDS.map((s) => (
-              <button key={s} className={go.speed === s ? "active" : ""} onClick={() => setGo({ speed: s })}>
-                {s}×
-              </button>
-            ))}
-          </div>
+          </Button>
+          <Segmented
+            aria-label="Playback speed"
+            value={String(go.speed)}
+            onValueChange={(v) => setGo({ speed: Number(v) })}
+            options={SPEEDS.map((s) => ({ value: String(s), label: `${s}×` }))}
+            itemClassName="px-[7px]"
+          />
         </div>
       )}
-    </div>
+    </Panel>
   );
 }
 

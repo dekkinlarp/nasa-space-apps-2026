@@ -1,5 +1,9 @@
 {
   "extends": "../../tsconfig.base.json",
-  "compilerOptions": { "jsx": "react-jsx", "types": ["vite/client", "geojson"] },
+  "compilerOptions": {
+    "jsx": "react-jsx",
+    "types": ["vite/client", "geojson"],
+    "paths": { "@/*": ["./src/*"] }
+  },
   "include": ["src"]
 }

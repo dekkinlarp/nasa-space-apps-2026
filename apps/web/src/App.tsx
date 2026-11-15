@@ -3,7 +3,16 @@ import { useStore, type Tab } from "./store";
 import { loadArea, pickArea } from "./data";
 import { startEngine } from "./engine";
 import { MapView, imageryGroup, setMapInsets } from "./map/MapView";
-import { Chevron, SidebarIcon } from "./components/icons";
+import { ChevronLeftIcon } from "lucide-react";
+import { SidebarIcon } from "./components/icons";
+import { Button } from "@/components/ui/button";
+import { Badge } from "@/components/ui/badge";
+import { Panel } from "@/components/ui/panel";
+import { Popover, PopoverContent, PopoverTrigger } from "@/components/ui/popover";
+import { Segmented } from "@/components/ui/segmented";
+import { Slider } from "@/components/ui/slider";
+import { Spinner } from "@/components/ui/spinner";
+import { Tabs, TabsContent, TabsList, TabsTrigger } from "@/components/ui/tabs";
 import { Starfield } from "./map/Starfield";
 import { ConditionsBar, SiteHeader } from "./components/SiteHeader";
 import { ExploreTab } from "./components/ExploreTab";
@@ -25,7 +34,7 @@ const TABS: { id: Tab; label: string }[] = [
   { id: "layers", label: "Layers" },
 ];
 
-/** Keep in step with --panel-ms in styles.css. */
+/** Keep in step with --panel-ms in index.css. */
 export const PANEL_MS = 380;
 
 const narrowScreen = () => typeof matchMedia === "function" && matchMedia("(max-width: 860px)").matches;
@@ -56,21 +65,19 @@ function GestureHint({ view3d }: { view3d: boolean }) {
         ["Double-click", "zoom in"],
       ];
   return (
-    <div className="gesture-hint">
-      <button className="hint-btn" aria-expanded={open} aria-label="Map gestures" title="Map gestures" onClick={() => setOpen(!open)}>
-        ?
-      </button>
-      {open && (
-        <dl className="hint-pop" onClick={() => setOpen(false)}>
+    <Popover open={open} onOpenChange={setOpen}>
+      <PopoverTrigger render={<Button variant="glass" size="icon-xl" aria-label="Map gestures" title="Map gestures" className="text-lg" />}>?</PopoverTrigger>
+      <PopoverContent align="end" sideOffset={8} className="glass bg-glass w-max max-w-[min(380px,calc(100vw-24px))] rounded-xl px-4 py-3 shadow-float-sm ring-0">
+        <dl className="m-0 grid gap-1.5 text-sm" onClick={() => setOpen(false)}>
           {rows.map(([k, v]) => (
-            <div key={k}>
-              <dt>{k}</dt>
-              <dd>{v}</dd>
+            <div key={k} className="flex justify-between gap-4">
+              <dt className="font-medium">{k}</dt>
+              <dd className="m-0 text-right text-muted-foreground">{v}</dd>
             </div>
           ))}
         </dl>
-      )}
-    </div>
+      </PopoverContent>
+    </Popover>
   );
 }
 
@@ -81,21 +88,24 @@ function ViewControls() {
   const set = useStore((s) => s.set);
   const hasElev = useStore((s) => !!s.area?.layers.elevation);
   return (
-    <div className="view-ctl">
+    <div className="flex items-center gap-2">
       {view3d && (
-        <label className="exag glass">
-          <span className="label">Vertical ×{ex}</span>
-          <input type="range" min={1} max={10} step={0.5} value={ex} onChange={(e) => set({ exaggeration: Number(e.target.value) })} />
-        </label>
+        <Panel className="flex h-11 items-center gap-3 px-4 text-ink-2 phone:hidden">
+          <span className="caps whitespace-nowrap">Vertical ×{ex}</span>
+          <Slider aria-label="Vertical exaggeration" className="w-[110px] sheet:w-20" min={1} max={10} step={0.5} value={[ex]} onValueChange={(v) => set({ exaggeration: Array.isArray(v) ? v[0]! : v })} />
+        </Panel>
       )}
-      <div className="seg-ctl glass" role="group" aria-label="Map view">
-        <button className={!view3d ? "active" : ""} aria-pressed={!view3d} onClick={() => set({ view3d: false })}>
-          2D
-        </button>
-        <button className={view3d ? "active" : ""} aria-pressed={view3d} disabled={!hasElev} onClick={() => set({ view3d: true })}>
-          3D
-        </button>
-      </div>
+      <Segmented
+        aria-label="Map view"
+        value={view3d ? "3d" : "2d"}
+        onValueChange={(v) => set({ view3d: v === "3d" })}
+        options={[
+          { value: "2d", label: "2D" },
+          { value: "3d", label: "3D", disabled: !hasElev },
+        ]}
+        className="glass bg-glass border-glass-edge h-11 p-1 shadow-float-sm"
+        itemClassName="h-full px-4 text-base coarse:h-full"
+      />
       <GestureHint view3d={view3d} />
     </div>
   );
@@ -174,17 +184,19 @@ export function App() {
 
   if (loadError)
     return (
-      <div className="splash">
-        <h2>Could not load map data</h2>
-        <p className="mono">{loadError}</p>
-        <p className="dim">Is the server running on :8787? Start everything with <span className="mono">pnpm dev</span>.</p>
+      <div className="grid h-full place-content-center gap-2 p-4 text-center text-ink-2">
+        <h2 className="m-0 text-lg text-foreground">Could not load map data</h2>
+        <p className="m-0 font-mono">{loadError}</p>
+        <p className="m-0 text-muted-foreground">
+          Is the server running on :8787? Start everything with <span className="font-mono">pnpm dev</span>.
+        </p>
       </div>
     );
   if (!area)
     return (
-      <div className="splash">
-        <div className="spinner big" />
-        <p>Loading Gale Crater…</p>
+      <div className="grid h-full place-content-center gap-2 p-4 text-center text-ink-2">
+        <Spinner className="mx-auto size-6" />
+        <p className="m-0">Loading Gale Crater…</p>
       </div>
     );
 
@@ -198,50 +210,73 @@ export function App() {
         <div className="map-credit">{area.manifest.imagery.find((i) => imageryGroup(i.id) === baseImagery)?.source ?? ""}</div>
       </div>
 
-      <aside className="side glass" ref={sideRef}>
+      <Tabs
+        value={tab}
+        onValueChange={(v) => set({ tab: v as Tab })}
+        render={<aside ref={sideRef} />}
+        className="side glass-thick gap-0 rounded-2xl shadow-float sheet:rounded-b-none sheet:border-b-0"
+      >
         <SiteHeader onCollapse={() => setSheetOpen(false)} />
-        <nav className="tabs" aria-label="Sections">
-          <div className="tab-seg">
+        <nav
+          className="tabs flex flex-none gap-2 border-b px-4 pb-3 sheet:p-3 sheet:pl-[max(12px,env(safe-area-inset-left))] sheet:in-[.sheet-closed]:border-b-0"
+          aria-label="Sections"
+        >
+          <TabsList className="flex-1 gap-0.5 rounded-[9px] bg-white/6 p-0.5 group-data-horizontal/tabs:h-auto">
             {TABS.map((t) => (
-              <button
+              <TabsTrigger
                 key={t.id}
-                className={tab === t.id ? "active" : ""}
-                aria-pressed={tab === t.id}
-                onClick={() => {
-                  // On the bottom sheet, tapping the open tab again folds it; any other tap opens it.
-                  setSheetOpen(tab === t.id && narrowScreen() ? !sheetOpen : true);
-                  set({ tab: t.id });
-                }}
+                value={t.id}
+                // On the bottom sheet, tapping the open tab again folds it; any other tap opens it.
+                onClick={() => setSheetOpen(tab === t.id && narrowScreen() ? !sheetOpen : true)}
+                className="h-[30px] rounded-[7px] text-sm text-ink-2 coarse:h-[38px] data-active:bg-white/16 data-active:text-foreground data-active:shadow-thumb"
               >
                 {t.label}
-                {t.id === "plan" && planCount > 0 && <span className="count">{planCount}</span>}
-              </button>
+                {t.id === "plan" && planCount > 0 && (
+                  <Badge variant="secondary" className="ml-1 h-4 rounded-lg bg-white/14 px-1.5 text-foreground">
+                    {planCount}
+                  </Badge>
+                )}
+              </TabsTrigger>
             ))}
-          </div>
-          <button className="sheet-toggle" aria-label={sheetOpen ? "Hide panel" : "Show panel"} title={sheetOpen ? "Hide panel" : "Show panel"} aria-expanded={sheetOpen} onClick={() => setSheetOpen(!sheetOpen)}>
-            <Chevron />
-          </button>
+          </TabsList>
+          <Button
+            variant="ghost"
+            size="icon"
+            className="sheet-toggle hidden flex-[0_0_40px] text-ink-2 sheet:inline-flex"
+            aria-label={sheetOpen ? "Hide panel" : "Show panel"}
+            title={sheetOpen ? "Hide panel" : "Show panel"}
+            aria-expanded={sheetOpen}
+            onClick={() => setSheetOpen(!sheetOpen)}
+          >
+            <ChevronLeftIcon className="size-4 transition-transform" />
+          </Button>
         </nav>
-        {tab === "explore" && <ExploreTab />}
-        {tab === "plan" && <PlanTab />}
-        {tab === "layers" && <LayersTab />}
-      </aside>
+        <TabsContent value="explore" className="tab-body text-base">
+          <ExploreTab />
+        </TabsContent>
+        <TabsContent value="plan" className="tab-body text-base">
+          <PlanTab />
+        </TabsContent>
+        <TabsContent value="layers" className="tab-body text-base">
+          <LayersTab />
+        </TabsContent>
+      </Tabs>
 
       {/* The stage is the part of the map the side panel leaves visible. Floating pieces are laid out in it. */}
       <div className="stage">
         <div className="stage-top">
           {!sheetOpen && (
-            <button className="hint-btn glass panel-open" aria-label="Show sidebar" title="Show sidebar" aria-expanded={false} onClick={() => setSheetOpen(true)}>
+            <Button variant="glass" size="icon-xl" className="sheet:hidden" aria-label="Show sidebar" title="Show sidebar" aria-expanded={false} onClick={() => setSheetOpen(true)}>
               <SidebarIcon on={false} />
-            </button>
+            </Button>
           )}
           <ConditionsBar />
-          <span className="grow" />
+          <span className="flex-1" />
           <ViewControls />
         </div>
         <div className="stage-mid">
           <MapLegend />
-          <span className="grow" />
+          <span className="flex-1" />
           <div className="card-slot">{poi ? <PoiCard poi={poi} /> : wp ? <WaypointCard /> : null}</div>
         </div>
         <div className="stage-bottom">
@@ -251,7 +286,9 @@ export function App() {
             <MapSafety />
             <GoPanel />
           </div>
-          <div className="dock" ref={dockRef}>{hasRoute && <ProfileStrip />}</div>
+          <div className="dock" ref={dockRef}>
+            {hasRoute && <ProfileStrip />}
+          </div>
         </div>
       </div>
     </div>
