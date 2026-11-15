@@ -35,11 +35,11 @@ export function MapSafety({ planVisible }: { planVisible: boolean }) {
       pnr.kind === "pnr"
         ? `Point of no return: turn back by ${fmtDur(pnr.elapsedS)} elapsed${pnr.atStop ? " (leave this stop by then)" : ""}.`
         : `Tightest point of the walk: turning back here still leaves ${fmtDur(pnr.marginS)} spare.`;
-    // A map label on a stem with a diamond at the spot; at a stop the stop's own marker is the spot.
+    // A plate on a post with a diamond at the spot (the post is taller in 3D); at a stop the stop's own marker is the spot.
     el.innerHTML =
       `<div class="pnr-chip flex items-center gap-[5px] ${MAP_LABEL_BOX} ${MAP_LABEL_TONE.strong}">` +
       `<svg class="size-3 flex-none ${isPnr ? MAP_LABEL_MARK.warn : MAP_LABEL_MARK.ok}" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.5" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><path d="M9 14 4 9l5-5"/><path d="M4 9h10.5a5.5 5.5 0 0 1 5.5 5.5a5.5 5.5 0 0 1-5.5 5.5H11"/></svg><b class="font-semibold"></b></div>` +
-      `<div class="h-2 w-0.5 ${isPnr ? "bg-warn" : "bg-ok"}"></div>` +
+      `<div class="h-2 w-0.5 shadow-[0_0_0_1px_rgba(0,0,0,0.75)] [.map-3d_&]:h-3.5 ${isPnr ? "bg-warn" : "bg-ok"}"></div>` +
       (pnr.atStop ? "" : `<div class="-mb-[5px] size-2.5 rotate-45 border-2 border-well ${isPnr ? "bg-warn shadow-[0_0_0_1.5px_var(--warn)]" : "bg-ok shadow-[0_0_0_1.5px_var(--ok)]"}"></div>`);
     el.querySelector("b")!.textContent = label;
     // A note on the map, not a control: named for screen readers, kept out of the tab order.

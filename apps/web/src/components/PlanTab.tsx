@@ -5,7 +5,6 @@ import type { RouteResult, RouteSegment, SurfaceClass, WalkParams } from "@marsm
 import { selectedResult, usableTimeS, useStore } from "../store";
 import { fmtDist, fmtDur, fmtEnergy, fmtLonLat, fmtO2 } from "../format";
 import { limitMessage, pointNames } from "../lib";
-import { profileColor } from "../map/MapView";
 import { routeSlopeColor, slopeBands } from "../map/routeSlope";
 import { demoAvailable, flyTo, placeName, runDemoWalk } from "./ExploreTab";
 import { nearlyIdentical, routeDelta } from "./routeCompare";
@@ -22,7 +21,6 @@ import { SectionHeading, SectionHeadingAside } from "@/components/ui/section-hea
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "@/components/ui/select";
 import { SliderField } from "@/components/ui/slider-field";
 import { Spinner } from "@/components/ui/spinner";
-import { Swatch } from "@/components/ui/swatch";
 import { cn } from "@/lib/utils";
 
 export function SurfaceMixBar({ mix, classes }: { mix: Record<number, number>; classes: SurfaceClass[] }) {
@@ -106,6 +104,7 @@ const ROUTE_COLS: { label: string; get: (r: RouteResult) => number; fmt: (v: num
  */
 function RouteTable({ results, selectedId, onPick }: { results: RouteResult[]; selectedId: string | undefined; onPick: (id: string) => void }) {
   const [showSimilar, setShowSimilar] = useState(false);
+  const setHover = (id: string | null) => useStore.getState().set({ hoverProfile: id });
   const ref0 = results.find((r) => r.profile.id === "fastest" && r.reachable) ?? null;
   const similar = new Set<string>();
   if (ref0) {
@@ -148,9 +147,13 @@ function RouteTable({ results, selectedId, onPick }: { results: RouteResult[]; s
               }
               className={cn(row, "min-h-8 cursor-pointer rounded-lg py-1 text-left text-sm transition-colors coarse:min-h-10 hover:bg-white/5", selected && "bg-white/11 hover:bg-white/11")}
               onClick={() => onPick(r.profile.id)}
+              // The routes not chosen are all one grey on the map: pointing at a row (or focusing it) lights its line.
+              onPointerEnter={() => setHover(r.profile.id)}
+              onPointerLeave={() => setHover(null)}
+              onFocus={() => setHover(r.profile.id)}
+              onBlur={() => setHover(null)}
             >
               <span className="flex min-w-0 items-center">
-                <Swatch color={profileColor(r.profile.id, results.indexOf(r))} />
                 <span className="min-w-0">
                   <span className={cn("block truncate font-medium", !selected && "text-ink-2")}>{r.profile.name}</span>
                   {!ok && <span className="block text-xs font-medium text-bad">{status}</span>}

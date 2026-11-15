@@ -8,7 +8,6 @@ import { fmtDist, fmtNum } from "../format";
 import { nearestPhoto, pointNames, surfaceById } from "../lib";
 import { cssGradient, SLOPE_STOPS } from "../map/rasters";
 import { PhotoThumb } from "./Cards";
-import { profileColor } from "../map/MapView";
 import { Panel } from "@/components/ui/panel";
 import { Swatch } from "@/components/ui/swatch";
 import { cn } from "@/lib/utils";
@@ -146,7 +145,8 @@ export function ProfileStrip() {
 
   if (!r || !flat || !geom) return null;
   const { X, Y } = geom;
-  const color = profileColor(r.profile.id);
+  // The profile is of the chosen route, which is the ink line on the map.
+  const color = "var(--ink)";
   const over = r.totals.firstSegmentOverLimit;
 
   let hi: number | null = null;

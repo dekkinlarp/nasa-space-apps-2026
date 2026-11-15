@@ -333,14 +333,42 @@ cards showing the same 4 km of ground; the chosen one has an Ink outline and a c
   scroll edges.
 
 ### Map labels
-The walk-limit ring label, the turn-back or tightest-point chip, the walker's countdown and a hovered
-place name share one box (`MAP_LABEL_BOX` in `map/mapLabel.ts`): 4px radius, hairline border, thick-glass
-fill, 11px semibold in the app font, with a neutral border and neutral text. A label that reports a status
-carries it once, on its icon or a 6px dot (`MAP_LABEL_MARK`), never on the border or the text.
-The walker's label holds only the work time left at a stop.
+Every label on the map is one physical thing: a small black plate with engraved text (`MAP_LABEL_BOX` in
+`map/mapLabel.ts`). The time-ring and walk-limit labels, the turn-back or tightest-point chip, the walker's
+countdown and place names all use it. This is the one place the map is skeuomorphic, and it follows the
+raised controls and the segmented meters: lit from above, drawn with shadows only.
 
-Place names are not boxed: white text with a crisp dark outline round the letters (`MAP_LABEL_HALO`), no
-glow. A name reads as a place and a box reads as an annotation; a hovered or selected place takes the box.
+- **The plate:** 18px tall, 4px corner, the Well fill, 11px medium in the mono face. No border: `shadow-plate`
+  gives it a dark keyline, a bright top lip with a soft highlight under it, a dark bottom edge and a short
+  shadow on the ground.
+- **The text** is cut in: a 1px dark line above the letters. Ink 2 for a plain measure (a ring's time), Ink
+  for a place, an event or a limit. Sentence case.
+- **Status shows once, on a mark** (`MAP_LABEL_MARK`): the label's icon, or a 6px lamp with a highlight, a dark
+  rim and a faint ring of its own colour. The plate and the text never take a status colour. The lamp is the
+  only thing on the map that glows.
+- **Place names are plates too.** There is no bare text on the map. A hovered or selected place shows its
+  full name.
+- **In 2D** a plate lies beside its point. **In 3D** it stands on a 14px post above it (`MAP_LABEL_POST`), with
+  the pin, a foot mark or the turn-back diamond where the post meets the ground. Plates stay flat to the
+  screen. Nearer ones draw over farther ones, and one whose point is behind a hill is dimmed (MapLibre's
+  own covered-marker opacity).
+- The walker's label holds only the work time left at a stop.
+
+### Map lines
+Lines are flat, thin and keylined, with no glow. Their colours are the tokens, read once in
+`map/mapPalette.ts` because MapLibre paint cannot use CSS variables. A broken line means estimated, modelled
+or hypothetical, and nothing else.
+
+- **Chosen route:** 3px on a 7px black casing. Ink, taking Warn from the caution slope and Bad in the last
+  degree before the no-go slope. Like the budget bars it carries no colour until there is a status. A bar
+  crosses it every 100 m.
+- **Routes not chosen:** 1.5px Ink 2 hairlines on a thin casing. Pointing at or focusing a row of the route
+  table brightens that route's line.
+- **Legs past the limit:** dashed Bad on the black casing.
+- **Walked part of a route:** solid Sim, 3px. The walk's position is a Sim dot in a thin Sim ring.
+- **Time rings:** dotted Ink on a dark keyline (they are modelled). **Walk limit:** solid Warn.
+- **Rover track:** solid, 1.25px, in the rover colour, with small waypoint dots (it was measured).
+- **Planning window:** four corner brackets, not a dashed square (it is a boundary, not an estimate).
 
 ### Stop numbers
 One badge in the Plan tab's list, on the map and in the map key (`STOP_BADGE`): a rounded square with a
@@ -353,7 +381,7 @@ The start row holds the start select and "Pick on map". Stops reorder by draggin
 on the grip. What the crew does at a stop is on the place's card and, during a walk, in the walk panel.
 
 ### Route table
-One row per route, selectable: a swatch in the route's map colour, its name, and right-aligned columns
+One row per route, selectable: its name and right-aligned columns
 for time, distance, energy and hazard metres. The best figure in each column is in Ink and the rest are
 muted; no colour is added. A route that does not fit says so in red under its name.
 

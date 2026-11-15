@@ -9,7 +9,7 @@
     "preview": "vite preview",
     "typecheck": "tsc -p tsconfig.json && tsc -p tsconfig.scripts.json",
     "fixture": "vite-node scripts/make-fixture.ts",
-    "test": "tsx --test src/pnr.test.ts src/walker.test.ts src/contours.test.ts"
+    "test": "tsx --test src/pnr.test.ts src/walker.test.ts src/contours.test.ts src/routeTicks.test.ts"
   },
   "dependencies": {
     "@base-ui/react": "^1.9.0",

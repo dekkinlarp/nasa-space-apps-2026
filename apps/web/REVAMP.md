@@ -213,12 +213,12 @@ its dashed border. Strong keeps its brighter border.
   tell types apart, and it is what lets drill sites share the rover colour.
 - **Hover readout and status bar** use Readout: `ELEV −3619 m`, `SLOPE 4.2°`, `LAT 4.80634°S`. The status
   bar's separators stay hairlines.
-- **Every map label is mono text in a black box.** One box for ring times, the walk limit, the turn-back
-  or tightest point, the walker's countdown and place names: 18px tall, 2px corner, hairline border,
-  `void` fill, 11px medium Geist Mono. Place names are boxed too; there is no haloed text on the map,
-  because a black box holds on the brightest ground and a halo does not. This is the one place a name is
-  set in mono. The text is neutral (`ink-2` for a measure, `ink` for a place, event or limit) and a status
-  shows once, on the label's icon or a 6px dot, as `map/mapLabel.ts` already does.
+- **Every map label is a small black plate with engraved mono text.** One plate for ring times, the
+  walk limit, the turn-back or tightest point, the walker's countdown and place names. It is the one
+  skeuomorphic thing on the map, lit from above like the raised controls: a bright top lip, a dark bottom
+  edge and a short shadow, drawn with shadows only. The text is neutral and a status shows once, on the
+  label's icon or a small lamp. In 3D a plate stands on a post above its point. Built: see "Map labels"
+  in `DESIGN.md`. This overrides "no gradients on surfaces" for map labels only.
 - **Map lines are thin and keylined, with no glow.**
   - The chosen route is a 3px Ink line on a 7px black casing (now 4px on 8.5px), with a tick every
     100 m so it reads as a ruler.

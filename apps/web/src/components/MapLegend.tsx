@@ -2,9 +2,9 @@ import { useEffect, type ReactNode } from "react";
 import { create } from "zustand";
 import { selectedResult, useStore } from "../store";
 import { fmtDur } from "../format";
-import { getMap, isTrackFaded, profileColor, RELAYOUT_LABELS, RING_COLOR, RING_LIMIT_COLOR } from "../map/MapView";
+import { getMap, isTrackFaded, RELAYOUT_LABELS } from "../map/MapView";
 import { CONTOUR_COLOR, CONTOUR_FINE_M, CONTOUR_INDEX_M, CONTOUR_MID_M } from "../map/contours";
-import { ROUTE_SLOPE_COLORS, slopeBands } from "../map/routeSlope";
+import { ROUTE_TICK_M, slopeBands } from "../map/routeSlope";
 import { ChevronDownIcon } from "lucide-react";
 import { Panel } from "@/components/ui/panel";
 import { POI_DOT } from "./Cards";
@@ -122,8 +122,7 @@ export function MapLegendPanel({ className }: { className?: string }) {
     return () => cancelAnimationFrame(id);
   }, [open, tab, !!sel, !!rings?.length, overlays.rings.on, overlays.contours.on, overlays.track.on, overlays.pois.on, !!start, stops.length > 0]);
   const b = slopeBands(params);
-  const C = ROUTE_SLOPE_COLORS;
-  const alts = (results ?? []).map((r, i) => ({ id: r.profile.id, color: profileColor(r.profile.id, i) })).filter((r) => r.id !== sel?.profile.id);
+  const alts = (results ?? []).filter((r) => r.profile.id !== sel?.profile.id);
   const showRings = !!rings?.length && overlays.rings.on;
   const ringBudgets = (rings ?? []).map((r) => r.budgetS).sort((x, y) => x - y);
   const limitS = ringBudgets[ringBudgets.length - 1];
@@ -135,34 +134,23 @@ export function MapLegendPanel({ className }: { className?: string }) {
   return (
         <Panel className={cn("map-legend scrollbar-thin max-h-[min(60dvh,440px)] w-max max-w-[240px] min-w-[164px] overflow-y-auto px-3 py-2 text-sm text-foreground sheet:max-h-[34dvh]", className)}>
           {sel && (
-            <Section title="Route slope" tip={`Route coloured by slope underfoot. Hazard from ${b.caution}°, no entry over ${b.max}°.`}>
-              <div className="m-0.5 flex h-1.5 overflow-hidden rounded-[3px] shadow-[0_0_0_2px_var(--well)]">
-                <span className="flex-1" style={{ background: C.easy }} />
-                <span className="flex-1" style={{ background: C.moderate }} />
-                <span className="flex-1" style={{ background: C.caution }} />
-                <span className="flex-1" style={{ background: C.limit }} />
-              </div>
-              <div className="relative mx-0.5 mb-1 h-3.5 text-xs text-muted-foreground *:absolute *:-translate-x-1/2">
-                <span style={{ left: "25%" }}>{b.easyBelow}°</span>
-                <span style={{ left: "50%" }}>{b.caution}°</span>
-                <span style={{ left: "75%" }}>{b.max}°</span>
-              </div>
+            <Section title="Route">
+              <Row sw={<LineSwatch color="var(--ink)" casing="#000" width={3} />} tip={`The chosen route. A bar crosses it every ${ROUTE_TICK_M} m.`}>
+                Chosen route
+              </Row>
+              <Row sw={<LineSwatch color="var(--warn)" casing="#000" width={3} />} tip={`The route crosses hazard slope here: ${b.caution}° or steeper underfoot.`}>
+                Hazard slope, from {b.caution}°
+              </Row>
+              <Row sw={<LineSwatch color="var(--bad)" casing="#000" width={3} />} tip={`The route is at the no-go slope here. Ground over ${b.max}° is not walked at all.`}>
+                No-go slope, {b.max}°
+              </Row>
               {alts.length > 0 && (
-                <Row
-                  sw={
-                    <span className="flex flex-col items-center gap-px">
-                      {alts.map((a) => (
-                        <LineSwatch key={a.id} color={a.color} opacity={0.5} width={3} />
-                      ))}
-                    </span>
-                  }
-                  tip="The other route options, faded"
-                >
+                <Row sw={<LineSwatch color="var(--ink-2)" casing="#000" width={1.5} />} tip="The other route options. Point at a route in the Plan tab's table to pick its line out.">
                   Other routes
                 </Row>
               )}
               {sel.totals.firstSegmentOverLimit != null && (
-                <Row sw={<LineSwatch color="#ffd2d2" dash="2 3" casing="#4a0d0b" width={2} />} tip="Legs walked after the EVA time or energy limit is used up">
+                <Row sw={<LineSwatch color="var(--bad)" dash="3 3" casing="#000" width={3} />} tip="Legs walked after the EVA time, energy or oxygen limit is used up">
                   Past limit
                 </Row>
               )}
@@ -188,7 +176,7 @@ export function MapLegendPanel({ className }: { className?: string }) {
             <Section>
               {ringBudgets.length > 1 && (
                 <Row
-                  sw={<LineSwatch color={RING_COLOR} dash="4 3" width={2} />}
+                  sw={<LineSwatch color="var(--ink)" dash="1.6 3" casing="rgba(0,0,0,.45)" width={1.25} />}
                   tip={`Round-trip walking time from the start: ${ringBudgets
                     .slice(0, -1)
                     .map((s) => fmtDur(s))
@@ -199,7 +187,7 @@ export function MapLegendPanel({ className }: { className?: string }) {
               )}
               {limitS != null && (
                 <Row
-                  sw={<LineSwatch color={RING_LIMIT_COLOR} width={1.8} />}
+                  sw={<LineSwatch color="var(--warn)" width={1.8} />}
                   tip={`Walk limit: ${fmtDur(limitS)} of walking there and back, plus one stop. Loops inside it are slopes over ${b.max}°, no entry.`}
                 >
                   Walk limit
@@ -207,7 +195,7 @@ export function MapLegendPanel({ className }: { className?: string }) {
               )}
               {clipped && (
                 <Row
-                  sw={<LineSwatch color={RING_LIMIT_COLOR} dash="1 3" width={1.8} />}
+                  sw={<LineSwatch color="var(--warn)" dash="1 3" width={1.8} />}
                   tip="This walk reaches past the 8 km square of full-resolution ground loaded around it, so the rings stop at that square's edge. Move the start, or add a stop, to shift the square."
                 >
                   Cut at planning window
@@ -219,8 +207,12 @@ export function MapLegendPanel({ className }: { className?: string }) {
           {windowOn && (
             <Section>
               <Row
-                sw={<LineSwatch color="rgba(255,255,255,.75)" dash="4 3" width={1.2} />}
-                tip="Routes and walk limits are worked out on 2 m ground loaded for this 8 km square around the walk. Elsewhere the map shows a 16 m overview. The square follows the start and stops."
+                sw={
+                  <svg className="block" width="26" height="10" viewBox="0 0 26 10" fill="none" stroke="var(--ink)" strokeWidth="1.5" strokeLinecap="square" aria-hidden>
+                    <path d="M5 8.5V1.5h5M21 8.5V1.5h-5" />
+                  </svg>
+                }
+                tip="Brackets at the corners of the 8 km square of 2 m ground loaded around the walk. Routes and walk limits are worked out on it. Elsewhere the map shows a 16 m overview. The square follows the start and stops."
               >
                 Planning window
               </Row>
@@ -248,8 +240,8 @@ export function MapLegendPanel({ className }: { className?: string }) {
                 <Row
                   sw={
                     <span className="relative block h-2.5 w-[26px]" style={{ opacity: trackFaded ? 0.45 : 1 }}>
-                      <LineSwatch color="#f5f0e6" dash="3 2" casing="rgba(0,0,0,.5)" width={1.6} />
-                      <span className={cn(dot, "absolute top-px left-[9px]")} style={{ background: "#f5f0e6" }} />
+                      <LineSwatch color="var(--poi-rover)" casing="rgba(0,0,0,.5)" width={1.25} />
+                      <span className={cn(dot, "absolute top-px left-[9px]")} style={{ background: "var(--poi-rover)" }} />
                     </span>
                   }
                   tip={`Curiosity's localized drive${lastSol ? ` to sol ${lastSol}` : ""}. ${trackFaded ? "Faded while planning." : "Click a stop for photos."}`}
