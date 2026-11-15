@@ -16,7 +16,7 @@ import { Swatch } from "@/components/ui/swatch";
 import { cn } from "@/lib/utils";
 
 /** Chart text: axis numbers and stop names. */
-const axis = "fill-muted-foreground text-[10px]";
+const axis = "fill-muted-foreground text-xs";
 
 interface Flat {
   d: Float64Array;
@@ -81,7 +81,8 @@ export function ProfileStrip() {
   const ref = useRef<HTMLDivElement>(null);
   const [w, setW] = useState(800);
   const [hoverD, setHoverD] = useState<number | null>(null);
-  const [open, setOpen] = useState(true);
+  // Starts folded to its title bar: the map keeps its height until the profile is asked for.
+  const [open, setOpen] = useState(false);
   const flat = useMemo(() => (r ? flatten(r) : null), [r]);
   const names = pointNames(st.start, st.stops, st.returnToStart);
 
@@ -164,12 +165,12 @@ export function ProfileStrip() {
       className={cn(
         // Folds down to its title bar, where the same button brings it back. Phones give its room to the open sheet.
         "profile flex flex-none flex-col overflow-hidden transition-[height] duration-(--panel-ms) ease-spring phone:in-[.sheet-open]:hidden squat:in-[.sheet-open]:hidden",
-        open ? "h-[188px] sheet:h-40" : "collapsed h-10",
+        open ? "h-[188px]" : "collapsed h-10",
       )}
     >
-      <div className="caps flex h-10 flex-none items-center gap-1.5 pr-2 pl-4 text-ink-2">
-        <span>Elevation</span>
-        <span className="font-normal tracking-normal text-muted-foreground normal-case">
+      <div className="flex h-10 flex-none items-center gap-2 pr-2 pl-4 text-sm">
+        <span className="font-medium">Elevation</span>
+        <span className="truncate text-muted-foreground">
           {r.profile.name} route · {fmtDist(flat.total)} · {Math.round(flat.max - flat.min)} m relief
         </span>
         <Button
@@ -212,11 +213,11 @@ export function ProfileStrip() {
                 </g>
               ),
             )}
-            <text x={PL - 6} y={PT + ih + 10} className={cn(axis, "cursor-help text-[9.5px]")} textAnchor="end">
+            <text x={PL - 6} y={PT + ih + 10} className={cn(axis, "cursor-help")} textAnchor="end">
               <title>Slope underfoot along the route (green gentle, red steep)</title>
               slope
             </text>
-            <text x={PL - 6} y={PT + ih + 19} className={cn(axis, "cursor-help text-[9.5px]")} textAnchor="end">
+            <text x={PL - 6} y={PT + ih + 19} className={cn(axis, "cursor-help")} textAnchor="end">
               <title>Mapped surface class along the route</title>
               surface
             </text>

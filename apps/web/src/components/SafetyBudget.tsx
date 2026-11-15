@@ -1,9 +1,13 @@
 /** Plan-tab safety budget: stacked time, energy and oxygen bars against the EVA limits, plus the turn-back point. */
+import { useState } from "react";
+import { ChevronRightIcon, Undo2Icon } from "lucide-react";
 import type { RouteResult, WalkParams } from "@marsmap/core";
 import { fmtDist, fmtDur, fmtEnergy, fmtO2 } from "../format";
 import type { PnrResult } from "../pnr";
 import { PNR_METHOD_NOTE } from "../usePnr";
 import { Collapsible, CollapsibleContent, CollapsibleTrigger } from "@/components/ui/collapsible";
+import { Button } from "@/components/ui/button";
+import { InfoTip } from "@/components/ui/info-tip";
 import { cn } from "@/lib/utils";
 
 /** Fill for each part of a bar and its legend key: walking, work at stops, suit leakage. */
@@ -56,9 +60,12 @@ function BudgetBar({
   const state = over ? "bad" : f > 0.85 ? "warn" : "ok";
   let x = 0;
   return (
-    <div className="mb-3" title={`${hint}\n${limitLabel}.`}>
-      <div className="mb-[7px] flex items-baseline justify-between text-[12px]">
-        <span className="font-semibold">{title}</span>
+    <div className="mb-3">
+      <div className="mb-[7px] flex items-center justify-between text-sm">
+        <span className="flex items-center gap-0.5 font-semibold">
+          {title}
+          <InfoTip label={`About ${title.toLowerCase()}`}>{`${hint}\n${limitLabel}.`}</InfoTip>
+        </span>
         <span>
           <b className={cn("font-bold", state === "bad" && "text-bad", state === "warn" && "text-warn")}>{fmt(used)}</b>
           <span className="text-muted-foreground"> / {fmt(usable)}</span>
@@ -107,7 +114,7 @@ function BudgetBar({
           </span>
         )}
         {reserveKey && !over && (
-          <span className="ml-auto cursor-help" title={`Safety reserve ${fmt(reserve)} (not planned into)`}>
+          <span className="ml-auto">
             <i className={cn(key, RESERVE)} />
             Reserve
           </span>
@@ -125,17 +132,23 @@ export function PnrNote({ pnr, names }: { pnr: PnrResult; names: string[] }) {
   const isPnr = pnr.kind === "pnr";
   return (
     <Collapsible
-      className={cn("mt-0.5 mb-2.5 rounded-md border text-sm", isPnr ? "border-warn/55 bg-warn/7" : "border-ok/35 bg-well")}
+      // A turn-back time is a warning and gets a box; "you can turn back anywhere" is reassurance and stays a quiet line.
+      className={cn("mb-2.5 text-sm", isPnr && "rounded-md border border-warn/55 bg-warn/7")}
     >
-      <CollapsibleTrigger className="group/pnr flex w-full cursor-pointer items-center gap-2 px-2.5 py-[7px] text-left whitespace-nowrap outline-none">
-        <span className={cn("text-[15px] leading-none font-bold", isPnr ? "text-warn" : "text-ok")}>⟲</span>
+      <CollapsibleTrigger className={cn("group/pnr flex w-full cursor-pointer items-center gap-2 py-1.5 text-left whitespace-nowrap coarse:py-3", isPnr && "px-2.5")}>
+        <Undo2Icon className={cn("size-3.5 flex-none", isPnr ? "text-warn" : "text-muted-foreground")} aria-hidden />
         <span className="min-w-0 truncate">
-          <b className={isPnr ? "text-warn" : "text-ok"}>{isPnr ? `Turn back by ${fmtMin(pnr.elapsedS)}` : "No point of no return"}</b>{" "}
-          <span className="text-muted-foreground">· {isPnr ? `${pnr.limitedBy} limit` : `${fmtMin(pnr.marginS)} margin`}</span>
+          {isPnr ? (
+            <>
+              <b className="font-semibold text-warn">Turn back by {fmtMin(pnr.elapsedS)}</b> <span className="text-muted-foreground">({pnr.limitedBy} limit)</span>
+            </>
+          ) : (
+            <span className="text-ink-2">The crew can turn back anywhere</span>
+          )}
         </span>
-        <span className="caps ml-auto text-2xs tracking-[0.1em] text-muted-foreground group-hover/pnr:text-foreground group-data-panel-open/pnr:text-mars">details</span>
+        <ChevronRightIcon className="ml-auto size-3 flex-none text-muted-foreground transition-transform group-data-panel-open/pnr:rotate-90" aria-hidden />
       </CollapsibleTrigger>
-      <CollapsibleContent className="pr-2.5 pb-[9px] pl-[34px] text-[11.5px] leading-[1.4] text-muted-foreground">
+      <CollapsibleContent className={cn("pb-2 pl-[22px] text-xs leading-[1.4] text-muted-foreground", isPnr && "pr-2.5 pl-8")}>
         {isPnr ? (
           <>
             {pnr.atStop ? `Leave ${stopName} for home by ${fmtMin(pnr.elapsedS)} elapsed: the point of no return falls during the work there.` : `Point of no return ${where}, at ${fmtMin(pnr.elapsedS)} elapsed.`} From there it is about {fmtMin(pnr.returnS)} home ({how}). Later than that, the crew cannot get back inside the usable {pnr.limitedBy === "energy" ? "energy" : "time"}.
@@ -145,8 +158,8 @@ export function PnrNote({ pnr, names }: { pnr: PnrResult; names: string[] }) {
             The crew can turn for home anywhere on this route. Tightest spot is {where} at {fmtMin(pnr.elapsedS)} elapsed, still {fmtMin(pnr.marginS)} inside the usable time ({how}).
           </>
         )}
-        <div className="mt-1.5 cursor-help text-2xs underline decoration-dotted underline-offset-2 opacity-85" title={tip}>
-          How this is estimated <span className="opacity-70">ⓘ</span>
+        <div className="mt-1 flex items-center gap-0.5">
+          How this is estimated <InfoTip label="How the turn-back point is estimated">{tip}</InfoTip>
         </div>
       </CollapsibleContent>
     </Collapsible>
@@ -162,49 +175,102 @@ export function SafetyBudget({ r, params, pnr, names }: { r: RouteResult; params
   // Oxygen model from the routing core: breathing follows metabolic energy, leakage follows time.
   const k = params.o2KgPerKJ ?? 0;
   const o2On = (params.o2BudgetKg ?? 0) > 0 && k > 0;
+  const [all, setAll] = useState(false);
+  const leakKg = (t.totalTimeS / 3600) * (params.o2LeakKgPerH ?? 0);
+  const usable = (limit: number) => limit * (1 - rf) || 1;
+  // Each budget with the share of its usable part this route spends. The tightest one is always shown.
+  const bars = [
+    {
+      id: "time",
+      f: t.totalTimeS / usable(params.evaLimitS),
+      render: (reserveKey: boolean) => (
+        <BudgetBar
+          key="time"
+          title="EVA time"
+          hint={`Total EVA time (walking + work at stops) against the ${fmtMin(params.evaLimitS)} EVA limit. The last ${Math.round(rf * 100)}% (${fmtMin(params.evaLimitS * rf)}) is held back as a safety reserve and is not planned into.`}
+          parts={[
+            { key: "walk", label: "Walk", value: t.walkTimeS },
+            { key: "dwell", label: "Stops", value: dwellT },
+          ]}
+          limit={params.evaLimitS}
+          reserveFraction={rf}
+          fmt={fmtMin}
+          limitLabel={`${fmtMin(params.evaLimitS)} limit`}
+          marker={pnr ? { at: pnr.kind === "pnr" ? pnr.elapsedS : -1, label: `Turn back by ${fmtMin(pnr.elapsedS)}`, kind: pnr.kind } : null}
+          reserveKey={reserveKey}
+        />
+      ),
+    },
+    {
+      id: "energy",
+      f: t.energyKJ / usable(params.energyBudgetKJ),
+      render: (reserveKey: boolean) => (
+        <BudgetBar
+          key="energy"
+          title="Energy"
+          hint={`Metabolic energy the crew burns (walking + working at stops), our stand-in for suit cooling and battery. The budget is ${fmtEnergy(params.energyBudgetKJ)} (a suit sized for 352 W average over 8 h); ${Math.round(rf * 100)}% is held in reserve. Suit consumables are not modelled directly.`}
+          parts={[
+            { key: "walk", label: "Walk", value: walkE },
+            { key: "dwell", label: "Stops", value: dwellE },
+          ]}
+          limit={params.energyBudgetKJ}
+          reserveFraction={rf}
+          fmt={fmtEnergy}
+          limitLabel={`${fmtEnergy(params.energyBudgetKJ)} budget, reserve ${fmtEnergy(params.energyBudgetKJ * rf)}`}
+          reserveKey={reserveKey}
+        />
+      ),
+    },
+    ...(o2On
+      ? [
+          {
+            id: "oxygen",
+            f: (t.energyKJ * k + leakKg) / usable(params.o2BudgetKg ?? 0),
+            render: (reserveKey: boolean) => (
+              <BudgetBar
+                key="oxygen"
+                title="Oxygen"
+                hint={`Oxygen breathed (in proportion to the energy burned) plus suit leakage, against ${fmtO2(params.o2BudgetKg ?? 0)} carried. The tank size and leak rate are placeholder assumptions; change the tank under Walk settings.`}
+                parts={[
+                  { key: "walk", label: "Walk", value: walkE * k },
+                  { key: "dwell", label: "Stops", value: dwellE * k },
+                  { key: "leak", label: "Leak", value: leakKg },
+                ]}
+                limit={params.o2BudgetKg ?? 0}
+                reserveFraction={rf}
+                fmt={fmtO2}
+                limitLabel={`${fmtO2(params.o2BudgetKg ?? 0)} carried, reserve ${fmtO2((params.o2BudgetKg ?? 0) * rf)}`}
+                reserveKey={reserveKey}
+              />
+            ),
+          },
+        ]
+      : []),
+  ].sort((a, b) => b.f - a.f);
+  // Anything over its usable budget is never folded away.
+  const open = all || bars.slice(1).some((b) => b.f > 1);
+  const shown = open ? bars : bars.slice(0, 1);
+  const rest = bars.slice(1).map((b) => b.id);
   return (
     <div>
-      <BudgetBar
-        title="EVA time"
-        hint={`Total EVA time (walking + work at stops) against the ${fmtMin(params.evaLimitS)} EVA limit. The last ${Math.round(rf * 100)}% (${fmtMin(params.evaLimitS * rf)}) is held back as a safety reserve and is not planned into.`}
-        parts={[
-          { key: "walk", label: "Walk", value: t.walkTimeS },
-          { key: "dwell", label: "Stops", value: dwellT },
-        ]}
-        limit={params.evaLimitS}
-        reserveFraction={rf}
-        fmt={fmtMin}
-        limitLabel={`${fmtMin(params.evaLimitS)} limit`}
-        marker={pnr ? { at: pnr.kind === "pnr" ? pnr.elapsedS : -1, label: `Turn back by ${fmtMin(pnr.elapsedS)}`, kind: pnr.kind } : null}
-      />
-      <BudgetBar
-        title="Energy"
-        hint={`Metabolic energy the crew burns (walking + working at stops), our stand-in for suit cooling and battery. The budget is ${fmtEnergy(params.energyBudgetKJ)} (a suit sized for 352 W average over 8 h); ${Math.round(rf * 100)}% is held in reserve. Suit consumables are not modelled directly.`}
-        parts={[
-          { key: "walk", label: "Walk", value: walkE },
-          { key: "dwell", label: "Stops", value: dwellE },
-        ]}
-        limit={params.energyBudgetKJ}
-        reserveFraction={rf}
-        fmt={fmtEnergy}
-        limitLabel={`${fmtEnergy(params.energyBudgetKJ)} budget, reserve ${fmtEnergy(params.energyBudgetKJ * rf)}`}
-        reserveKey={false}
-      />
-      {o2On && (
-        <BudgetBar
-          title="Oxygen"
-          hint={`Oxygen breathed (in proportion to the energy burned) plus suit leakage, against ${fmtO2(params.o2BudgetKg ?? 0)} carried. The tank size and leak rate are placeholder assumptions; change the tank under Walk settings.`}
-          parts={[
-            { key: "walk", label: "Walk", value: walkE * k },
-            { key: "dwell", label: "Stops", value: dwellE * k },
-            { key: "leak", label: "Leak", value: (t.totalTimeS / 3600) * (params.o2LeakKgPerH ?? 0) },
-          ]}
-          limit={params.o2BudgetKg ?? 0}
-          reserveFraction={rf}
-          fmt={fmtO2}
-          limitLabel={`${fmtO2(params.o2BudgetKg ?? 0)} carried, reserve ${fmtO2((params.o2BudgetKg ?? 0) * rf)}`}
-          reserveKey={false}
-        />
+      {shown.map((b, i) => b.render(i === 0))}
+      {open && (
+        <div className="mb-2 flex gap-4 text-xs text-muted-foreground">
+          <span>
+            Climb{" "}
+            <b className="font-semibold text-foreground">
+              ↑{Math.round(t.ascentM)} ↓{Math.round(t.descentM)} m
+            </b>
+          </span>
+          <span>
+            Radiation dose <b className="font-semibold text-foreground">{t.radiationMSv.toFixed(3)} mSv</b>
+          </span>
+        </div>
+      )}
+      {!bars.slice(1).some((b) => b.f > 1) && (
+        <Button variant="link" size="inline" className="mb-2 flex text-xs" aria-expanded={all} onClick={() => setAll(!all)}>
+          {all ? "Show the tightest budget only" : `Show ${rest.join(" and ")}, climb and dose`}
+        </Button>
       )}
       {pnr && <PnrNote pnr={pnr} names={names} />}
     </div>

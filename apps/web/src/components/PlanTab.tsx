@@ -1,6 +1,6 @@
 import { Fragment, useState } from "react";
 import { useShallow } from "zustand/react/shallow";
-import { GripVerticalIcon, XIcon } from "lucide-react";
+import { CheckIcon, GripVerticalIcon, XIcon } from "lucide-react";
 import type { RouteResult, RouteSegment, SurfaceClass } from "@marsmap/core";
 import { selectedResult, usableTimeS, useStore } from "../store";
 import { fmtDist, fmtDur, fmtEnergy, fmtLonLat, fmtO2 } from "../format";
@@ -12,10 +12,10 @@ import type { Poi, Stop } from "../types";
 import { fmtMin, SafetyBudget } from "./SafetyBudget";
 import { usePnr } from "../usePnr";
 import { Alert } from "@/components/ui/alert";
-import { Badge } from "@/components/ui/badge";
 import { Button } from "@/components/ui/button";
 import { Checkbox } from "@/components/ui/checkbox";
 import { Disclosure } from "@/components/ui/disclosure";
+import { InfoTip } from "@/components/ui/info-tip";
 import { Input } from "@/components/ui/input";
 import { SectionHeading, SectionHeadingAside } from "@/components/ui/section-heading";
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "@/components/ui/select";
@@ -41,17 +41,15 @@ export function SurfaceMixBar({ mix, classes }: { mix: Record<number, number>; c
 
 function Segment({ s, i, names, over, classes }: { s: RouteSegment; i: number; names: string[]; over: boolean; classes: SurfaceClass[] }) {
   return (
-    <li className="group/seg cursor-pointer border-b py-2.5" onClick={() => flyTo(s.to[0], s.to[1], 16)}>
-      <div className={cn("flex justify-between gap-2 text-[12px] font-medium", over && "text-bad")}>
+    <li className="border-b">
+      <button type="button" className="group/seg block w-full cursor-pointer py-2.5 text-left" onClick={() => flyTo(s.to[0], s.to[1], 16)} aria-label={`Show ${names[i] ?? "?"} to ${names[i + 1] ?? "?"} on the map`}>
+      <span className={cn("flex justify-between gap-2 text-sm font-medium", over && "text-bad")}>
         <span className="truncate group-hover/seg:underline group-hover/seg:underline-offset-2">
           {names[i] ?? "?"} → {names[i + 1] ?? "?"}
         </span>
-        <span className="text-sm whitespace-nowrap">{fmtDur(s.timeS)}</span>
-      </div>
-      <div
-        className="mt-0.5 mb-1 flex flex-wrap gap-x-[9px] gap-y-0.5 text-xs text-muted-foreground"
-        title={`Slope ${s.avgSlopeDeg.toFixed(1)}° avg, ${s.maxSlopeDeg.toFixed(1)}° max · energy ${fmtEnergy(s.energyKJ)}`}
-      >
+        <span className="whitespace-nowrap">{fmtDur(s.timeS)}</span>
+      </span>
+      <span className="mt-0.5 mb-1 flex flex-wrap gap-x-[9px] gap-y-0.5 text-xs text-muted-foreground">
         <span className="text-foreground">{fmtDist(s.distanceM)}</span>
         <span>
           ↑{Math.round(s.ascentM)} ↓{Math.round(s.descentM)} m
@@ -59,8 +57,9 @@ function Segment({ s, i, names, over, classes }: { s: RouteSegment; i: number; n
         <span>≤{Math.round(s.maxSlopeDeg)}°</span>
         <span className={s.hazardM > 0 ? "text-warn" : undefined}>{Math.round(s.hazardM)} m hazard</span>
         <span>{fmtEnergy(s.energyKJ)}</span>
-      </div>
+      </span>
       <SurfaceMixBar mix={s.surfaceMix} classes={classes} />
+      </button>
     </li>
   );
 }
@@ -91,7 +90,7 @@ function AltCard({
   const all = !isRef && ref0 ? deltaParts(routeDelta(r, ref0)) : [];
   // One line: time delta + either the hazard chip or the next most important difference. The rest is in the tooltip.
   const parts = chip ? all.slice(0, 1) : all.slice(0, 2);
-  const status = !r.reachable ? "Unreachable" : t.withinLimits ? "Within limits" : `Over ${t.limitingFactor ?? "limit"}`;
+  const status = !r.reachable ? "Unreachable" : t.withinLimits ? "Fits the limits" : `Over ${t.limitingFactor ?? "limit"}`;
   const ok = r.reachable && t.withinLimits;
   const tip = [
     `${r.profile.name}: ${fmtDur(t.totalTimeS)} total (walk + stops)`,
@@ -116,8 +115,7 @@ function AltCard({
       title={tip}
     >
       <div className="flex items-center justify-between gap-1.5">
-        <span className={cn("caps truncate text-ink-2", compact && "text-[9.5px] tracking-[0.03em]")}>{r.profile.name}</span>
-        {ok && <span className="size-[7px] flex-none rounded-full bg-ok shadow-[0_0_0_2px_rgba(111,212,138,0.18)]" aria-label={status} />}
+        <span className={cn("truncate text-sm font-medium text-ink-2", compact && "text-xs")}>{r.profile.name}</span>
       </div>
       <div className={cn("mt-px mb-0.5 text-lg leading-[1.2] tracking-[-0.015em]", compact && "text-[16px]")}>{fmtDur(t.totalTimeS)}</div>
       <div className="truncate text-xs text-muted-foreground">
@@ -125,17 +123,16 @@ function AltCard({
       </div>
       <div className="truncate text-xs text-muted-foreground">{Math.round(t.hazardM)} m hazard</div>
       <div className={cn("mt-[5px] flex min-h-[18px] items-center gap-x-[5px] overflow-hidden text-xs leading-[1.35] font-semibold whitespace-nowrap", compact && "flex-wrap gap-y-[3px]")}>
-        {isRef ? (
-          <span className={TONE.neutral}>Reference</span>
-        ) : (
+        {/* Fastest is what the others are measured against, so it carries no comparison of its own. */}
+        {!isRef && <span className="font-normal text-muted-foreground">vs Fastest</span>}
+        {!isRef &&
           parts.map((p, k) => (
             <Fragment key={k}>
               {k > 0 && <span className="-mx-[3px] font-normal text-muted-foreground"> · </span>}
               <span className={TONE[p.tone]}>{p.text}</span>
             </Fragment>
-          ))
-        )}
-        {chip && <span className="flex-none rounded-[9px] bg-(--c) px-[7px] py-px text-[10px] leading-[1.4] font-bold text-[#0f0c0b]">{chip}</span>}
+          ))}
+        {chip && <span className="flex-none rounded-[9px] bg-(--c) px-[7px] py-px text-xs leading-[1.4] font-bold text-[#0f0c0b]">{chip}</span>}
       </div>
       {!ok && <div className="mt-[3px] text-xs font-medium text-bad">{status}</div>}
     </button>
@@ -170,7 +167,7 @@ function RouteAlternatives({ results, selectedId, onPick }: { results: RouteResu
           {hidden.length > 0 ? (
             <>
               {hidden.map((r) => r.profile.name).join(", ")} ≈ Fastest ·{" "}
-              <Button variant="link" size="inline" className="text-2xs" onClick={() => setShowSimilar(true)}>
+              <Button variant="link" size="inline" className="text-xs" onClick={() => setShowSimilar(true)}>
                 show
               </Button>
             </>
@@ -178,7 +175,7 @@ function RouteAlternatives({ results, selectedId, onPick }: { results: RouteResu
             <>
               {[...similar].map((id) => results.find((r) => r.profile.id === id)?.profile.name).join(", ")} ≈ Fastest{showSimilar ? " · " : ""}
               {showSimilar && (
-                <Button variant="link" size="inline" className="text-2xs" onClick={() => setShowSimilar(false)}>
+                <Button variant="link" size="inline" className="text-xs" onClick={() => setShowSimilar(false)}>
                   hide
                 </Button>
               )}
@@ -188,17 +185,6 @@ function RouteAlternatives({ results, selectedId, onPick }: { results: RouteResu
       )}
     </>
   );
-}
-
-/** One-line version of limitMessage(); the full sentence (numbers and advice) goes in the tooltip. */
-function shortLimit(r: RouteResult, names: string[]): string {
-  if (!r.reachable) {
-    const idx = (r as RouteResult & { unreachableStops?: number[] }).unreachableStops?.[0];
-    return `No walkable path${idx != null && names[idx] ? ` to ${names[idx]}` : ""} · too steep or off the map`;
-  }
-  const i = r.totals.firstSegmentOverLimit ?? 0;
-  const what = r.totals.limitingFactor === "energy" ? "energy" : "time";
-  return `Over the ${what} budget from ${names[i + 1] ?? `leg ${i + 1}`}`;
 }
 
 /** One line under a stop: what the crew does there (from the POI's "what a crew can do") and the dwell. */
@@ -286,7 +272,7 @@ export function PlanTab() {
 
       <SectionHeading>
         Stops <span className="font-semibold tracking-[0.04em] opacity-80">{stops.length}</span>
-        <SectionHeadingAside render={<label />} className="flex cursor-pointer items-center gap-1.5 text-[12px] text-foreground" title="Plan a loop that ends back at the start">
+        <SectionHeadingAside render={<label />} className="flex cursor-pointer items-center gap-1.5 text-sm text-foreground" title="Plan a loop that ends back at the start">
           <Checkbox checked={returnToStart} onCheckedChange={(v) => st.set({ returnToStart: v })} />
           Return to start
         </SectionHeadingAside>
@@ -323,11 +309,25 @@ export function PlanTab() {
                 setOverIdx(null);
               }}
             >
-              <GripVerticalIcon className="size-3.5 flex-none cursor-grab text-ink-4" aria-label="Drag to reorder" />
+              {/* Drag with a pointer; with the keyboard, focus the grip and press the up or down arrow. */}
+              <button
+                type="button"
+                className="-mx-1 flex-none cursor-grab rounded-sm p-1 text-ink-4 coarse:-my-1 coarse:grid coarse:size-9 coarse:place-items-center hover:text-ink-2 focus-visible:text-foreground"
+                aria-label={`Reorder stop ${i + 1}, ${s.name}. Use the up and down arrow keys.`}
+                title="Drag to reorder, or use the arrow keys"
+                onKeyDown={(e) => {
+                  const to = e.key === "ArrowUp" ? i - 1 : e.key === "ArrowDown" ? i + 1 : -1;
+                  if (to < 0 || to >= stops.length) return;
+                  e.preventDefault();
+                  st.moveStop(i, to);
+                }}
+              >
+                <GripVerticalIcon className="size-3.5" aria-hidden />
+              </button>
               <span className={cn("grid size-[18px] flex-none place-items-center rounded-sm border border-seam-strong text-xs", over && "border-bad text-bad")}>{i + 1}</span>
-              <span className="flex min-w-0 flex-1 cursor-pointer" onClick={() => flyTo(s.lonLat[0], s.lonLat[1])}>
+              <button type="button" className="flex min-w-0 flex-1 cursor-pointer text-left coarse:py-2" onClick={() => flyTo(s.lonLat[0], s.lonLat[1])} title="Show on the map">
                 <span className="truncate hover:underline hover:underline-offset-2">{s.name}</span>
-              </span>
+              </button>
               <label className="flex items-center gap-1 text-xs text-muted-foreground" title="Time working at this stop">
                 <Input
                   type="number"
@@ -381,39 +381,21 @@ export function PlanTab() {
 
       {sel && (
         <>
-          {msg && (
-            <Alert variant="destructive" className="block cursor-help truncate" title={msg}>
-              {shortLimit(sel, names)}
-            </Alert>
+          {/* The one place that says whether the selected route fits. */}
+          {msg ? (
+            <Alert variant="destructive">{msg}</Alert>
+          ) : (
+            <p className="mt-3 mb-0 flex flex-wrap items-center gap-x-1.5" role="status">
+              <CheckIcon className="size-4 flex-none text-ok" aria-hidden />
+              <b className="font-semibold">Fits the limits</b>
+              <span className="text-muted-foreground">
+                {fmtMin(sel.totals.totalTimeS)} of {fmtMin(usableT)} usable, {Math.round(params.reserveFraction * 100)}% in reserve
+              </span>
+            </p>
           )}
-          <SectionHeading>
-            Safety budget
-            {!msg && (
-              <Badge
-                variant="success"
-                className="ml-auto h-auto cursor-help px-2 py-px text-xs tracking-normal normal-case"
-                title={`Plan fits the EVA time, energy and oxygen limits with ${Math.round(params.reserveFraction * 100)}% held in reserve.`}
-              >
-                ✓ Fits limits
-              </Badge>
-            )}
-          </SectionHeading>
-          <div className="pt-3 pb-2">
+          <SectionHeading>Safety budget</SectionHeading>
+          <div className="pt-1 pb-2">
             <SafetyBudget r={sel} params={params} pnr={pnr} names={names} />
-            <div
-              className="flex cursor-help gap-4 border-t pt-[7px] text-[11.5px] text-muted-foreground"
-              title={`${sel.profile.name}: total climb and descent, and estimated radiation dose for the whole EVA.`}
-            >
-              <span>
-                Climb{" "}
-                <b className="font-semibold text-foreground">
-                  ↑{Math.round(sel.totals.ascentM)} ↓{Math.round(sel.totals.descentM)} m
-                </b>
-              </span>
-              <span>
-                Dose <b className="font-semibold text-foreground">{sel.totals.radiationMSv.toFixed(3)} mSv</b>
-              </span>
-            </div>
           </div>
           <div className="mt-2.5 flex gap-2">
             <Button className="flex-1" onClick={() => st.setGo({ mode: "sim", playing: true, elapsedS: 0, alongM: 0, position: start?.lonLat ?? null, gpsError: null })}>
@@ -456,12 +438,10 @@ export function PlanTab() {
           <SliderField hint={src.reserveFraction} label="Safety reserve" value={params.reserveFraction * 100} min={0} max={50} step={1} format={(v) => `${Math.round(v)}%`} onValueChange={(v) => st.setParams({ reserveFraction: v / 100 })} />
         </div>
         <div className="mt-1 flex items-center gap-2">
-          <span
-            className="cursor-help text-sm text-muted-foreground"
-            title={`Usable = limit minus the safety reserve. Max slope is the no-go steepness for routing. Source: ${area.config.walkParamsSource}`}
-          >
-            Usable {fmtMin(usableT)} · {fmtEnergy(usableE)}
-            {o2On ? ` · ${fmtO2(usableO)} O₂` : ""} · slope ≤ {params.maxSlopeDeg}° <span className="opacity-70">ⓘ</span>
+          <span className="flex items-center gap-0.5 text-sm text-muted-foreground">
+            Usable {fmtMin(usableT)}, {fmtEnergy(usableE)}
+            {o2On ? `, ${fmtO2(usableO)} O₂` : ""}; slope up to {params.maxSlopeDeg}°
+            <InfoTip label="About the usable budget">{`Usable = limit minus the safety reserve. Max slope is the no-go steepness for routing.\nSource: ${area.config.walkParamsSource}`}</InfoTip>
           </span>
           {defaultParams && JSON.stringify(defaultParams) !== JSON.stringify(params) && (
             <Button variant="link" size="inline" className="ml-auto text-xs" onClick={() => st.set({ params: defaultParams })}>

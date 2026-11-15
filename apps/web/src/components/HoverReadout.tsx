@@ -9,7 +9,7 @@ import { cn } from "@/lib/utils";
 
 const row = "mt-0.5 flex gap-x-3.5 gap-y-0.5 text-sm font-semibold whitespace-nowrap";
 const unit = "text-xs font-normal text-muted-foreground";
-const tag = "mr-[3px] text-[10px] font-medium tracking-[0.045em] text-muted-foreground uppercase";
+const tag = "mr-1 text-xs font-normal text-muted-foreground";
 
 export function HoverReadout() {
   const hover = useStore((s) => s.hover);
@@ -22,14 +22,13 @@ export function HoverReadout() {
   const confOn = useStore((s) => s.overlays.confidence.on);
   const detail = useStore((s) => s.detail);
   const sciOn = scienceLayers(area).filter((l) => sci[l.id]?.on && sciData[l.id]);
+  // Nothing to read until the pointer is over the map (or the user is placing the start).
+  if (!hover && !picking) return null;
   const conf = confOn && hover ? (sampleBest(area, detail, hover.lonLat)?.confidence ?? undefined) : undefined;
   return (
     <Panel
       className={cn(
         "readout pointer-events-none max-w-full min-w-0 px-3 py-2 text-sm sheet:in-[.app:has(.go-panel)]:hidden",
-        !hover && "text-[11.5px] text-muted-foreground",
-        // No hover on touch screens: drop the "hover the map" prompt, keep the values of the last tap.
-        !hover && !picking && "[@media(hover:none)]:hidden",
       )}
     >
       {picking && <div className="mb-[3px] font-medium text-foreground">Click the map to place the start</div>}
@@ -76,11 +75,9 @@ export function HoverReadout() {
               )}
             </div>
           )}
-          <div className="mt-0.5 font-mono text-2xs text-muted-foreground">{fmtLonLat(hover.lonLat)}</div>
+          <div className="mt-0.5 font-mono text-xs text-muted-foreground">{fmtLonLat(hover.lonLat)}</div>
         </>
-      ) : (
-        <div>Hover the map for slope and surface</div>
-      )}
+      ) : null}
     </Panel>
   );
 }

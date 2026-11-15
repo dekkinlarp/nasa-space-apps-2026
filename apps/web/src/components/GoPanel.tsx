@@ -21,7 +21,7 @@ const GO_PANEL = "go-panel w-80 max-w-full flex-none sheet:w-auto sheet:flex-1";
 function Reading({ label, bad, children }: { label: string; bad?: boolean; children: ReactNode }) {
   return (
     <div>
-      <span className="caps block text-muted-foreground">{label}</span>
+      <span className="block text-xs text-muted-foreground">{label}</span>
       <b className={cn("text-sm font-normal", bad && "text-bad")}>{children}</b>
     </div>
   );

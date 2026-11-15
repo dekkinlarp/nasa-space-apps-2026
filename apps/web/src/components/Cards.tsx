@@ -20,7 +20,7 @@ export const POI_TYPE_LABEL: Record<string, string> = {
   viewpoint: "Viewpoint",
 };
 
-/** The dot colour of each point-of-interest type (the map pins use the same tokens, see map.css). */
+/** The dot colour of each point-of-interest type (the map pins use the same tokens, see MapView). */
 export const POI_DOT: Record<string, string> = {
   "drill-site": "bg-poi-drill-site",
   "science-target": "bg-poi-science-target",
@@ -34,8 +34,10 @@ const BASIS_LABEL: Record<string, string> = { rover: "Rover", orbital: "Orbit", 
 
 export function PriorityTag({ poi, tiny }: { poi: Poi; tiny?: boolean }) {
   if (!poi.priority) return null;
+  // In a list the rows are already in priority order, so the word is enough.
+  if (tiny) return <span className="text-xs font-normal text-muted-foreground">{poi.priority}</span>;
   const variant = poi.priority === "primary" ? "strong" : poi.priority === "optional" ? "quiet" : "default";
-  return <Badge variant={variant}>{tiny ? poi.priority : PRIORITY_LABEL[poi.priority]}</Badge>;
+  return <Badge variant={variant}>{PRIORITY_LABEL[poi.priority]}</Badge>;
 }
 
 /** What the orbital mineral layers read at the POI, next to how that compares with the rest of the area. */
@@ -76,14 +78,14 @@ export function PhotoThumb({ photo, distM, className }: { photo: RoverPhoto; dis
       title="Open source image"
     >
       <img className="block max-h-[180px] w-full object-cover" src={photo.url} alt={`Rover image, sol ${photo.sol}`} loading="lazy" />
-      <div className="flex justify-between gap-2 bg-card px-1.5 py-1 text-2xs">
+      <div className="flex justify-between gap-2 bg-card px-1.5 py-1 text-xs">
         <span className="min-w-0 truncate" title={photo.instrument ? `Camera: ${photo.instrument}` : undefined}>
           Sol {photo.sol}
           {photo.instrument ? ` · ${photo.instrument}` : ""}
         </span>
         {distM != null && <span className="flex-none text-muted-foreground">{fmtDist(distM)} away</span>}
       </div>
-      {photo.credit && <div className="bg-card px-1.5 pb-1 text-[10px] text-muted-foreground">{photo.credit}</div>}
+      {photo.credit && <div className="bg-card px-1.5 pb-1 text-xs text-muted-foreground">{photo.credit}</div>}
     </a>
   );
 }
@@ -118,13 +120,15 @@ function PointStats({ lonLat }: { lonLat: LonLat }) {
 }
 
 /** A floating card at the right of the map: a point of interest or a rover waypoint. */
-function FloatCard({ onClose, children }: { onClose: () => void; children: ReactNode }) {
+function FloatCard({ onClose, footer, children }: { onClose: () => void; footer?: ReactNode; children: ReactNode }) {
   return (
-    <Panel size="lg" className="relative origin-top-right animate-pop-in overflow-y-auto p-4 scrollbar-thin">
-      <Button variant="ghost" size="icon-xs" className="absolute top-3 right-3 text-muted-foreground" onClick={onClose} aria-label="Close">
+    <Panel size="lg" className="relative flex min-h-0 origin-top-right animate-pop-in flex-col overflow-hidden">
+      <Button variant="ghost" size="icon-xs" className="absolute top-3 right-3 z-1 text-muted-foreground" onClick={onClose} aria-label="Close">
         <XIcon />
       </Button>
-      {children}
+      <div className="scrollbar-thin min-h-0 flex-1 overflow-y-auto p-4">{children}</div>
+      {/* The actions stay put while the text scrolls, so a short card on a phone still offers them. */}
+      {footer && <div className="flex flex-none gap-2 border-t p-3">{footer}</div>}
     </Panel>
   );
 }
@@ -132,7 +136,7 @@ function FloatCard({ onClose, children }: { onClose: () => void; children: React
 /** The card's type line: a coloured dot and the kind of place. */
 function TypeTag({ type, label }: { type: string; label: string }) {
   return (
-    <span className="caps flex items-center gap-1.5 text-ink-2">
+    <span className="flex items-center gap-1.5 text-sm text-ink-2">
       <i className={cn("size-2 rounded-full", POI_DOT[type], type === "start" && "rounded-[1px]")} />
       {label}
     </span>
@@ -148,7 +152,7 @@ function CardFoot({ children }: { children: ReactNode }) {
 
 function CardLonLat({ lonLat, title }: { lonLat: LonLat; title?: string }) {
   return (
-    <span className="ml-auto cursor-help font-mono text-2xs text-muted-foreground" title={title}>
+    <span className="ml-auto cursor-help font-mono text-xs text-muted-foreground" title={title}>
       {fmtLonLat(lonLat)}
     </span>
   );
@@ -164,11 +168,37 @@ export function PoiCard({ poi }: { poi: Poi }) {
   const np = nearestPhoto(area.rover.photos, ll);
   const already = stops.some((s) => s.poiId === poi.id);
   return (
-    <FloatCard onClose={() => set({ selectedPoi: null })}>
+    <FloatCard
+      onClose={() => set({ selectedPoi: null })}
+      footer={
+        <>
+        <Button
+          variant="secondary"
+          className="flex-1"
+          onClick={() => {
+            setStart({ lonLat: ll, name: poi.name, poiId: poi.id });
+            set({ tab: "plan" });
+          }}
+        >
+          Set as start
+        </Button>
+        <Button
+          className="flex-1"
+          disabled={already}
+          onClick={() => {
+            addStop({ lonLat: ll, name: poi.name, poiId: poi.id });
+            set({ tab: "plan" });
+          }}
+        >
+          {already ? "In plan" : "Add as stop"}
+        </Button>
+        </>
+      }
+    >
       <div className="flex items-baseline gap-2 pr-[22px]">
         <TypeTag type={poi.type} label={POI_TYPE_LABEL[poi.type] ?? poi.type} />
         {poi.positionSource === "illustrative" && (
-          <span className="cursor-help text-2xs text-[#e6b98a] before:text-muted-foreground before:content-['·_']" title="A plausible spot picked from the HiRISE image for the demo, not a surveyed target">
+          <span className="cursor-help text-xs text-[#e6b98a] before:text-muted-foreground before:content-['·_']" title="A plausible spot picked from the HiRISE image for the demo, not a surveyed target">
             Illustrative position
           </span>
         )}
@@ -188,7 +218,7 @@ export function PoiCard({ poi }: { poi: Poi }) {
               <li key={i}>
                 <Badge
                   variant={e.basis === "rover" ? "strong" : e.basis === "orbital" ? "default" : "estimate"}
-                  className={cn("mr-1.5 h-3.5 px-1 text-[10px] leading-3.5", e.basis === "rover" && "border-ink-2 text-foreground")}
+                  className={cn("mr-1.5", e.basis === "rover" && "border-ink-2 text-foreground")}
                 >
                   {BASIS_LABEL[e.basis] ?? e.basis}
                 </Badge>
@@ -214,28 +244,6 @@ export function PoiCard({ poi }: { poi: Poi }) {
           <PhotoThumb photo={np.photo} distM={np.distM} />
         </Detail>
       )}
-      <div className="mt-3 flex gap-2">
-        <Button
-          variant="secondary"
-          className="flex-1 "
-          onClick={() => {
-            setStart({ lonLat: ll, name: poi.name, poiId: poi.id });
-            set({ tab: "plan" });
-          }}
-        >
-          Set as start
-        </Button>
-        <Button
-          className="flex-1"
-          disabled={already}
-          onClick={() => {
-            addStop({ lonLat: ll, name: poi.name, poiId: poi.id });
-            set({ tab: "plan" });
-          }}
-        >
-          {already ? "In plan" : "Add as stop"}
-        </Button>
-      </div>
       <CardFoot>
         {poi.sources.map((u) => (
           <a key={u} href={u} target="_blank" rel="noreferrer" title={u}>

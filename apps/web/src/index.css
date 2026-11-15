@@ -10,8 +10,9 @@
  *
  * Layout: the map is the whole window. The side panel and every control float over it on one
  * translucent material (`glass`), so the ground stays visible around and behind the chrome.
- * Type: one tight grotesque throughout. Headings are large with negative tracking; labels are small,
- * uppercase and slightly open (`caps`); numbers use tabular figures of the same face.
+ * Type: one tight grotesque throughout. Headings are large with negative tracking. Nothing is set
+ * under 11px. Uppercase (`caps`) is kept for the headings that open a section of a panel; every
+ * other label is sentence case. Numbers use tabular figures of the same face.
  *
  * The app is dark only, and :root carries the dark values. There is no .dark class, so the
  * components' dark: variants stay off: one set of classes, and the tokens carry the theme.
@@ -45,8 +46,6 @@
   --font-mono: var(--mono);
 
   /* Type scale: a dense UI, so every step sits a little under Tailwind's defaults. */
-  --text-2xs: 10.5px;
-  --text-2xs--line-height: 1.35;
   --text-xs: 11px;
   --text-xs--line-height: 1.35;
   --text-sm: 12.5px;
@@ -247,7 +246,7 @@
   border-style: solid;
   border-color: var(--glass-edge);
 }
-/* Labels: small, uppercase, slightly open. Used for every caption that names a value or a section. */
+/* Section headings: small, uppercase, slightly open. Not for value labels, buttons or names. */
 @utility caps {
   font-size: var(--text-xs);
   font-weight: 500;
@@ -303,8 +302,12 @@
     @apply text-foreground underline decoration-ink-4 underline-offset-2 hover:decoration-foreground;
   }
   :focus-visible {
-    outline: 1px solid var(--ink);
+    outline: 2px solid var(--ink);
     outline-offset: 2px;
+  }
+  ::selection {
+    background: color-mix(in srgb, var(--mars) 40%, transparent);
+    color: var(--ink);
   }
 }
 

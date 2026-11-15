@@ -33,7 +33,7 @@ const POI_KEY: [string, string, string][] = [
 function Section({ title, tip, children }: { title?: string; tip?: string; children: ReactNode }) {
   return (
     <div className="border-t pt-1.5 pb-0.5 first:border-t-0 first:pt-0" title={tip}>
-      {title && <div className="caps mb-1 text-[10px] text-muted-foreground">{title}</div>}
+      {title && <div className="mb-1 text-xs text-muted-foreground">{title}</div>}
       {children}
     </div>
   );
@@ -97,9 +97,9 @@ export function MapLegend() {
   const trackFaded = isTrackFaded(tab, overlays.track);
 
   return (
-    <Panel className={cn("map-legend scrollbar-thin max-h-full flex-none overflow-y-auto text-sm", open ? "w-[164px] sheet:absolute sheet:z-4 sheet:max-h-[60%]" : "w-auto")}>
+    <Panel className={cn("map-legend scrollbar-thin z-4 max-h-[min(60dvh,440px)] flex-none overflow-y-auto text-sm sheet:max-h-[38dvh]", open ? "w-[164px]" : "w-auto")}>
       <button
-        className="caps flex h-9 w-full cursor-pointer items-center justify-between gap-2 px-3 text-foreground hover:text-foreground"
+        className="flex h-[42px] w-full cursor-pointer items-center justify-between gap-2 px-3 text-sm font-medium text-foreground"
         onClick={toggle}
         aria-expanded={open}
         title={open ? "Hide map key" : "Show what the lines and markers mean"}
@@ -117,7 +117,7 @@ export function MapLegend() {
                 <span className="flex-1" style={{ background: C.caution }} />
                 <span className="flex-1" style={{ background: C.limit }} />
               </div>
-              <div className="relative mx-0.5 mb-1 h-3.5 text-[10px] text-muted-foreground *:absolute *:-translate-x-1/2">
+              <div className="relative mx-0.5 mb-1 h-3.5 text-xs text-muted-foreground *:absolute *:-translate-x-1/2">
                 <span style={{ left: "25%" }}>{b.easyBelow}°</span>
                 <span style={{ left: "50%" }}>{b.caution}°</span>
                 <span style={{ left: "75%" }}>{b.max}°</span>

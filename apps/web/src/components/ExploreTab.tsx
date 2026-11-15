@@ -1,15 +1,19 @@
 import { useState } from "react";
+import { ArrowRightIcon, PlayIcon } from "lucide-react";
 import { useStore } from "../store";
 import { getMap } from "../map/MapView";
 import { POI_DOT, POI_TYPE_LABEL, PriorityTag } from "./Cards";
+import { ConditionsLine } from "./SiteHeader";
 import { Badge } from "@/components/ui/badge";
 import { Button } from "@/components/ui/button";
 import { SectionHeading } from "@/components/ui/section-heading";
-import { Stat, StatGrid } from "@/components/ui/stat";
 import { cn } from "@/lib/utils";
 import type { Poi, PoiType } from "../types";
 
 const ORDER: PoiType[] = ["drill-site", "science-target", "viewpoint", "start"];
+/** Within a group, the walk's primary objectives come first. */
+const PRIORITY_RANK: Record<string, number> = { primary: 0, secondary: 1, optional: 2 };
+const rank = (p: Poi) => PRIORITY_RANK[p.priority ?? ""] ?? 3;
 
 export function flyTo(lon: number, lat: number, zoom = 17) {
   getMap()?.flyTo({ center: [lon, lat], zoom: Math.max(zoom, getMap()?.getZoom() ?? 0), duration: 900 });
@@ -65,6 +69,10 @@ export function ExploreTab() {
   const rover = area.rover;
   const sols = rover.waypoints.map((w) => w.sol).filter((x): x is number => x != null);
   const [more, setMore] = useState(false);
+  // The demo replaces the plan. With stops of your own in it, the button asks first.
+  const planned = useStore((s) => s.stops);
+  const ownPlan = planned.length > 0 && planned.map((s) => s.poiId).join() !== DEMO.stops.join();
+  const [confirming, setConfirming] = useState(false);
   const demoReady = DEMO.stops.every((id) => area.config.pois.some((p) => p.id === id)) && area.config.pois.some((p) => p.id === DEMO.start);
   const runDemo = () => runDemoWalk(area.config.pois);
   const pick = (p: Poi) => {
@@ -89,56 +97,77 @@ export function ExploreTab() {
             </p>
           </>
         )}
-        <Button variant="link" size="inline" className="mb-3 flex text-2xs" onClick={() => setMore(!more)} aria-expanded={more}>
+        <Button variant="link" size="inline" className="mb-3 flex text-xs" onClick={() => setMore(!more)} aria-expanded={more}>
           {more ? "Less" : "More"}
         </Button>
         {/* The demo walk is the one coloured action in the panel. */}
         <Button
-          className="h-auto w-full justify-start gap-2.5 rounded-xl bg-linear-135 from-[#d4521a] to-mars-deep px-3 py-2.5 text-left text-white shadow-[0_4px_18px_rgba(255,122,47,0.25)] hover:from-[#e5602a] hover:to-[#d4521a] hover:bg-transparent"
-          onClick={demoReady ? runDemo : undefined}
+          className="h-auto w-full justify-start gap-2.5 rounded-xl bg-mars-deep px-3 py-2.5 text-left text-white hover:bg-[#d4521a]"
+          onClick={demoReady ? () => (ownPlan ? setConfirming(true) : runDemo()) : undefined}
           disabled={!demoReady}
         >
-          <span className="grid size-[30px] flex-none place-items-center rounded-full bg-white/16 pl-0.5 text-sm">▶</span>
+          <PlayIcon className="size-4 flex-none fill-current" aria-hidden />
           <span className="min-w-0">
-            <b className="block text-[14px] tracking-[0.01em]">Try the boxwork walk</b>
-            <span className="block truncate text-2xs font-medium text-white/78">Camp → hollow → ridge junction → sand dig</span>
+            <b className="block text-base">Try the boxwork walk</b>
+            <span className="block truncate text-xs font-medium text-white/85">Camp → hollow → ridge junction → sand dig</span>
           </span>
         </Button>
+        {confirming && ownPlan && (
+          <div className="mt-2 flex flex-wrap items-center gap-2 text-sm" role="group" aria-label="Replace your plan?">
+            <span className="mr-auto text-ink-2">
+              This replaces your {planned.length} {planned.length === 1 ? "stop" : "stops"}.
+            </span>
+            <Button
+              size="sm"
+              onClick={() => {
+                setConfirming(false);
+                runDemo();
+              }}
+            >
+              Replace plan
+            </Button>
+            <Button size="sm" variant="ghost" onClick={() => setConfirming(false)}>
+              Keep mine
+            </Button>
+          </div>
+        )}
         <Button variant="secondary" className="mt-2 h-9 w-full bg-transparent" onClick={() => set({ tab: "plan" })}>
-          Plan an EVA →
+          Plan an EVA <ArrowRightIcon aria-hidden />
         </Button>
       </section>
 
       {ORDER.map((type) => {
-        const list = area.config.pois.filter((p) => p.type === type);
+        const list = area.config.pois.filter((p) => p.type === type).sort((a, b) => rank(a) - rank(b));
         if (!list.length) return null;
         return (
           <section key={type}>
             <SectionHeading className="mt-[22px]">{POI_TYPE_LABEL[type]}s</SectionHeading>
             <ul className="-mx-2 list-none p-0">
               {list.map((p) => (
-                <li
-                  key={p.id}
-                  className={cn(
-                    "flex cursor-pointer gap-2.5 rounded-lg p-2 transition-colors coarse:py-[11px] hover:bg-white/5",
-                    selected?.id === p.id && "bg-white/11 hover:bg-white/11",
-                  )}
-                  onClick={() => pick(p)}
-                  title={p.summary}
-                >
-                  <i className={cn("mt-1.5 size-2 flex-none rounded-full", POI_DOT[p.type], p.type === "start" && "rounded-[1px]")} />
-                  <div className="min-w-0">
-                    <div className="flex flex-wrap items-center gap-x-1.5 gap-y-0.5 font-medium">
-                      {p.name}
-                      <PriorityTag poi={p} tiny />
-                      {p.positionSource === "illustrative" && (
-                        <Badge variant="estimate" title="Position is illustrative, not a surveyed target">
-                          illustrative
-                        </Badge>
-                      )}
-                    </div>
-                    <div className="line-clamp-1 text-sm text-muted-foreground">{p.summary}</div>
-                  </div>
+                <li key={p.id}>
+                  <button
+                    type="button"
+                    aria-pressed={selected?.id === p.id}
+                    className={cn(
+                      "flex w-full cursor-pointer gap-2.5 rounded-lg p-2 text-left transition-colors coarse:py-[11px] hover:bg-white/5",
+                      selected?.id === p.id && "bg-white/11 hover:bg-white/11",
+                    )}
+                    onClick={() => pick(p)}
+                  >
+                    <i className={cn("mt-1.5 size-2 flex-none rounded-full", POI_DOT[p.type], p.type === "start" && "rounded-[1px]")} />
+                    <span className="block min-w-0">
+                      <span className="flex flex-wrap items-baseline gap-x-2 gap-y-0.5 font-medium">
+                        {p.name}
+                        <PriorityTag poi={p} tiny />
+                        {p.positionSource === "illustrative" && (
+                          <Badge variant="estimate" title="Position is illustrative, not a surveyed target">
+                            illustrative
+                          </Badge>
+                        )}
+                      </span>
+                      <span className="line-clamp-1 text-sm text-muted-foreground">{p.summary}</span>
+                    </span>
+                  </button>
                 </li>
               ))}
             </ul>
@@ -148,19 +177,13 @@ export function ExploreTab() {
 
       <section>
         <SectionHeading>Curiosity in this area</SectionHeading>
-        <StatGrid className="gap-y-1.5">
-          <Stat label="Waypoints">{rover.waypoints.length}</Stat>
-          {sols.length > 0 && (
-            <Stat label="Sols">
-              {Math.min(...sols)}–{Math.max(...sols)}
-            </Stat>
-          )}
-          <Stat label="Rover photos">{rover.photos.length}</Stat>
-          <Stat label="Drill sites" labelTitle="Drill sites from the rover data">
-            {rover.drillSites.map((d) => d.name).join(", ") || "—"}
-          </Stat>
-        </StatGrid>
-        <p className="my-3 text-sm text-muted-foreground">Click a waypoint dot for its sol and photos.</p>
+        <p className="mt-0 mb-3 text-sm text-ink-2">
+          {rover.waypoints.length} waypoints and {rover.photos.length} photos
+          {sols.length > 0 && ` from sols ${Math.min(...sols)}–${Math.max(...sols)}`}
+          {rover.drillSites.length > 0 && `, with drill holes at ${rover.drillSites.map((d) => d.name).join(", ")}`}. Click a waypoint dot on the map for its sol and photos.
+        </p>
+        {/* On the bottom-sheet layout the site header is hidden, so the site facts close the tab instead. */}
+        <ConditionsLine className="mb-3 hidden sheet:block" />
       </section>
     </>
   );

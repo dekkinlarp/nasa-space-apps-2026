@@ -303,7 +303,10 @@ export const RELAYOUT_LABELS = "marsmap:relayout-labels";
 type Box = { l: number; t: number; r: number; b: number };
 const boxesHit = (a: Box, b: Box) => a.l < b.r && a.r > b.l && a.t < b.b && a.b > b.t;
 /** Map furniture a ring label must not sit under (relative to the map container). */
-const LABEL_OBSTACLES = ".view-ctl, .maplibregl-ctrl-top-right, .map-legend, .readout, .card-slot > *, .go-panel, .maplibregl-ctrl-bottom-right";
+const LABEL_OBSTACLES = ".view-ctl, .maplibregl-ctrl-top-right, .map-legend, .readout, .card-slot > *, .go-panel, .map-safety, .profile, .maplibregl-ctrl-bottom-right";
+
+/** The floating panels live beside the map layer, not inside it, so obstacles are looked up from the app root. */
+const obstacleRoot = (container: HTMLElement) => container.closest(".app") ?? container.parentElement;
 
 /**
  * Put each ring label on the topmost point of its ring that keeps the whole label inside the
@@ -314,7 +317,7 @@ function placeRingLabels(map: MLMap, markers: maplibregl.Marker[], labels: { el:
   const W = container.clientWidth, H = container.clientHeight;
   const cr = container.getBoundingClientRect();
   const obstacles: Box[] = [];
-  container.parentElement?.querySelectorAll(LABEL_OBSTACLES).forEach((n) => {
+  obstacleRoot(container)?.querySelectorAll(LABEL_OBSTACLES).forEach((n) => {
     const r = (n as HTMLElement).getBoundingClientRect();
     if (r.width && r.height) obstacles.push({ l: r.left - cr.left - 4, t: r.top - cr.top - 4, r: r.right - cr.left + 4, b: r.bottom - cr.top + 4 });
   });
@@ -395,7 +398,7 @@ function placePoiLabels(map: MLMap, pins: { el: HTMLElement; ll: LonLat; rank: n
   const cr = container.getBoundingClientRect();
   const rel = (r: DOMRect): Box => ({ l: r.left - cr.left, t: r.top - cr.top, r: r.right - cr.left, b: r.bottom - cr.top });
   const obstacles: Box[] = [];
-  container.parentElement?.querySelectorAll(`${LABEL_OBSTACLES}, .stop-marker, .pnr-chip, .ring-label`).forEach((n) => {
+  obstacleRoot(container)?.querySelectorAll(`${LABEL_OBSTACLES}, .stop-marker, .pnr-chip, .ring-label`).forEach((n) => {
     const r = (n as HTMLElement).getBoundingClientRect();
     if (r.width && r.height && (n as HTMLElement).style.visibility !== "hidden") obstacles.push(rel(r));
   });
@@ -420,7 +423,8 @@ function placePoiLabels(map: MLMap, pins: { el: HTMLElement; ll: LonLat; rank: n
         { flip: false, box: { l: cx + off, t: cy - h / 2, r: cx + off + w, b: cy + h / 2 } },
         { flip: true, box: { l: cx - off - w, t: cy - h / 2, r: cx - off, b: cy + h / 2 } },
       ];
-      const own = (o: Box) => o.l <= cx && o.r >= cx && o.t <= cy && o.b >= cy;
+      // A plan marker sitting on the pin is its own, not an obstacle. A panel over the pin still is: the label hides with it.
+      const own = (o: Box) => o.r - o.l <= 40 && o.l <= cx && o.r >= cx && o.t <= cy && o.b >= cy;
       const ok = sides.find(({ box }) => {
         if (box.l < M || box.t < M || box.r > W - M || box.b > H - M) return false;
         if (obstacles.some((o) => !own(o) && boxesHit(box, o)) || placed.some((o) => boxesHit(box, o))) return false;

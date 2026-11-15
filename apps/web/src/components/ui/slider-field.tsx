@@ -1,4 +1,5 @@
 import { useId } from "react";
+import { InfoTip } from "@/components/ui/info-tip";
 import { Slider } from "@/components/ui/slider";
 import { cn } from "@/lib/utils";
 
@@ -26,9 +27,12 @@ function SliderField({
 }) {
   const id = useId();
   return (
-    <div data-slot="slider-field" className={cn("grid gap-1.5", className)} title={hint}>
-      <div className="flex justify-between text-sm text-ink-2">
-        <span id={id}>{label}</span>
+    <div data-slot="slider-field" className={cn("grid gap-1.5", className)}>
+      <div className="flex items-center justify-between text-sm text-ink-2">
+        <span className="flex items-center gap-0.5">
+          <span id={id}>{label}</span>
+          {hint && <InfoTip label={`About ${label.toLowerCase()}`}>{hint}</InfoTip>}
+        </span>
         <b className="font-normal text-foreground">{format(value)}</b>
       </div>
       <Slider aria-labelledby={id} value={[value]} min={min} max={max} step={step} onValueChange={(v) => onValueChange(Array.isArray(v) ? v[0]! : v)} />

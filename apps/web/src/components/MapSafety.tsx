@@ -1,4 +1,5 @@
 /** On-map safety overlay: compact time / energy meter and the point-of-no-return marker. */
+import { CheckIcon, TriangleAlertIcon } from "lucide-react";
 import { useEffect } from "react";
 import maplibregl from "maplibre-gl";
 import { selectedResult, usableTimeS, useStore } from "../store";
@@ -27,7 +28,7 @@ function MiniBar({ label, f, text }: { label: string; f: number; text: string })
   );
 }
 
-export function MapSafety() {
+export function MapSafety({ planVisible }: { planVisible: boolean }) {
   const results = useStore((s) => s.results);
   const selectedProfile = useStore((s) => s.selectedProfile);
   const params = useStore((s) => s.params);
@@ -52,7 +53,7 @@ export function MapSafety() {
     // A chip on a stem with a diamond at the spot; at a stop the stop's own marker is the spot.
     el.innerHTML =
       `<div class="flex items-center gap-[5px] rounded-sm border bg-[rgba(15,12,11,0.9)] pr-[7px] pl-[5px] whitespace-nowrap shadow-[0_2px_8px_rgba(0,0,0,0.6)] ${isPnr ? "border-warn" : "border-[rgba(111,212,138,0.7)]"}">` +
-      `<span class="text-[12px]/4 font-bold ${isPnr ? "text-warn" : "text-ok"}">⟲</span><b class="text-[11px]/4 font-semibold ${isPnr ? "text-[#ffe7a8]" : "text-[#c9f0d3]"}"></b></div>` +
+      `<svg class="size-3 flex-none ${isPnr ? "text-warn" : "text-ok"}" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.5" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><path d="M9 14 4 9l5-5"/><path d="M4 9h10.5a5.5 5.5 0 0 1 5.5 5.5a5.5 5.5 0 0 1-5.5 5.5H11"/></svg><b class="text-[11px]/4 font-semibold ${isPnr ? "text-[#ffe7a8]" : "text-[#c9f0d3]"}"></b></div>` +
       `<div class="h-2 w-0.5 ${isPnr ? "bg-warn" : "bg-ok"}"></div>` +
       (pnr.atStop ? "" : `<div class="-mb-[5px] size-2.5 rotate-45 border-2 border-[#120c0a] ${isPnr ? "bg-warn shadow-[0_0_0_1.5px_var(--warn),0_2px_6px_rgba(0,0,0,0.7)]" : "bg-ok shadow-[0_0_0_1.5px_var(--ok),0_2px_6px_rgba(0,0,0,0.7)]"}"></div>`);
     el.querySelector("b")!.textContent = label;
@@ -64,6 +65,7 @@ export function MapSafety() {
     };
   }, [pnr, area]);
 
+  // The Plan tab already carries the verdict and the budgets; this is their stand-in when it is out of sight.
   if (!r || !params || !r.reachable || goMode !== "off") return null;
   const t = r.totals;
   const usableT = usableTimeS(params);
@@ -73,15 +75,16 @@ export function MapSafety() {
   const ok = t.withinLimits;
   const fo = t.o2UsedFraction;
   const over = t.limitingFactor === "oxygen" ? "Over O₂" : t.limitingFactor === "energy" ? "Over energy" : "Over time";
-  return (
-    <Panel className={cn("w-[190px] flex-none px-2.5 pt-1.5 pb-[7px] text-[11.5px] sheet:hidden", !ok && "border-bad/55")}>
+  // The full meter: the Plan tab's stand-in on wide screens when that tab is out of sight.
+  const full = (
+    <Panel className={cn("map-safety w-[190px] flex-none px-2.5 pt-1.5 pb-[7px] text-xs sheet:hidden", !ok && "border-bad/55")}>
       <div className="mb-1 flex items-center justify-between">
-        <span className="text-[12px] font-bold">Suit</span>
+        <span className="text-sm font-semibold">Suit</span>
         <span
           className={cn("cursor-help text-xs font-semibold", ok ? "text-ok" : "text-bad")}
           title={ok ? "Time, energy and oxygen all inside the usable budget" : `Over the usable ${t.limitingFactor ?? ""} budget`}
         >
-          {ok ? "Within limits" : over}
+          {ok ? "Fits the limits" : over}
         </span>
       </div>
       <MiniBar label="Time" f={ft} text={`${fmtDur(t.totalTimeS)} of ${fmtDur(usableT)} usable (limit ${fmtDur(params.evaLimitS)} minus ${Math.round(params.reserveFraction * 100)}% reserve)`} />
@@ -99,5 +102,18 @@ export function MapSafety() {
         </div>
       )}
     </Panel>
+  );
+  return (
+    <>
+      {/* Phones and tablets: the sheet's verdict is a scroll away, so one line of it rides on the map. */}
+      <Panel className={cn("map-safety hidden h-9 min-w-0 flex-none items-center gap-1.5 px-3 text-sm sheet:flex", !ok && "border-bad/55")} role="status">
+        {ok ? <CheckIcon className="size-4 flex-none text-ok" aria-hidden /> : <TriangleAlertIcon className="size-4 flex-none text-bad" aria-hidden />}
+        <b className="font-semibold whitespace-nowrap">{ok ? "Fits the limits" : over}</b>
+        <span className="truncate text-muted-foreground">
+          {fmtDur(t.totalTimeS)} of {fmtDur(usableT)}
+        </span>
+      </Panel>
+      {!planVisible && full}
+    </>
   );
 }

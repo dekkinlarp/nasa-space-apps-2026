@@ -6,6 +6,7 @@ import { pictureGroup, tintable } from "../map/imageryTiles";
 import { CONFIDENCE_CLEAR, CONFIDENCE_LOW, COST_RAMP, cssGradient, ELEV_RAMP, SLOPE_STOPS } from "../map/rasters";
 import type { AreaData } from "../types";
 import { Badge } from "@/components/ui/badge";
+import { InfoTip } from "@/components/ui/info-tip";
 import { RadioGroup, RadioGroupItem } from "@/components/ui/radio-group";
 import { SectionHeading } from "@/components/ui/section-heading";
 import { Slider } from "@/components/ui/slider";
@@ -68,7 +69,7 @@ function LegendBar({ background }: { background: string }) {
 }
 
 function LegendTicks({ children, className }: { children: ReactNode; className?: string }) {
-  return <div className={cn("mt-[3px] flex justify-between text-2xs text-muted-foreground", className)}>{children}</div>;
+  return <div className={cn("mt-[3px] flex justify-between text-xs text-muted-foreground", className)}>{children}</div>;
 }
 
 function Row({ id, title, children, disabled, note }: { id: OverlayId; title: string; children?: ReactNode; disabled?: string; note?: ReactNode }) {
@@ -225,7 +226,7 @@ export function LayersTab() {
         <span className="text-sm whitespace-nowrap text-muted-foreground">Imagery opacity</span>
         <Slider aria-label="Imagery opacity" min={0} max={1} step={0.05} value={[baseOpacity]} onValueChange={(v) => set({ baseOpacity: Array.isArray(v) ? v[0]! : v })} />
       </div>
-      <LayerRow title="Mars colour tint" note={<Badge variant="estimate">cosmetic</Badge>} on={marsTint} onOnChange={(on) => set({ marsTint: on })} disabled={!canTint}>
+      <LayerRow title="Mars colour tint" note={<span className="text-xs text-muted-foreground">cosmetic</span>} on={marsTint} onOnChange={(on) => set({ marsTint: on })} disabled={!canTint}>
         <Hint>
           {base && !tintable(base)
             ? "Thermal imagery shows temperature, so it is left as captured."
@@ -236,7 +237,7 @@ export function LayersTab() {
       {scienceLayers(area).length > 0 && (
         <>
           <SectionHeading>
-            Minerals from orbit <Badge variant="sim">science</Badge>
+            Minerals from orbit
           </SectionHeading>
           {scienceLayers(area).map((l) => (
             <ScienceRow key={l.id} area={area} layer={l} />
@@ -249,14 +250,14 @@ export function LayersTab() {
         </>
       )}
 
-      <SectionHeading>Overlays</SectionHeading>
+      <SectionHeading>Terrain</SectionHeading>
       <Row id="surface" title="Surface conditions" note={est("surface")} disabled={L.surface ? undefined : "No surface layer in this dataset"}>
         <div className="mt-2 flex flex-wrap gap-x-3 gap-y-1 text-sm text-ink-2">
           {area.config.surfaceClasses.map((c) => (
             <span key={c.id}>
               <Swatch color={c.color} />
               {c.name}
-              {c.hazard && <span className="ml-1.5 text-2xs text-warn">hazard</span>}
+              {c.hazard && <span className="ml-1.5 text-xs text-warn">hazard</span>}
             </span>
           ))}
         </div>
@@ -293,7 +294,8 @@ export function LayersTab() {
       <Row id="hillshade" title="Hillshade (from DEM)" disabled={L.elevation ? undefined : "No elevation layer"}>
         <Hint>Opacity slider sets shading strength.</Hint>
       </Row>
-      <Row id="cost" title="Walk cost from start" disabled={!start ? "Set a start to see walk cost" : undefined} note={<Badge variant="sim">model</Badge>}>
+      <SectionHeading>Walk model</SectionHeading>
+      <Row id="cost" title="Walk cost from start" disabled={!start ? "Set a start to see walk cost" : undefined}>
         {reach ? (
           <>
             <LegendBar background={cssGradient(COST_RAMP)} />
@@ -315,6 +317,7 @@ export function LayersTab() {
           Round trip: 15 min · 30 min · 1h · walk limit
         </Hint>
       </Row>
+      <SectionHeading>Places</SectionHeading>
       <Row id="track" title="Curiosity traverse + waypoints" disabled={area.rover.traverse ? undefined : "No rover traverse in this dataset"}>
         <div className="mt-1 text-xs text-muted-foreground">NASA/JPL-Caltech MSL localized traverse</div>
       </Row>
@@ -323,11 +326,11 @@ export function LayersTab() {
       <DataChecks area={area} />
 
       <SectionHeading>Data</SectionHeading>
-      <div
-        className="cursor-help text-sm text-muted-foreground"
-        title={`Manifest generated ${new Date(m.generatedAt).toLocaleString()}.\nMap uses Mars lon/lat on a Web Mercator canvas (≈0.35% scale distortion at 4.8°S). All distances and times come from the routing core.`}
-      >
-        Area <span className="font-mono">{area.areaId}</span> · generated {new Date(m.generatedAt).toLocaleDateString()} <span className="opacity-70">ⓘ</span>
+      <div className="flex items-center gap-0.5 text-sm text-muted-foreground">
+        <span>
+          Area <span className="font-mono">{area.areaId}</span>, generated {new Date(m.generatedAt).toLocaleDateString()}
+        </span>
+        <InfoTip label="About this data">{`Manifest generated ${new Date(m.generatedAt).toLocaleString()}.\nMap uses Mars lon/lat on a Web Mercator canvas (≈0.35% scale distortion at 4.8°S). All distances and times come from the routing core.`}</InfoTip>
       </div>
     </>
   );

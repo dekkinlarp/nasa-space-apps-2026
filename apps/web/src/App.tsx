@@ -2,9 +2,9 @@ import { useEffect, useRef, useState } from "react";
 import { useStore, type Tab } from "./store";
 import { loadArea, pickArea } from "./data";
 import { startEngine } from "./engine";
-import { MapView, setMapInsets } from "./map/MapView";
+import { getMap, MapView, setMapInsets } from "./map/MapView";
 import { pictureGroup } from "./map/imageryTiles";
-import { ChevronLeftIcon } from "lucide-react";
+import { ChevronLeftIcon, CircleHelpIcon } from "lucide-react";
 import { SidebarIcon } from "./components/icons";
 import { Button } from "@/components/ui/button";
 import { Badge } from "@/components/ui/badge";
@@ -17,7 +17,7 @@ import { Spinner } from "@/components/ui/spinner";
 import { Tabs, TabsContent, TabsList, TabsTrigger } from "@/components/ui/tabs";
 import { Starfield } from "./map/Starfield";
 import { cn } from "@/lib/utils";
-import { ConditionsBar, SiteHeader } from "./components/SiteHeader";
+import { SiteHeader } from "./components/SiteHeader";
 import { ExploreTab } from "./components/ExploreTab";
 import { PlanTab } from "./components/PlanTab";
 import { LayersTab } from "./components/LayersTab";
@@ -47,7 +47,7 @@ export const PANEL_MS = 380;
  * of the elevation profile, which the root reads off its own descendants with has-[…].
  */
 const SHELL =
-  "app relative h-full overflow-hidden [--dock:0px] has-[.profile:not(.collapsed)]:[--dock:calc(188px+var(--gap))] has-[.profile.collapsed]:[--dock:calc(40px+var(--gap))] sheet:[--stage-left:max(var(--gap),env(safe-area-inset-left))] sheet:has-[.profile:not(.collapsed)]:[--dock:calc(160px+var(--gap))]";
+  "app relative h-full overflow-hidden [--dock:0px] has-[.profile:not(.collapsed)]:[--dock:calc(188px+var(--gap))] has-[.profile.collapsed]:[--dock:calc(40px+var(--gap))] sheet:[--stage-left:max(var(--gap),env(safe-area-inset-left))]";
 /** Phones and short landscape screens give the profile's room to the open sheet. */
 const SHELL_OPEN =
   "sheet-open [--sheet-h:0px] [--stage-left:calc(var(--side-w)+var(--gap)*2)] sheet:[--sheet-h:46dvh] phone:[--dock:0px]! phone:[--sheet-h:50dvh] squat:[--dock:0px]! squat:[--sheet-h:56dvh]";
@@ -90,7 +90,9 @@ function GestureHint({ view3d }: { view3d: boolean }) {
       ];
   return (
     <Popover open={open} onOpenChange={setOpen}>
-      <PopoverTrigger render={<Button variant="glass" size="icon-xl" aria-label="Map gestures" title="Map gestures" className="text-lg" />}>?</PopoverTrigger>
+      <PopoverTrigger render={<Button variant="glass" size="icon-xl" aria-label="Map gestures" title="Map gestures" />}>
+        <CircleHelpIcon className="size-[18px]" aria-hidden />
+      </PopoverTrigger>
       <PopoverContent align="end" sideOffset={8} className="glass bg-glass w-max max-w-[min(380px,calc(100vw-24px))] rounded-xl px-4 py-3 shadow-float-sm ring-0">
         <dl className="m-0 grid gap-1.5 text-sm" onClick={() => setOpen(false)}>
           {rows.map(([k, v]) => (
@@ -118,11 +120,11 @@ function ViewControls() {
   return (
     <div className="pointer-events-auto flex items-center gap-2">
       {view3d && (
-        <Panel className="flex h-11 items-center gap-3 px-4 text-ink-2 phone:hidden">
-          <span className="caps whitespace-nowrap">Vertical ×{ex}</span>
+        <Panel className="view-ctl flex h-11 items-center gap-3 px-4 text-ink-2 phone:hidden">
+          <span className="text-sm whitespace-nowrap">Vertical ×{ex}</span>
           <Slider aria-label="Vertical exaggeration" className="w-[110px] sheet:w-20" min={1} max={10} step={0.5} value={[ex]} onValueChange={(v) => set({ exaggeration: Array.isArray(v) ? v[0]! : v })} />
-          <span className="caps ml-1 whitespace-nowrap" title="How much ground is drawn in 3D, centred on where you are looking. Smaller is faster on slow devices.">
-            Draw
+          <span className="ml-1 text-sm whitespace-nowrap" title="How much ground is drawn in 3D, centred on where you are looking. Smaller is faster on slow devices.">
+            Draw distance
           </span>
           <Select items={RENDER_DISTANCES} value={String(renderKm)} onValueChange={(v) => v && set({ renderDistanceKm: Number(v) })}>
             <SelectTrigger aria-label="3D render distance" size="sm" className="w-[104px]">
@@ -194,6 +196,27 @@ export function App() {
     };
   }, [sheetOpen, area, hasRoute]);
 
+  // A card opens at the right of the map (the top, on phones). If the place it describes is underneath,
+  // slide the map just far enough to bring it out, by whichever way is shorter.
+  useEffect(() => {
+    const ll = poi ? ([poi.lon, poi.lat] as [number, number]) : wp ? (wp.lonLat as [number, number]) : null;
+    if (!ll) return;
+    const raf = requestAnimationFrame(() => {
+      const map = getMap();
+      const card = document.querySelector(".card-slot > *");
+      if (!map || !card || map.isMoving()) return;
+      const c = card.getBoundingClientRect(), m = map.getContainer().getBoundingClientRect();
+      const p = map.project(ll);
+      const x = p.x + m.left, y = p.y + m.top, pad = 28;
+      if (x < c.left - pad || x > c.right + pad || y < c.top - pad || y > c.bottom + pad) return;
+      const dx = x - (c.left - pad), dy = c.bottom + pad - y;
+      const stage = card.parentElement!.parentElement!.getBoundingClientRect();
+      const roomBelow = stage.bottom - c.bottom > 60;
+      map.panBy(roomBelow && dy < dx ? [0, -dy] : [dx, 0], { duration: 500 });
+    });
+    return () => cancelAnimationFrame(raf);
+  }, [poi, wp]);
+
   // Stop Safari from pinch-zooming the whole page when a pinch starts outside the map.
   useEffect(() => {
     const stop = (e: Event) => e.preventDefault();
@@ -227,12 +250,14 @@ export function App() {
 
   if (loadError)
     return (
-      <div className="grid h-full place-content-center gap-2 p-4 text-center text-ink-2">
-        <h2 className="m-0 text-lg text-foreground">Could not load map data</h2>
-        <p className="m-0 font-mono">{loadError}</p>
-        <p className="m-0 text-muted-foreground">
-          Is the server running on :8787? Start everything with <span className="font-mono">pnpm dev</span>.
-        </p>
+      <div className="grid h-full place-content-center justify-items-center gap-2 p-4 text-center text-ink-2">
+        <h2 className="m-0 text-lg text-foreground">The map did not load</h2>
+        <p className="m-0 max-w-[44ch]">The map data could not be fetched. Check your connection and try again.</p>
+        <Button className="mt-2" onClick={() => location.reload()}>
+          Reload
+        </Button>
+        {/* The cause, for whoever is running the project locally. */}
+        {import.meta.env.DEV && <p className="m-0 mt-3 max-w-[60ch] font-mono text-xs text-muted-foreground">{loadError}</p>}
       </div>
     );
   if (!area)
@@ -246,11 +271,12 @@ export function App() {
   return (
     <div className={cn(SHELL, sheetOpen ? SHELL_OPEN : SHELL_CLOSED)}>
       {/* The map is the whole window; everything else floats over it. */}
-      <div className="absolute inset-0 bg-background">
+      {/* isolate: a raised marker (hovered, selected) stacks among the markers, never above the panels. */}
+      <div className="absolute inset-0 isolate bg-background">
         <Starfield />
         <MapView />
         <GoWalker />
-        <div className="pointer-events-none absolute bottom-[calc(var(--sheet-h)+2px)] left-1/2 max-w-[60%] -translate-x-1/2 truncate text-[9.5px] text-white/50 text-shadow-[0_1px_2px_#000] in-[.app:has(.profile)]:hidden">{area.manifest.imagery.find((i) => pictureGroup(i) === baseImagery)?.source ?? ""}</div>
+        <div className="pointer-events-none absolute bottom-[calc(var(--sheet-h)+2px)] left-1/2 max-w-[60%] -translate-x-1/2 truncate text-xs text-white/50 text-shadow-[0_1px_2px_#000] in-[.app:has(.profile)]:hidden">{area.manifest.imagery.find((i) => pictureGroup(i) === baseImagery)?.source ?? ""}</div>
       </div>
 
       <Tabs
@@ -307,27 +333,27 @@ export function App() {
 
       {/* The stage is the part of the map the side panel leaves visible. Floating pieces are laid out in it. */}
       <div className="pointer-events-none absolute top-[max(var(--gap),env(safe-area-inset-top))] right-[max(var(--gap),env(safe-area-inset-right))] bottom-[calc(var(--sheet-h)+var(--gap))] left-(--stage-left) z-2 flex min-h-0 flex-col gap-(--gap) transition-[left] duration-(--panel-ms) ease-spring sheet:transition-[bottom]">
-        <div className="flex flex-none items-start gap-2 sheet:relative">
+        {/* One row of controls. The map key hangs from it when open, over the map, without pushing the cards down. */}
+        <div className="flex h-11 flex-none items-start gap-2 sheet:relative">
           {!sheetOpen && (
             <Button variant="glass" size="icon-xl" className="pointer-events-auto sheet:hidden" aria-label="Show sidebar" title="Show sidebar" aria-expanded={false} onClick={() => setSheetOpen(true)}>
               <SidebarIcon on={false} />
             </Button>
           )}
-          <ConditionsBar />
+          <MapLegend />
           <span className="flex-1" />
           <ViewControls />
         </div>
-        <div className="flex min-h-0 flex-1 items-start justify-end sheet:relative">
-          <MapLegend />
-          <span className="flex-1" />
-          <div className="card-slot flex max-h-[calc(100%-96px)] w-[340px] max-w-full flex-col compact:w-[300px] sheet:max-h-full sheet:w-full sheet:in-[.app:has(.go-panel)]:hidden">{poi ? <PoiCard poi={poi} /> : wp ? <WaypointCard /> : null}</div>
+        {/* Cards sit at the right; on the bottom-sheet layout they move left, clear of the zoom buttons. */}
+        <div className="flex min-h-0 flex-1 items-start justify-end sheet:relative sheet:justify-start">
+          <div className="card-slot relative z-5 flex max-h-[calc(100%-96px)] w-[340px] max-w-full flex-col compact:w-[300px] sheet:max-h-full phone:max-h-[62%] phone:w-full sheet:in-[.app:has(.go-panel)]:hidden">{poi ? <PoiCard poi={poi} /> : wp ? <WaypointCard /> : null}</div>
         </div>
         <div className="flex min-w-0 flex-none flex-col gap-(--gap)">
-          {/* The right padding leaves the corner to the zoom and compass buttons. */}
-          <div className="flex min-w-0 items-end gap-2 pr-12 sheet:pr-[52px]">
+          {/* The right padding leaves the corner to the zoom and compass buttons and the scale bar under them. */}
+          <div className="flex min-w-0 items-end gap-2 pr-24 sheet:pr-[52px]">
             <HoverReadout />
             <span className="grow" />
-            <MapSafety />
+            <MapSafety planVisible={sheetOpen && tab === "plan"} />
             <GoPanel />
           </div>
           <div className="empty:hidden" ref={dockRef}>

@@ -10,7 +10,7 @@ function StatGrid({ className, ...props }: React.ComponentProps<"dl">) {
 function Stat({ label, labelTitle, className, children, ...props }: Omit<React.ComponentProps<"div">, "children"> & { label: React.ReactNode; labelTitle?: string; children: React.ReactNode }) {
   return (
     <div data-slot="stat" className={cn("min-w-0", className)} {...props}>
-      <dt className="caps text-muted-foreground" title={labelTitle}>
+      <dt className="text-xs text-muted-foreground" title={labelTitle}>
         {label}
       </dt>
       <dd className="m-0 text-sm wrap-anywhere">{children}</dd>
@@ -22,7 +22,7 @@ function Stat({ label, labelTitle, className, children, ...props }: Omit<React.C
 function Detail({ label, className, children, ...props }: Omit<React.ComponentProps<"div">, "children"> & { label: React.ReactNode; children: React.ReactNode }) {
   return (
     <div data-slot="detail" className={cn("my-3", className)} {...props}>
-      <div className="caps mb-0.5 text-muted-foreground">{label}</div>
+      <div className="mb-0.5 text-xs text-muted-foreground">{label}</div>
       {children}
     </div>
   );
