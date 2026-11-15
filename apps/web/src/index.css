@@ -215,9 +215,11 @@
   --ring: var(--ink-3);
   --radius: 8px;
 
-  /* The floating material: dark glass with a bright top edge. */
-  --glass: rgba(17, 19, 23, 0.78);
-  --glass-thick: rgba(15, 17, 20, 0.92);
+  /* The floating material: dark glass with a bright top edge. Every floating surface is the same glass at
+     89%: the side panel used to be thicker than the rest (92% against 78%) and read as a darker window.
+     --glass-thick is kept as a name for the surfaces that used it, and is the same value. */
+  --glass: rgba(17, 19, 23, 0.89);
+  --glass-thick: var(--glass);
   --glass-edge: rgba(255, 255, 255, 0.12);
   --blur: blur(28px) saturate(170%);
   --float: 0 0 0 0.5px rgba(0, 0, 0, 0.7), 0 10px 30px rgba(0, 0, 0, 0.45);
@@ -257,7 +259,6 @@
 @media (prefers-reduced-transparency: reduce) {
   :root {
     --glass: #14171b;
-    --glass-thick: #101216;
     --blur: none;
   }
 }
