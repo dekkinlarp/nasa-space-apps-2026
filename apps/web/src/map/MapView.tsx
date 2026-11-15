@@ -20,8 +20,33 @@ import { routeSlopeFeatures } from "./routeSlope";
 import { setRenderDistance, tuneTerrain } from "./terrainPerf";
 import { followGroundAfterEase, keepCameraAboveGround } from "./cameraClearance";
 
-let mapInstance: MLMap | null = null;
-export const getMap = () => mapInstance;
+/**
+ * The live map and the state that belongs to it. One object, so that in development it can be kept on
+ * Vite's hot-module data: when a component this file imports is edited, Vite evaluates this file again,
+ * and a fresh copy with no map would be swapped in under the mounted <MapView>, which then ignores the app.
+ */
+interface Live {
+  map: MLMap | null;
+  ready: boolean;
+  /** The scale bar is MapLibre's element, moved out of its corner into a slot the app lays out. */
+  scaleEl: HTMLElement | null;
+  scaleSlot: HTMLElement | null;
+  /** Set while the map is still opening: fits the opening view again (see the map's load handler). */
+  refitOpening: (() => void) | null;
+  pendingInsets: { top?: number; right?: number; bottom?: number; left?: number } | null;
+  /** Set when a hold has just opened the menu, so the tap that ends the hold does not reopen it elsewhere. */
+  suppressNextClick: number;
+  /** True while the 2D/3D state is being changed by a tilt gesture rather than the 2D/3D buttons. */
+  tiltDriven: boolean;
+  /** True while the 2D/3D buttons are swinging the camera, so that animation is not read as a tilt gesture. */
+  switching: boolean;
+  stopTerrainAnim: (() => void) | null;
+  stopGlide: (() => void) | null;
+}
+const newLive = (): Live => ({ map: null, ready: false, scaleEl: null, scaleSlot: null, refitOpening: null, pendingInsets: null, suppressNextClick: 0, tiltDriven: false, switching: false, stopTerrainAnim: null, stopGlide: null });
+const hotData = import.meta.hot?.data as { live?: Live } | undefined;
+const live: Live = hotData ? (hotData.live ??= newLive()) : newLive();
+export const getMap = () => live.map;
 
 const BLANK = "data:image/png;base64,iVBORw0KGgoAAAANSUhEUgAAAAEAAAABCAQAAAC1HAwCAAAAC0lEQVR42mNkYAAAAAYAAjCB0C8AAAAASUVORK5CYII=";
 const EMPTY_FC: GeoJSON.FeatureCollection = { type: "FeatureCollection", features: [] };
@@ -47,43 +72,36 @@ const TRACK_PLAN_FADE = 0.28;
 const DEFAULT_TRACK_STATE = useStore.getState().overlays.track;
 /** True when the traverse should recede: Plan tab open and the user has not set the track layer themselves. */
 export const isTrackFaded = (tab: string, track: LayerState) => tab === "plan" && track === DEFAULT_TRACK_STATE;
-let mapReady = false;
 
-// The scale bar is MapLibre's element, moved out of its corner into a slot the app lays out.
-let scaleEl: HTMLElement | null = null;
-let scaleSlot: HTMLElement | null = null;
 const placeScaleBar = () => {
-  if (scaleEl && scaleSlot && scaleEl.parentElement !== scaleSlot) scaleSlot.appendChild(scaleEl);
+  if (live.scaleEl && live.scaleSlot && live.scaleEl.parentElement !== live.scaleSlot) live.scaleSlot.appendChild(live.scaleEl);
 };
 /** Give the scale bar a home in the app's own layout. Safe to call before or after the map exists. */
 export function mountScaleBar(slot: HTMLElement | null) {
-  scaleSlot = slot;
+  live.scaleSlot = slot;
   placeScaleBar();
 }
-/** Set while the map is still opening: fits the opening view again (see the map's load handler). */
-let refitOpening: (() => void) | null = null;
 const OPENING_SETTLE_MS = 3000;
-let pendingInsets: { top?: number; right?: number; bottom?: number; left?: number } | null = null;
 
 /**
  * Tell the map how much of its canvas is covered by floating panels, so "centre" means the centre of
  * the part the user can see. Eased, so the ground glides aside as a panel opens.
  */
 export function setMapInsets(p: { top?: number; right?: number; bottom?: number; left?: number }, ms = 380) {
-  const map = mapInstance;
+  const map = live.map;
   if (!map) return;
-  if (!mapReady) {
+  if (!live.ready) {
     // Asked before the map's first frame: remembered, and applied without animation when it loads.
-    pendingInsets = p;
+    live.pendingInsets = p;
     return;
   }
   const padding = { top: p.top ?? 0, right: p.right ?? 0, bottom: p.bottom ?? 0, left: p.left ?? 0 };
   const cur = map.getPadding();
   if (cur.top === padding.top && cur.right === padding.right && cur.bottom === padding.bottom && cur.left === padding.left) return;
-  if (refitOpening) {
+  if (live.refitOpening) {
     // Still opening: take the insets at once and fit the opening view inside them.
     map.jumpTo({ padding });
-    refitOpening();
+    live.refitOpening();
     return;
   }
   map.easeTo({ padding, duration: ms, easing: (t) => 1 - Math.pow(1 - t, 3) });
@@ -93,7 +111,7 @@ export function setMapInsets(p: { top?: number; right?: number; bottom?: number;
 export function resizeMapDuring(ms: number) {
   const until = performance.now() + ms + 80;
   const step = () => {
-    mapInstance?.resize();
+    live.map?.resize();
     if (performance.now() < until) requestAnimationFrame(step);
   };
   requestAnimationFrame(step);
@@ -141,12 +159,6 @@ const TAP_DELAY_MS = 260;
 /** Tilting past ENTER switches the terrain on; levelling below LEAVE switches it off. */
 const TILT_ENTER_3D = 4;
 const TILT_LEAVE_3D = 1;
-/** Set when a hold has just opened the menu, so the tap that ends the hold does not reopen it elsewhere. */
-let suppressNextClick = 0;
-/** True while the 2D/3D state is being changed by a tilt gesture rather than the 2D/3D buttons. */
-let tiltDriven = false;
-/** True while the 2D/3D buttons are swinging the camera, so that animation is not read as a tilt gesture. */
-let switching = false;
 
 /** How long the ground takes to rise when the 3D button is pressed, to sink for the 2D button, and to do either for a tilt gesture. */
 const TERRAIN_RISE_MS = 900;
@@ -157,7 +169,6 @@ const TERRAIN_WAIT_MS = 600;
 /** Terrain is switched on at this height (not 0, so loaded heights can be told from missing ones). */
 const TERRAIN_FLAT = 0.001;
 const easeInOut = (t: number) => (t < 0.5 ? 4 * t * t * t : 1 - Math.pow(-2 * t + 2, 3) / 2);
-let stopTerrainAnim: (() => void) | null = null;
 
 /**
  * The 2D/3D transition: ease the height of the terrain to a vertical exaggeration (0 is flat) and, when
@@ -168,8 +179,8 @@ let stopTerrainAnim: (() => void) | null = null;
  * holds the height it started with. Touching the map hands the camera back to the user; the ground still finishes moving.
  */
 function animateTerrain(map: MLMap, exaggeration: number, camera: { pitch: number; bearing: number } | null, ms: number, done?: () => void) {
-  stopTerrainAnim?.();
-  if (camera) stopGlide?.();
+  live.stopTerrainAnim?.();
+  if (camera) live.stopGlide?.();
   const terrain = map.terrain;
   if (!terrain) return;
   const from = { exaggeration: terrain.exaggeration, pitch: map.getPitch(), bearing: map.getBearing() };
@@ -181,17 +192,17 @@ function animateTerrain(map: MLMap, exaggeration: number, camera: { pitch: numbe
   let steering = !!camera;
   const release = () => {
     steering = false;
-    switching = false;
+    live.switching = false;
   };
   const stop = () => {
     cancelAnimationFrame(raf);
     for (const ev of INPUT) el.removeEventListener(ev, release);
-    if (steering) switching = false;
-    stopTerrainAnim = null;
+    if (steering) live.switching = false;
+    live.stopTerrainAnim = null;
   };
-  stopTerrainAnim = stop;
+  live.stopTerrainAnim = stop;
   if (steering) {
-    switching = true;
+    live.switching = true;
     for (const ev of INPUT) el.addEventListener(ev, release, { passive: true });
   }
   // Rising from flat waits (briefly) for the heights under the centre to load, so the camera is never
@@ -230,9 +241,8 @@ function animateTerrain(map: MLMap, exaggeration: number, camera: { pitch: numbe
   step();
 }
 
-let stopGlide: (() => void) | null = null;
 /** True while glideTo is moving the camera (map.isMoving() is false between its steps). */
-export const isCameraGliding = () => !!stopGlide;
+export const isCameraGliding = () => !!live.stopGlide;
 
 /**
  * Move the camera to a view over `ms`, one jumpTo per frame. Used instead of easeTo because in 3D
@@ -241,7 +251,7 @@ export const isCameraGliding = () => !!stopGlide;
  * its own centre. Touching the map stops it where it is.
  */
 function glideTo(map: MLMap, to: { center: maplibregl.LngLat; zoom: number; pitch: number; bearing: number }, ms: number) {
-  stopGlide?.();
+  live.stopGlide?.();
   const from = { center: map.getCenter(), zoom: map.getZoom(), pitch: map.getPitch(), bearing: map.getBearing() };
   const turn = ((to.bearing - from.bearing + 540) % 360) - 180;
   const el = map.getCanvasContainer();
@@ -250,11 +260,11 @@ function glideTo(map: MLMap, to: { center: maplibregl.LngLat; zoom: number; pitc
   const stop = () => {
     cancelAnimationFrame(raf);
     for (const ev of INPUT) el.removeEventListener(ev, stop);
-    switching = false;
-    stopGlide = null;
+    live.switching = false;
+    live.stopGlide = null;
   };
-  stopGlide = stop;
-  switching = true;
+  live.stopGlide = stop;
+  live.switching = true;
   for (const ev of INPUT) el.addEventListener(ev, stop, { passive: true });
   const t0 = performance.now();
   const step = () => {
@@ -279,7 +289,7 @@ function glideTo(map: MLMap, to: { center: maplibregl.LngLat; zoom: number; pitc
  * MapLibre's own flight; in 3D it is glideTo, keeping the tilt and heading the user has set.
  */
 export function showOnMap(target: { center: LonLat; zoom: number } | { bounds: [LonLat, LonLat]; padding: number; maxZoom: number }, ms = 900) {
-  const map = mapInstance;
+  const map = live.map;
   if (!map) return;
   if ("center" in target) {
     if (!map.terrain) map.flyTo({ center: target.center, zoom: target.zoom, duration: ms });
@@ -373,7 +383,7 @@ function attachGestures(map: MLMap): () => void {
       if (!holdAt) return;
       const ll = pointer({ clientX: holdAt.x, clientY: holdAt.y });
       holdAt = null;
-      suppressNextClick = performance.now();
+      live.suppressNextClick = performance.now();
       useStore.getState().set({ mapClick: [ll.lng, ll.lat], selectedWaypoint: null });
     }, HOLD_MS);
   };
@@ -671,7 +681,7 @@ export function MapView() {
       scrollZoom: false, // replaced by attachGestures
       renderWorldCopies: false,
     });
-    mapInstance = map;
+    live.map = map;
     const detachGestures = attachGestures(map);
     keepCameraAboveGround(map);
     followGroundAfterEase(map);
@@ -682,7 +692,7 @@ export function MapView() {
       const bearing = in3d ? HOME_3D.bearing : HOME_BEARING;
       const cam = map.cameraForBounds(initialBounds(area), { padding: HOME_PADDING, bearing });
       // Not while the 2D/3D switch is still swinging the camera.
-      if (!cam?.center || cam.zoom == null || (switching && !stopGlide)) return;
+      if (!cam?.center || cam.zoom == null || (live.switching && !live.stopGlide)) return;
       glideTo(map, { center: maplibregl.LngLat.convert(cam.center), zoom: cam.zoom, pitch: in3d ? HOME_3D.pitch : 0, bearing }, HOME_MS);
     };
     // Top-right corner, stacking downward: the zoom and home strip, then the compass dial.
@@ -690,15 +700,15 @@ export function MapView() {
     map.addControl(new CompassControl(), "top-right");
     // MapLibre draws the scale bar; the app shows it beside the view controls (see mountScaleBar).
     map.addControl(new maplibregl.ScaleControl({ unit: "metric" }), "bottom-right");
-    scaleEl = map.getContainer().querySelector<HTMLElement>(".maplibregl-ctrl-scale");
+    live.scaleEl = map.getContainer().querySelector<HTMLElement>(".maplibregl-ctrl-scale");
     placeScaleBar();
     (window as unknown as { __map: MLMap }).__map = map;
 
     map.on("load", () => {
-      mapReady = true;
-      if (pendingInsets) {
-        const p = pendingInsets;
-        pendingInsets = null;
+      live.ready = true;
+      if (live.pendingInsets) {
+        const p = live.pendingInsets;
+        live.pendingInsets = null;
         setMapInsets(p, 0);
       }
       // Fit the opening view again now the map has its final size and insets, so it is the view home returns to.
@@ -708,9 +718,9 @@ export function MapView() {
         if (cam) map.jumpTo(cam);
       };
       refit();
-      refitOpening = refit;
+      live.refitOpening = refit;
       const settle = () => {
-        refitOpening = null;
+        live.refitOpening = null;
         for (const ev of ["pointerdown", "wheel", "touchstart"]) map.getCanvasContainer().removeEventListener(ev, settle);
       };
       for (const ev of ["pointerdown", "wheel", "touchstart"]) map.getCanvasContainer().addEventListener(ev, settle, { passive: true });
@@ -818,31 +828,31 @@ export function MapView() {
           return;
         }
       }
-      if (performance.now() - suppressNextClick < 700) return;
+      if (performance.now() - live.suppressNextClick < 700) return;
       clearTimeout(tapTimer);
       tapTimer = setTimeout(() => useStore.getState().set({ mapClick: ll, selectedWaypoint: null }), TAP_DELAY_MS);
     });
     map.on("dblclick", () => clearTimeout(tapTimer));
     // Apple Maps style: tilting the flat map slides into 3D, levelling it out returns to 2D.
     map.on("pitch", () => {
-      if (switching || !area.overview.elevation || useStore.getState().view3d || map.getPitch() < TILT_ENTER_3D) return;
-      tiltDriven = true;
+      if (live.switching || !area.overview.elevation || useStore.getState().view3d || map.getPitch() < TILT_ENTER_3D) return;
+      live.tiltDriven = true;
       useStore.getState().set({ view3d: true });
     });
     map.on("moveend", () => {
-      if (switching || !useStore.getState().view3d || map.getPitch() > TILT_LEAVE_3D || map.isMoving()) return;
-      tiltDriven = true;
+      if (live.switching || !useStore.getState().view3d || map.getPitch() > TILT_LEAVE_3D || map.isMoving()) return;
+      live.tiltDriven = true;
       useStore.getState().set({ view3d: false });
     });
 
     return () => {
-      stopTerrainAnim?.();
-      stopGlide?.();
-      refitOpening = null;
+      live.stopTerrainAnim?.();
+      live.stopGlide?.();
+      live.refitOpening = null;
       detachGestures();
       map.remove();
-      mapInstance = null;
-      mapReady = false;
+      live.map = null;
+      live.ready = false;
     };
   }, [area]);
 
@@ -851,7 +861,7 @@ export function MapView() {
   const baseOpacity = useStore((s) => s.baseOpacity);
   const marsTint = useStore((s) => s.marsTint);
   useEffect(() => {
-    const map = mapInstance;
+    const map = live.map;
     if (!ready || !map) return;
     for (const grp of imageryGroups()) {
       const id = `img-${grp.id}`;
@@ -869,14 +879,14 @@ export function MapView() {
   // ---------- planning window: terrain heights ----------
   const detail = useStore((s) => s.detail);
   useEffect(() => {
-    const map = mapInstance;
+    const map = live.map;
     const ov = area.overview;
     if (!ready || !map || !ov.elevation || !area.tiles) return;
     const url = setDemSource({ grid: ov.grid, elev: ov.elevation }, detail?.elevation ? { grid: detail.grid, elev: detail.elevation } : null, ov.elevRef);
     for (const id of ["dem", "dem-hs"]) (map.getSource(id) as maplibregl.RasterDEMTileSource | undefined)?.setTiles([url]);
   }, [ready, detail, area]);
   useEffect(() => {
-    const map = mapInstance;
+    const map = live.map;
     if (!ready || !map || !area.tiles) return;
     const c = detail ? gridCoords(detail.grid) : null;
     (map.getSource("window") as GeoJSONSource | undefined)?.setData(
@@ -904,7 +914,7 @@ export function MapView() {
     detailGen.current++;
   }, [detail]);
   useEffect(() => {
-    const map = mapInstance;
+    const map = live.map;
     if (!ready || !map) return;
     const show = (layer: string, on: boolean, opacity: number) => {
       if (!map.getLayer(layer)) return;
@@ -976,7 +986,7 @@ export function MapView() {
   const contoursOn = overlays.contours.on;
   const contoursFor = useRef<DisplayLayers | null | undefined>(undefined);
   useEffect(() => {
-    const map = mapInstance;
+    const map = live.map;
     const ov = area.overview;
     if (!ready || !map || !contoursOn || !ov.elevation || contoursFor.current === detail) return;
     // After this frame, so the switch moves before the tracing starts.
@@ -996,7 +1006,7 @@ export function MapView() {
   const sciData = useStore((s) => s.sciData);
   const sciUrls = useRef<Record<string, string>>({});
   useEffect(() => {
-    const map = mapInstance;
+    const map = live.map;
     if (!ready || !map) return;
     for (const l of scienceLayers(area)) {
       const st = sci[l.id];
@@ -1023,7 +1033,7 @@ export function MapView() {
   const rings = useStore((s) => s.rings);
   const ringMarkers = useRef<maplibregl.Marker[]>([]);
   useEffect(() => {
-    const map = mapInstance;
+    const map = live.map;
     if (!ready || !map) return;
     (map.getSource("rings") as GeoJSONSource).setData(ringFeatures(rings));
     ringMarkers.current.forEach((m) => m.remove());
@@ -1072,7 +1082,7 @@ export function MapView() {
   const results = useStore((s) => s.results);
   const selectedProfile = useStore((s) => s.selectedProfile);
   useEffect(() => {
-    const map = mapInstance;
+    const map = live.map;
     if (!ready || !map) return;
     (map.getSource("routes") as GeoJSONSource).setData(routeFeatures(results));
     const sel = selectedResult({ results, selectedProfile })?.profile.id ?? "";
@@ -1085,7 +1095,7 @@ export function MapView() {
   // ---------- selected route coloured by slope ----------
   const walkParams = useStore((s) => s.params);
   useEffect(() => {
-    const map = mapInstance;
+    const map = live.map;
     if (!ready || !map) return;
     (map.getSource("route-slope") as GeoJSONSource | undefined)?.setData(routeSlopeFeatures(selectedResult({ results, selectedProfile }), walkParams));
   }, [ready, results, selectedProfile, walkParams]);
@@ -1095,7 +1105,7 @@ export function MapView() {
   const selectedPoi = useStore((s) => s.selectedPoi);
   const poiPins = useRef<{ el: HTMLElement; poi: Poi }[]>([]);
   useEffect(() => {
-    const map = mapInstance;
+    const map = live.map;
     if (!ready || !map || !poisOn) return;
     poiPins.current = [];
     const markers = area.config.pois.map((p) => {
@@ -1117,7 +1127,7 @@ export function MapView() {
   const start = useStore((s) => s.start);
   const stops = useStore((s) => s.stops);
   useEffect(() => {
-    const map = mapInstance;
+    const map = live.map;
     if (!ready || !map) return;
     const ms: maplibregl.Marker[] = [];
     if (start) {
@@ -1152,7 +1162,7 @@ export function MapView() {
 
   // ---------- POI label placement (after the plan markers, which are obstacles) ----------
   useEffect(() => {
-    const map = mapInstance;
+    const map = live.map;
     if (!ready || !map || !poisOn) return;
     const inPlan = new Set([start?.poiId, ...stops.map((s) => s.poiId)].filter(Boolean));
     const pins = poiPins.current.map(({ el, poi }, i) => {
@@ -1191,7 +1201,7 @@ export function MapView() {
   // ---------- cursor (profile scrub; the Go position is the animated walker in GoWalker) ----------
   const cursor = useStore((s) => s.profileCursor);
   useEffect(() => {
-    const map = mapInstance;
+    const map = live.map;
     if (!ready || !map) return;
     const f: GeoJSON.Feature[] = [];
     if (cursor) f.push({ type: "Feature", properties: { kind: "profile" }, geometry: { type: "Point", coordinates: cursor } });
@@ -1203,10 +1213,10 @@ export function MapView() {
   const exaggeration = useStore((s) => s.exaggeration);
   const last3d = useRef(false);
   useEffect(() => {
-    const map = mapInstance;
+    const map = live.map;
     if (!ready || !map) return;
-    const byTilt = tiltDriven;
-    tiltDriven = false;
+    const byTilt = live.tiltDriven;
+    live.tiltDriven = false;
     // Only a 2D/3D switch moves the camera; changing the vertical scale must not.
     const switched = last3d.current !== view3d;
     last3d.current = view3d;
@@ -1233,12 +1243,12 @@ export function MapView() {
   }, [ready, view3d, exaggeration, area]);
 
   const renderDistanceKm = useStore((s) => s.renderDistanceKm);
-  useEffect(() => setRenderDistance(mapInstance, renderDistanceKm), [ready, renderDistanceKm]);
+  useEffect(() => setRenderDistance(live.map, renderDistanceKm), [ready, renderDistanceKm]);
 
   // ---------- click popup ----------
   const mapClick = useStore((s) => s.mapClick);
   useEffect(() => {
-    const map = mapInstance;
+    const map = live.map;
     if (!ready || !map || !mapClick) {
       setPopupEl(null);
       return;
