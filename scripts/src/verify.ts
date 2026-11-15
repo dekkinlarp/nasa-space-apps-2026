@@ -74,6 +74,36 @@ export async function runVerify(): Promise<boolean> {
     log("verify", `  sol ${r.sol} (${r.lon.toFixed(5)}, ${r.lat.toFixed(5)}): waypoint ${r.waypointElevM.toFixed(2)}  grid ${r.grid2mM.toFixed(2)}  1m ${r.dem1mM.toFixed(2)}`);
   ok(med(absd) < 2, "DEM vs waypoint elevations disagree (georeferencing?)");
 
+  // Slope vs. the tilt Curiosity recorded when parked at each waypoint. The rover's tilt is over
+  // its ~3 m wheelbase and it chose gentle ground to stop on, so only rough agreement is expected.
+  const tiltRows = (wp.features.map((f) => f.properties) as { lon: number; lat: number; tiltDeg?: number }[])
+    .filter((p) => inBounds(g, p.lon, p.lat) && typeof p.tiltDeg === "number")
+    .map((p) => ({ slope: sampleGrid(g, slope, p.lon, p.lat), tilt: Math.abs(p.tiltDeg!) }))
+    .filter((r) => Number.isFinite(r.slope));
+  const medOf = (xs: number[]) => [...xs].sort((x, y) => x - y)[Math.floor(xs.length / 2)] ?? NaN;
+  const slopeVsTilt = {
+    waypoints: tiltRows.length,
+    medianSlopeDeg: medOf(tiltRows.map((r) => r.slope)),
+    medianTiltDeg: medOf(tiltRows.map((r) => r.tilt)),
+    medianAbsDiffDeg: medOf(tiltRows.map((r) => Math.abs(r.slope - r.tilt))),
+  };
+  log("verify", `slope vs rover tilt at ${slopeVsTilt.waypoints} waypoints: median slope ${slopeVsTilt.medianSlopeDeg.toFixed(1)} deg, median tilt ${slopeVsTilt.medianTiltDeg.toFixed(1)} deg, median |d| ${slopeVsTilt.medianAbsDiffDeg.toFixed(1)} deg`);
+
+  // Mineral layers: present, inside the CRISM scene, and aligned with the photo.
+  const mineralsFile = join(dir, "minerals.json");
+  let mineralCheck: unknown = null;
+  if (existsSync(mineralsFile)) {
+    const m = JSON.parse(readFileSync(mineralsFile, "utf8")) as {
+      coregistration: { corrBest: number | null; applied: boolean; shiftPx: [number, number] };
+      layers: { id: string; stats: { coveragePct: number } }[];
+      scenes?: { obs: string; coregistration: { corrBest: number | null } }[];
+    };
+    mineralCheck = { coregistration: m.coregistration, scenes: m.scenes, coveragePct: Object.fromEntries(m.layers.map((l) => [l.id, l.stats.coveragePct])) };
+    for (const l of m.layers) ok(l.stats.coveragePct > 90, `${l.id} covers only ${l.stats.coveragePct}% of the area`);
+    for (const sc of m.scenes ?? [{ obs: "CRISM", coregistration: m.coregistration }])
+      ok((sc.coregistration.corrBest ?? 0) > 0.5, `${sc.obs} does not line up with the HiRISE photo (best r = ${sc.coregistration.corrBest})`);
+  }
+
   for (const im of manifest.imagery) {
     const f = join(dir, im.file);
     if (!existsSync(f)) {
@@ -96,6 +126,8 @@ export async function runVerify(): Promise<boolean> {
     elevation: { min: mn, max: mx, nan },
     slopePercentiles: { p1: sp[0], p10: sp[1], p25: sp[2], p50: sp[3], p75: sp[4], p90: sp[5], p99: sp[6] },
     surfaceHistogramPct: histPct,
+    slopeVsTilt,
+    minerals: mineralCheck,
     georef: { waypoints: rows.length, meanDiffM: mean, medianAbsDiffM: med(absd), maxAbsDiffM: absd[absd.length - 1], rows },
     problems,
   });

@@ -8,6 +8,7 @@
     "all": "vite-node src/all.ts",
     "elevation": "vite-node src/elevation.ts",
     "derive": "vite-node src/derive.ts",
+    "minerals": "vite-node src/minerals.ts",
     "imagery": "vite-node src/imagery.ts",
     "rover": "vite-node src/rover.ts",
     "photos": "vite-node src/photos.ts",
