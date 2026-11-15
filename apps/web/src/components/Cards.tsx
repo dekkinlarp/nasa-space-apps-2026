@@ -137,7 +137,7 @@ function FloatCard({ onClose, footer, children }: { onClose: () => void; footer?
 function TypeTag({ type, label }: { type: string; label: string }) {
   return (
     <span className="flex items-center gap-1.5 text-sm text-ink-2">
-      <i className={cn("size-2 rounded-full", POI_DOT[type], type === "start" && "rounded-[1px]")} />
+      <i className={cn("size-2 rounded-full shadow-dome-sm", POI_DOT[type], type === "start" && "rounded-[1px]")} />
       {label}
     </span>
   );
