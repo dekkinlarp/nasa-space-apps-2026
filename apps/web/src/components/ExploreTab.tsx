@@ -1,6 +1,7 @@
 import { useState } from "react";
 import { ArrowRightIcon, PlayIcon } from "lucide-react";
 import { useStore } from "../store";
+import { inGrid } from "../geo";
 import { getMap } from "../map/MapView";
 import { POI_DOT, POI_TYPE_LABEL, PriorityTag } from "./Cards";
 import { SiteFacts } from "./SiteHeader";
@@ -10,10 +11,7 @@ import { SectionHeading } from "@/components/ui/section-heading";
 import { cn } from "@/lib/utils";
 import type { Poi, PoiType } from "../types";
 
-const ORDER: PoiType[] = ["drill-site", "science-target", "viewpoint", "start"];
-/** Within a group, the walk's primary objectives come first. */
-const PRIORITY_RANK: Record<string, number> = { primary: 0, secondary: 1, optional: 2 };
-const rank = (p: Poi) => PRIORITY_RANK[p.priority ?? ""] ?? 3;
+const ORDER: PoiType[] = ["landmark", "drill-site", "science-target", "viewpoint", "start"];
 
 export function flyTo(lon: number, lat: number, zoom = 17) {
   getMap()?.flyTo({ center: [lon, lat], zoom: Math.max(zoom, getMap()?.getZoom() ?? 0), duration: 900 });
@@ -27,7 +25,7 @@ function runDemoWalk(pois: Poi[]) {
   const start = pois.find((p) => p.id === DEMO.start);
   const stops = DEMO.stops.map((id) => pois.find((p) => p.id === id)).filter((p): p is Poi => !!p);
   if (!start || stops.length !== DEMO.stops.length) return;
-  st.set({ stops: [], selectedPoi: null, selectedWaypoint: null, mapClick: null, pickingStart: false, selectedProfile: "fastest", returnToStart: true });
+  st.set({ stops: [], selectedPoi: null, selectedWaypoint: null, mapClick: null, pickingStart: false, pickingStop: false, selectedProfile: "fastest", returnToStart: true });
   st.setStart({ lonLat: [start.lon, start.lat], name: start.name, poiId: start.id });
   for (const p of stops) st.addStop({ lonLat: [p.lon, p.lat], name: p.name, poiId: p.id });
   st.set({ tab: "plan" });
@@ -77,7 +75,12 @@ export function ExploreTab() {
   const runDemo = () => runDemoWalk(area.config.pois);
   const pick = (p: Poi) => {
     set({ selectedPoi: p, selectedWaypoint: null, mapClick: null });
-    flyTo(p.lon, p.lat);
+    const g = area.manifest.grid;
+    if (inGrid(g, [p.lon, p.lat])) flyTo(p.lon, p.lat);
+    else getMap()?.fitBounds(
+      [[Math.min(g.west, p.lon), Math.min(g.south, p.lat)], [Math.max(g.east, p.lon), Math.max(g.north, p.lat)]],
+      { padding: 70, duration: 900 },
+    );
   };
   return (
     <>

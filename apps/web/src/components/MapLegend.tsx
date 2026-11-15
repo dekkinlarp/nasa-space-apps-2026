@@ -77,7 +77,6 @@ export function MapLegend() {
   const selectedProfile = useStore((s) => s.selectedProfile);
   const overlays = useStore((s) => s.overlays);
   const rings = useStore((s) => s.rings);
-  const clipped = useStore((s) => !!s.reach?.clipped && !!s.area?.tiles);
   const windowOn = useStore((s) => !!s.area?.tiles && !!s.detail);
   const start = useStore((s) => s.start);
   const stops = useStore((s) => s.stops);
@@ -92,9 +91,8 @@ export function MapLegend() {
   const b = slopeBands(params);
   const C = ROUTE_SLOPE_COLORS;
   const alts = (results ?? []).map((r, i) => ({ id: r.profile.id, color: profileColor(r.profile.id, i) })).filter((r) => r.id !== sel?.profile.id);
-  const showRings = !!rings?.length && overlays.rings.on;
-  const ringBudgets = (rings ?? []).map((r) => r.budgetS).sort((x, y) => x - y);
-  const limitS = ringBudgets[ringBudgets.length - 1];
+  const showRings = !!rings?.some((r) => r.kind !== "limit") && overlays.rings.on;
+  const ringBudgets = (rings ?? []).filter((r) => r.kind !== "limit").map((r) => r.budgetS).sort((x, y) => x - y);
   const showTrack = !!area.rover.traverse && overlays.track.on;
   const lastSol = area.rover.waypoints.reduce((m, w) => Math.max(m, w.sol ?? 0), 0);
   const trackFaded = isTrackFaded(tab, overlays.track);
@@ -166,31 +164,14 @@ export function MapLegend() {
 
           {showRings && (
             <Section>
-              {ringBudgets.length > 1 && (
+              {ringBudgets.length > 0 && (
                 <Row
                   sw={<LineSwatch color={RING_COLOR} dash="4 3" width={2} />}
                   tip={`Round-trip walking time from the start: ${ringBudgets
-                    .slice(0, -1)
                     .map((s) => fmtDur(s))
                     .join(", ")}`}
                 >
                   Round trip
-                </Row>
-              )}
-              {limitS != null && (
-                <Row
-                  sw={<LineSwatch color={RING_LIMIT_COLOR} width={1.8} />}
-                  tip={`Walk limit: ${fmtDur(limitS)} of walking there and back, plus one stop. Loops inside it are slopes over ${b.max}°, no entry.`}
-                >
-                  Walk limit
-                </Row>
-              )}
-              {clipped && (
-                <Row
-                  sw={<LineSwatch color={RING_LIMIT_COLOR} dash="1 3" width={1.8} />}
-                  tip="This walk reaches past the 8 km square of full-resolution ground loaded around it, so the rings stop at that square's edge. Move the start, or add a stop, to shift the square."
-                >
-                  Cut at planning window
                 </Row>
               )}
             </Section>

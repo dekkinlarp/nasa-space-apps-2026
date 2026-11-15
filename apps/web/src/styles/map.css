@@ -1,0 +1,158 @@
+/*
+ * What stays in plain CSS (imported into the components layer by index.css, so utilities win):
+ *  - the shell: a full-window map with floating chrome, whose layout follows panel state through
+ *    custom properties and :has() (sheet open or closed, profile dock showing or folded);
+ *  - DOM that MapLibre or the map code builds by hand: markers, labels, popups and map controls.
+ * Everything rendered by React is styled with Tailwind utilities and the components in components/ui.
+ * Utilities beat this layer, so a property set here (display, padding, borders…) must not also be
+ * set by a utility on the same element.
+ */
+
+/* ---------- shell ---------- */
+.app { position: relative; height: 100%; overflow: hidden; --stage-left: calc(var(--side-w) + var(--gap) * 2); --sheet-h: 0px; --dock: 0px; }
+.app.sheet-closed { --stage-left: var(--gap); }
+.app:has(.profile:not(.collapsed)) { --dock: calc(188px + var(--gap)); }
+.app:has(.profile.collapsed) { --dock: calc(40px + var(--gap)); }
+.map-layer { position: absolute; inset: 0; background: var(--void); }
+
+/* The stage is the part of the map the side panel leaves visible. It only lays things out:
+   clicks fall through to the map except on the floating pieces themselves. */
+.stage { position: absolute; z-index: 2; top: max(var(--gap), env(safe-area-inset-top)); right: max(var(--gap), env(safe-area-inset-right)); bottom: calc(var(--sheet-h) + var(--gap)); left: var(--stage-left); display: flex; flex-direction: column; gap: var(--gap); min-height: 0; pointer-events: none; transition: left var(--panel-ms) var(--spring); }
+.stage-top { flex: none; display: flex; align-items: flex-start; gap: 8px; }
+.stage-mid { flex: 1; min-height: 0; display: flex; justify-content: flex-end; align-items: flex-start; }
+.stage-bottom { flex: none; display: flex; flex-direction: column; gap: var(--gap); min-width: 0; }
+/* Leaves the corner to the zoom and compass buttons. */
+.stage-row { display: flex; align-items: flex-end; gap: 8px; padding-right: 48px; min-width: 0; }
+.stage-top > *, .card-slot > *, .stage-row > :not(.grow):not(.readout), .profile { pointer-events: auto; }
+.dock:empty { display: none; }
+
+/* The side panel leaves and returns by the left edge, the way it came. */
+.side { position: absolute; z-index: 3; top: max(var(--gap), env(safe-area-inset-top)); left: max(var(--gap), env(safe-area-inset-left)); bottom: var(--gap); width: var(--side-w); display: flex; flex-direction: column; min-height: 0; overflow: hidden; transition: transform var(--panel-ms) var(--spring), visibility 0s; }
+.sheet-closed .side { transform: translateX(calc(-100% - var(--gap) * 2)); visibility: hidden; transition: transform var(--panel-ms) var(--spring), visibility 0s linear var(--panel-ms); }
+.tab-body { flex: 1; overflow-y: auto; padding: 16px 16px 40px; scrollbar-width: thin; scrollbar-color: var(--track) transparent; }
+
+.card-slot { width: 340px; max-width: 100%; max-height: calc(100% - 96px); display: flex; flex-direction: column; }
+.go-panel { width: 320px; max-width: 100%; flex: none; }
+.map-legend { flex: none; width: 164px; max-height: 100%; overflow-y: auto; scrollbar-width: thin; }
+.map-legend:not(.open) { width: auto; }
+
+/* The elevation profile folds down to its title bar, where the same button brings it back. */
+.profile { flex: none; display: flex; flex-direction: column; height: 188px; transition: height var(--panel-ms) var(--spring); }
+.profile.collapsed { height: 40px; }
+.profile.collapsed .profile-body { visibility: hidden; transition: visibility 0s linear var(--panel-ms); }
+.app:has(.profile) .map-credit { display: none; }
+
+@media (max-width: 1100px) {
+  .card-slot { width: 300px; }
+}
+
+/* Tablet portrait and phones: the side panel becomes a bottom sheet; the stage is the map above it. */
+@media (max-width: 860px) {
+  .app { --stage-left: max(var(--gap), env(safe-area-inset-left)); --sheet-h: 46dvh; }
+  .app.sheet-closed { --stage-left: max(var(--gap), env(safe-area-inset-left)); --sheet-h: calc(58px + env(safe-area-inset-bottom)); }
+  .app:has(.profile:not(.collapsed)) { --dock: calc(160px + var(--gap)); }
+
+  .side { top: auto; left: 0; right: 0; bottom: 0; width: auto; height: var(--sheet-h); padding-bottom: env(safe-area-inset-bottom); transition: height var(--panel-ms) var(--spring); }
+  .sheet-closed .side { transform: none; visibility: visible; transition: height var(--panel-ms) var(--spring); }
+  .sheet-closed .side > :not(.tabs) { display: none; }
+  .sheet-open .sheet-toggle svg { transform: rotate(-90deg); }
+  .sheet-closed .sheet-toggle svg { transform: rotate(90deg); }
+  .tab-body { padding: 12px max(16px, env(safe-area-inset-right)) 28px max(16px, env(safe-area-inset-left)); -webkit-overflow-scrolling: touch; overscroll-behavior: contain; touch-action: pan-y; }
+  .stage { transition: bottom var(--panel-ms) var(--spring); }
+  .stage-top { position: relative; }
+  .stage-mid { position: relative; }
+  .stage-row { padding-right: 52px; }
+  .card-slot { width: 100%; max-height: 100%; }
+  .map-legend.open { position: absolute; z-index: 4; max-height: 60%; }
+  /* One floating panel at a time: during a walk the Go panel replaces the POI card and the readout. */
+  .app:has(.go-panel) .card-slot, .app:has(.go-panel) .readout { display: none; }
+  .go-panel { width: auto; flex: 1; }
+  .profile { height: 160px; }
+}
+
+/* Phones: the sheet takes the profile's room. */
+@media (max-width: 600px) {
+  .app.sheet-open, .app.sheet-open:has(.profile) { --sheet-h: 50dvh; --dock: 0px; }
+  .sheet-open .profile { display: none; }
+}
+
+/* Short landscape phones: keep the sheet from swallowing the map. */
+@media (max-width: 860px) and (max-height: 480px) {
+  .app.sheet-open, .app.sheet-open:has(.profile) { --sheet-h: 56dvh; --dock: 0px; }
+  .sheet-open .profile { display: none; }
+}
+
+/* ---------- map ---------- */
+.stars { position: absolute; inset: 0; width: 100%; height: 100%; pointer-events: none; }
+.map { position: absolute; inset: 0; touch-action: none; }
+.map-credit { position: absolute; left: 50%; transform: translateX(-50%); bottom: calc(var(--sheet-h) + 2px); font-size: 9.5px; color: rgba(255, 255, 255, 0.5); text-shadow: 0 1px 2px #000; pointer-events: none; white-space: nowrap; max-width: 60%; overflow: hidden; text-overflow: ellipsis; }
+
+/* Zoom, compass and scale: bottom-right, lifted clear of the bottom sheet and the profile dock. */
+.maplibregl-ctrl-bottom-right { right: max(var(--gap), env(safe-area-inset-right)) !important; bottom: calc(var(--sheet-h) + var(--dock) + var(--gap)) !important; transition: bottom var(--panel-ms) var(--spring); }
+.maplibregl-ctrl-group { background: var(--glass) !important; -webkit-backdrop-filter: var(--blur); backdrop-filter: var(--blur); border: 1px solid var(--glass-edge); border-radius: 12px !important; box-shadow: var(--float-sm) !important; overflow: hidden; }
+.maplibregl-ctrl-group button { width: 36px !important; height: 36px !important; }
+.maplibregl-ctrl-group button + button { border-top: 1px solid var(--seam-2) !important; }
+.maplibregl-ctrl-group button:not(:disabled):hover { background-color: rgba(255, 255, 255, 0.1) !important; }
+.maplibregl-ctrl-group button .maplibregl-ctrl-icon { filter: invert(0.85); }
+.maplibregl-ctrl-bottom-right .maplibregl-ctrl { margin: 8px 0 0 0; }
+.maplibregl-ctrl-scale { background: rgba(15, 17, 20, 0.6) !important; color: var(--ink-2) !important; border: 1px solid var(--ink-3) !important; border-top: 0 !important; font: 10px/14px var(--font) !important; padding: 0 4px !important; }
+
+/* The click menu's popup: the content itself is React (ClickMenu). */
+.click-popup .maplibregl-popup-content { padding: 10px 12px; color: var(--ink); font: 13.5px/1.45 var(--font); background: var(--glass); -webkit-backdrop-filter: var(--blur); backdrop-filter: var(--blur); border: 1px solid var(--glass-edge); border-radius: 12px; box-shadow: var(--float-sm); }
+.click-popup.maplibregl-popup-anchor-bottom .maplibregl-popup-tip, .click-popup.maplibregl-popup-anchor-bottom-left .maplibregl-popup-tip, .click-popup.maplibregl-popup-anchor-bottom-right .maplibregl-popup-tip { border-top-color: var(--hull); }
+.click-popup.maplibregl-popup-anchor-top .maplibregl-popup-tip, .click-popup.maplibregl-popup-anchor-top-left .maplibregl-popup-tip, .click-popup.maplibregl-popup-anchor-top-right .maplibregl-popup-tip { border-bottom-color: var(--hull); }
+.click-popup.maplibregl-popup-anchor-left .maplibregl-popup-tip { border-right-color: var(--hull); }
+.click-popup.maplibregl-popup-anchor-right .maplibregl-popup-tip { border-left-color: var(--hull); }
+.click-popup .maplibregl-popup-close-button { color: var(--ink-3); font-size: 16px; width: 24px; height: 24px; border-radius: 8px; }
+.click-popup .maplibregl-popup-close-button:hover { color: var(--ink); background: var(--hull-3); }
+
+/* Markers: crisp shapes with a dark keyline and a light ring, legible on bright and dark ground */
+.poi-drill-site { --pc: var(--poi-drill-site); }
+.poi-science-target { --pc: var(--poi-science-target); }
+.poi-start { --pc: var(--poi-start); }
+.poi-landmark, .poi-viewpoint { --pc: var(--poi-viewpoint); }
+/* maplibre makes markers position: absolute, which also anchors the label */
+.poi-pin { display: flex; align-items: center; gap: 6px; width: 14px; height: 14px; cursor: pointer; }
+.poi-pin:hover, .poi-pin.selected { z-index: 3; }
+.poi-dot { display: block; width: 12px; height: 12px; border-radius: 50%; background: var(--pc); border: 1.5px solid var(--well); box-shadow: 0 0 0 1px rgba(255, 255, 255, 0.75); transition: transform 120ms var(--ease); }
+.poi-start .poi-dot { border-radius: 2px; }
+.poi-pin:hover .poi-dot, .poi-pin.selected .poi-dot { transform: scale(1.2); }
+/* One label style for everything named on the map: 11px semibold, white, dark halo. */
+.poi-label, .ring-label, .pnr-chip b { font-size: 11px; font-weight: 600; line-height: 16px; }
+.poi-label { position: absolute; top: -1px; left: 19px; color: #fff; text-shadow: 0 0 2px #000, 0 0 4px #000, 0 1px 6px #000; white-space: nowrap; pointer-events: none; }
+.lowzoom .poi-label { display: none; }
+.lowzoom .poi-pin:hover .poi-label { display: inline; }
+.poi-pin.flip .poi-label { left: auto; right: 19px; }
+.poi-pin.in-plan .poi-label { left: 23px; }
+.poi-pin.in-plan.flip .poi-label { left: auto; right: 23px; }
+.poi-pin.lbl-off .poi-label { visibility: hidden; }
+.poi-label .pl-full { display: none; }
+.poi-pin:hover .poi-label, .poi-pin.selected .poi-label { visibility: visible; background: rgba(15, 12, 11, 0.9); border: 1px solid var(--seam-2); border-radius: 4px; padding: 0 6px; top: -2px; text-shadow: none; }
+.poi-pin:hover .pl-short, .poi-pin.selected .pl-short { display: none; }
+.poi-pin:hover .pl-full, .poi-pin.selected .pl-full { display: inline; }
+
+.stop-marker { width: 22px; height: 22px; border-radius: 8px; background: var(--well); border: 1.5px solid #fff; color: #fff; font-weight: 600; font-size: 11px; display: grid; place-items: center; box-shadow: 0 0 0 1px rgba(0, 0, 0, 0.6); cursor: grab; }
+.start-marker { background: #fff; color: var(--well); border-color: var(--well); box-shadow: 0 0 0 1px rgba(255, 255, 255, 0.8); }
+.ring-label { color: var(--ink-2); background: rgba(15, 17, 20, 0.86); border: 1px solid var(--seam-2); border-radius: 4px; padding: 0 5px; white-space: nowrap; pointer-events: none; cursor: help; }
+.ring-label.limit { color: var(--warn); border-color: color-mix(in srgb, var(--warn) 55%, transparent); }
+
+/* Point-of-no-return marker (MapSafety) */
+.pnr-marker { display: flex; flex-direction: column; align-items: center; pointer-events: auto; cursor: help; }
+.pnr-chip { display: flex; align-items: center; gap: 5px; padding: 0 7px 0 5px; border-radius: 4px; background: rgba(15, 12, 11, 0.9); border: 1px solid var(--warn); box-shadow: 0 2px 8px rgba(0, 0, 0, 0.6); white-space: nowrap; }
+.pnr-chip b { color: #ffe7a8; }
+.pnr-chip .pnr-ico { color: var(--warn); font-size: 12px; line-height: 16px; font-weight: 700; }
+.pnr-stem { width: 2px; height: 8px; background: var(--warn); }
+.pnr-pin { width: 10px; height: 10px; transform: rotate(45deg); background: var(--warn); border: 2px solid #120c0a; box-shadow: 0 0 0 1.5px var(--warn), 0 2px 6px rgba(0, 0, 0, 0.7); margin-bottom: -5px; }
+.pnr-marker.at-stop .pnr-pin { display: none; }
+.pnr-marker.clear .pnr-stem { background: var(--ok); }
+.pnr-marker.clear .pnr-chip { border-color: rgba(111, 212, 138, 0.7); }
+.pnr-marker.clear .pnr-chip b { color: #c9f0d3; }
+.pnr-marker.clear .pnr-chip .pnr-ico { color: var(--ok); }
+.pnr-marker.clear .pnr-pin { background: var(--ok); box-shadow: 0 0 0 1.5px var(--ok), 0 2px 6px rgba(0, 0, 0, 0.7); }
+
+@media (pointer: coarse) {
+  .maplibregl-ctrl-group button { width: 44px !important; height: 44px !important; }
+  .maplibregl-popup-close-button { min-width: 36px; min-height: 36px; }
+  .stop-marker { width: 30px; height: 30px; font-size: 13.5px; }
+  .poi-dot { width: 16px; height: 16px; }
+}

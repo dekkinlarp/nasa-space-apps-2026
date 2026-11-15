@@ -4,6 +4,7 @@ import { CheckIcon, GripVerticalIcon, XIcon } from "lucide-react";
 import type { RouteResult, RouteSegment, SurfaceClass } from "@marsmap/core";
 import { selectedResult, usableTimeS, useStore } from "../store";
 import { fmtDist, fmtDur, fmtEnergy, fmtLonLat, fmtO2 } from "../format";
+import { inGrid } from "../geo";
 import { limitMessage, pointNames } from "../lib";
 import { profileColor } from "../map/MapView";
 import { flyTo } from "./ExploreTab";
@@ -184,7 +185,8 @@ export function PlanTab() {
   const [overIdx, setOverIdx] = useState<number | null>(null);
   const pnr = usePnr();
   const starts = area.config.pois.filter((p) => p.type === "start");
-  const stopPois = area.config.pois.filter((p) => p.type !== "start");
+  const stopPois = area.config.pois.filter((p) => p.type !== "start" && inGrid(area.manifest.grid, [p.lon, p.lat]));
+  const poiById = new Map(area.config.pois.map((p) => [p.id, p] as const));
   const sel = selectedResult(st);
   const names = pointNames(start, stops, returnToStart);
   const classes = area.config.surfaceClasses;
@@ -212,23 +214,34 @@ export function PlanTab() {
         </Alert>
       )}
 
-      {sel && (
-        <section aria-label="Verdict and budgets">
-          {/* The one place that says whether the selected route fits. The figures are on the bars under it. */}
-          {msg ? (
-            <Alert variant="destructive" className="mt-0 mb-1">
-              {msg}
-            </Alert>
-          ) : (
-            <p className="m-0 flex flex-wrap items-center gap-x-1.5" role="status">
-              <CheckIcon className="size-4 flex-none text-ok" aria-hidden />
-              <b className="font-semibold">Fits the limits</b>
-              <span className="text-muted-foreground">{Math.round(params.reserveFraction * 100)}% held in reserve</span>
-            </p>
-          )}
-          <SafetyBudget r={sel} params={params} pnr={pnr} names={names} />
-        </section>
-      )}
+      <SectionHeading>Start</SectionHeading>
+      <div className="mb-1.5 flex gap-2" title={start ? `${fmtLonLat(start.lonLat)} · drag the S marker on the map to move it` : undefined}>
+        <Select
+          items={startItems}
+          value={start?.poiId ?? (start ? "__custom" : null)}
+          onValueChange={(id) => {
+            const p = starts.find((x) => x.id === id) ?? area.config.pois.find((x) => x.id === id);
+            if (p) {
+              st.setStart({ lonLat: [p.lon, p.lat], name: p.name, poiId: p.id });
+              flyTo(p.lon, p.lat, 15.5);
+            }
+          }}
+        >
+          <SelectTrigger className="min-w-0 flex-1">
+            <SelectValue placeholder="Choose a start spot…" />
+          </SelectTrigger>
+          <SelectContent>
+            {startItems.map((it) => (
+              <SelectItem key={it.value} value={it.value} disabled={it.value === "__custom"}>
+                {it.label}
+              </SelectItem>
+            ))}
+          </SelectContent>
+        </Select>
+        <Button variant={st.pickingStart ? "default" : "secondary"} aria-pressed={st.pickingStart} onClick={() => st.set({ pickingStart: !st.pickingStart, pickingStop: false, mapClick: null, selectedPoi: null, selectedWaypoint: null })}>
+          {st.pickingStart ? "Cancel pick" : "Pick on map"}
+        </Button>
+      </div>
 
       <SectionHeading>
         Walk
@@ -364,7 +377,18 @@ export function PlanTab() {
             ))}
           </SelectContent>
         </Select>
+        <Button variant={st.pickingStop ? "default" : "secondary"} aria-pressed={st.pickingStop}
+          onClick={() => st.set({ pickingStop: !st.pickingStop, pickingStart: false, mapClick: null, selectedPoi: null, selectedWaypoint: null })}>
+          {st.pickingStop ? "Cancel pick" : "Pick on map"}
+        </Button>
       </div>
+
+      {(st.pickingStart || st.pickingStop) && (
+        <p role="status" className="mt-2 text-sm text-muted-foreground">
+          Click or tap the mapped terrain to place {st.pickingStart ? "the start" : "a stop"}.
+          <Button variant="link" size="inline" className="ml-2" onClick={() => st.set({ pickingStart: false, pickingStop: false })}>Cancel</Button>
+        </p>
+      )}
 
       {planError && <Alert variant="destructive">Routing failed: {planError}</Alert>}
 

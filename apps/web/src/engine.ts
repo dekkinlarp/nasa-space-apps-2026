@@ -11,10 +11,10 @@ import { loadDetail } from "./data";
 import type { AreaData, StartPoint, Stop } from "./types";
 import type { WorkerIn, WorkerOut } from "./worker/protocol";
 
-/** Round-trip walking-time rings, seconds. The worker adds the real walk limit as the outermost ring. */
-export const RING_STEPS_S = [15 * 60, 30 * 60, 60 * 60];
+/** Round-trip time rings at 15 and 30 minutes only. */
+export const RING_STEPS_S = [15 * 60, 30 * 60];
 
-/** The fixed time rings that sit clearly inside the time limit (usable EVA time minus one stop's work). */
+/** Keep time rings clearly inside the time limit; the worker adds the actual safety-limit ring. */
 export function ringBudgets(usableS: number, dwellS: number): number[] {
   const limit = Math.max(0, usableS - dwellS);
   return RING_STEPS_S.filter((b) => b < limit * 0.9);

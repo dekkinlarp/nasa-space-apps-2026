@@ -2,7 +2,7 @@ import type { ReactNode } from "react";
 import { useStore } from "../store";
 import { fmtDist, fmtLonLat, fmtNum } from "../format";
 import { nearestPhoto, sampleBest, surfaceById } from "../lib";
-import { marsDistanceM } from "../geo";
+import { inGrid, marsDistanceM } from "../geo";
 import type { Poi, RoverPhoto } from "../types";
 import type { LonLat } from "@marsmap/core";
 import { XIcon } from "lucide-react";
@@ -18,6 +18,7 @@ export const POI_TYPE_LABEL: Record<string, string> = {
   "science-target": "Science target",
   start: "Start spot",
   viewpoint: "Viewpoint",
+  landmark: "Landmark",
 };
 
 /** The dot colour of each point-of-interest type (the map pins use the same tokens, see MapView). */
@@ -26,6 +27,7 @@ export const POI_DOT: Record<string, string> = {
   "science-target": "bg-poi-science-target",
   start: "bg-poi-start",
   viewpoint: "bg-poi-viewpoint",
+  landmark: "bg-poi-viewpoint",
   rover: "bg-poi-rover",
 };
 
@@ -166,6 +168,7 @@ export function PoiCard({ poi }: { poi: Poi }) {
   const stops = useStore((s) => s.stops);
   const ll: LonLat = [poi.lon, poi.lat];
   const np = nearestPhoto(area.rover.photos, ll);
+  const inside = inGrid(area.manifest.grid, ll);
   const already = stops.some((s) => s.poiId === poi.id);
   return (
     <FloatCard
@@ -244,6 +247,30 @@ export function PoiCard({ poi }: { poi: Poi }) {
           <PhotoThumb photo={np.photo} distM={np.distM} />
         </Detail>
       )}
+      {!inside && <p className="text-sm text-muted-foreground">Outside the mapped terrain. Routing is unavailable here.</p>}
+      <div className="mt-3 flex gap-2">
+        <Button
+          variant="secondary"
+          className="flex-1 "
+          disabled={!inside}
+          onClick={() => {
+            setStart({ lonLat: ll, name: poi.name, poiId: poi.id });
+            set({ tab: "plan" });
+          }}
+        >
+          Set as start
+        </Button>
+        <Button
+          className="flex-1"
+          disabled={already || !inside}
+          onClick={() => {
+            addStop({ lonLat: ll, name: poi.name, poiId: poi.id });
+            set({ tab: "plan" });
+          }}
+        >
+          {already ? "In plan" : "Add as stop"}
+        </Button>
+      </div>
       <CardFoot>
         {poi.sources.map((u) => (
           <a key={u} href={u} target="_blank" rel="noreferrer" title={u}>

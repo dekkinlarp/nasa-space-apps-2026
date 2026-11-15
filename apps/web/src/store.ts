@@ -78,6 +78,7 @@ interface State {
   mapClick: LonLat | null;
   /** When set, the next map click sets the start. */
   pickingStart: boolean;
+  pickingStop: boolean;
 
   start: StartPoint | null;
   stops: Stop[];
@@ -147,6 +148,7 @@ export const useStore = create<State>((set, get) => ({
   hover: null,
   mapClick: null,
   pickingStart: false,
+  pickingStop: false,
 
   start: null,
   stops: [],
@@ -175,9 +177,10 @@ export const useStore = create<State>((set, get) => ({
     const cur = get().params;
     if (cur) set({ params: { ...cur, ...p } });
   },
-  setStart: (s) => set({ start: s, pickingStart: false }),
+  setStart: (s) => set({ start: s, pickingStart: false, pickingStop: false }),
   addStop: (s) =>
     set({
+      pickingStop: false,
       stops: [...get().stops, { ...s, id: `stop-${++stopSeq}`, dwellS: s.dwellS ?? get().params?.stopDwellS ?? 1200 }],
     }),
   removeStop: (id) => set({ stops: get().stops.filter((s) => s.id !== id) }),

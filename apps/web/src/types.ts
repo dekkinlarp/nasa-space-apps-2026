@@ -1,6 +1,6 @@
 import type { LayerManifest, LonLat, SurfaceClass, WalkParams, GridSpec, TileSet } from "@marsmap/core";
 
-export type PoiType = "drill-site" | "science-target" | "start" | "viewpoint";
+export type PoiType = "drill-site" | "science-target" | "start" | "viewpoint" | "landmark";
 
 export interface PoiEvidence {
   claim: string;

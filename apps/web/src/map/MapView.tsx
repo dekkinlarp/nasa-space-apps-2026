@@ -6,7 +6,7 @@ import { MAP_LABEL, MAP_LABEL_BOX, MAP_LABEL_TONE, STOP_BADGE, STOP_BADGE_NUMBER
 import type { GridSpec, LonLat, ReachRing, RouteResult } from "@marsmap/core";
 import { selectedResult, useStore, type LayerState, type OverlayId } from "../store";
 import type { AreaData, DisplayLayers, Poi } from "../types";
-import { M_PER_DEG_LAT } from "../geo";
+import { inGrid, M_PER_DEG_LAT } from "../geo";
 import { sampleBest } from "../lib";
 import { confidenceUrl, costUrl, elevationUrl, SCIENCE_RAMPS, scienceUrl, slopeUrl, surfaceUrl } from "./rasters";
 import { loadFloatLayer } from "../data";
@@ -294,15 +294,15 @@ function ringFeatures(rings: ReachRing[] | null): GeoJSON.FeatureCollection {
   const n = rings.length;
   return {
     type: "FeatureCollection",
-    features: rings.map((r, i) => ({
+    features: rings.filter((r) => r.kind !== "limit").map((r, i) => ({
       type: "Feature",
       properties: { id: r.id, i, t: n > 1 ? i / (n - 1) : 1, limit: r.kind === "limit" ? 1 : 0 },
       geometry: {
         type: "MultiPolygon",
         coordinates: r.coordinates
           .filter((poly) => poly[0] && ringAreaM2(poly[0]) >= MIN_RING_PART_M2)
-          // Holes (no-go ground inside a ring) are drawn once, on the walk-limit ring, not repeated on every ring.
-          .map((poly) => [poly[0]!, ...(i === n - 1 ? poly.slice(1).filter((h) => ringAreaM2(h) >= MIN_RING_PART_M2) : [])]),
+          // Show only the outer outlines of the time rings.
+          .map((poly) => [poly[0]!]),
       },
     })),
   };
@@ -568,10 +568,10 @@ export function MapView() {
       contourLayer("contours-index", 3, 0, 1.3);
       map.addSource("window", { type: "geojson", data: EMPTY_FC });
       map.addLayer({ id: "window", type: "line", source: "window", paint: { "line-color": "#ffffff", "line-opacity": 0.55, "line-width": 1.2, "line-dasharray": [4, 3] } });
+      map.addSource("contours", { type: "geojson", data: EMPTY_FC });
+      map.addLayer({ id: "contours", type: "line", source: "contours", layout: { visibility: "none" }, paint: { "line-color": "#e4d4bf", "line-opacity": 0.65, "line-width": ["case", ["get", "major"], 1.4, 0.6] } });
       map.addSource("rings", { type: "geojson", data: EMPTY_FC });
-      map.addLayer({ id: "rings-line", type: "line", source: "rings", filter: ["<", ["get", "t"], 1], paint: { "line-color": RING_COLOR, "line-width": ["interpolate", ["linear"], ["get", "t"], 0, 1.2, 1, 2.2], "line-dasharray": [3, 2] } });
-      // Walk-limit ring (and the no-go loops inside it): solid amber, drawn over the time rings where they coincide.
-      map.addLayer({ id: "rings-limit", type: "line", source: "rings", filter: [">=", ["get", "t"], 1], layout: { "line-join": "round" }, paint: { "line-color": RING_LIMIT_COLOR, "line-width": 1.6 } });
+      map.addLayer({ id: "rings-line", type: "line", source: "rings", paint: { "line-color": RING_COLOR, "line-width": ["interpolate", ["linear"], ["get", "t"], 0, 1.2, 1, 2.2], "line-dasharray": [3, 2] } });
 
       map.addSource("track", { type: "geojson", data: area.rover.traverse ?? EMPTY_FC });
       map.addLayer({ id: "track-casing", type: "line", source: "track", paint: { "line-color": "#000", "line-width": 4, "line-opacity": 0.5 } });
@@ -608,15 +608,22 @@ export function MapView() {
     const zoomClass = () => containerRef.current?.classList.toggle("lowzoom", map.getZoom() < 15.6);
     map.on("zoom", zoomClass);
     zoomClass();
-    map.on("mouseenter", "waypoints", () => (map.getCanvas().style.cursor = "pointer"));
-    map.on("mouseleave", "waypoints", () => (map.getCanvas().style.cursor = ""));
+    map.on("mouseenter", "waypoints", () => (map.getCanvas().style.cursor = useStore.getState().pickingStart || useStore.getState().pickingStop ? "crosshair" : "pointer"));
+    map.on("mouseleave", "waypoints", () => (map.getCanvas().style.cursor = useStore.getState().pickingStart || useStore.getState().pickingStop ? "crosshair" : ""));
 
     let tapTimer: ReturnType<typeof setTimeout> | undefined;
     map.on("click", (e) => {
       const s = useStore.getState();
       const ll: LonLat = [e.lngLat.lng, e.lngLat.lat];
-      if (s.pickingStart) {
-        s.setStart({ lonLat: ll, name: "Custom start" });
+      if (s.pickingStart || s.pickingStop) {
+        clearTimeout(tapTimer);
+        if (!inGrid(area.manifest.grid, ll)) {
+          s.set({ mapClick: ll });
+          return;
+        }
+        if (s.pickingStart) s.setStart({ lonLat: ll, name: "Custom start" });
+        else s.addStop({ lonLat: ll, name: `Map point ${s.stops.length + 1}` });
+        s.set({ mapClick: null, selectedPoi: null, selectedWaypoint: null });
         return;
       }
       const wp = map.getLayer("waypoints") ? map.queryRenderedFeatures(e.point, { layers: ["waypoints"] }) : [];
@@ -646,6 +653,7 @@ export function MapView() {
     });
 
     return () => {
+      clearTimeout(tapTimer);
       detachGestures();
       map.remove();
       mapInstance = null;
@@ -767,8 +775,6 @@ export function MapView() {
     }
     map.setLayoutProperty("rings-line", "visibility", overlays.rings.on ? "visible" : "none");
     map.setPaintProperty("rings-line", "line-opacity", overlays.rings.opacity);
-    map.setLayoutProperty("rings-limit", "visibility", overlays.rings.on ? "visible" : "none");
-    map.setPaintProperty("rings-limit", "line-opacity", overlays.rings.opacity * 0.85);
     for (const l of ["track", "track-casing", "waypoints"]) map.setLayoutProperty(l, "visibility", overlays.track.on ? "visible" : "none");
     // While planning, Curiosity's track recedes so the planned route stands out — unless the user
     // has set the track layer themselves in the Layers tab (its state object then differs from the default).
@@ -779,24 +785,31 @@ export function MapView() {
     map.setPaintProperty("waypoints", "circle-stroke-opacity", fade);
   }, [ready, overlays, reach, area, tab, detail]);
 
-  // ---------- contour lines (traced the first time they are switched on, and again when the window moves) ----------
-  const contoursOn = overlays.contours.on;
-  const contoursFor = useRef<DisplayLayers | null | undefined>(undefined);
+  const contoursOn = useStore((s) => s.overlays.contours.on);
+  const contoursOpacity = useStore((s) => s.overlays.contours.opacity);
+  const contourCache = useRef<{ area: AreaData; data: GeoJSON.FeatureCollection } | null>(null);
   useEffect(() => {
     const map = mapInstance;
-    const ov = area.overview;
-    if (!ready || !map || !contoursOn || !ov.elevation || contoursFor.current === detail) return;
-    // After this frame, so the switch moves before the tracing starts.
-    const timer = setTimeout(() => {
-      const whole = { grid: ov.grid, elev: ov.elevation! };
-      const win = area.tiles && detail?.elevation ? { grid: detail.grid, elev: detail.elevation } : null;
-      // An untiled area is full-resolution ground throughout.
-      const data = area.tiles ? contourFeatures(whole, win) : contourFeatures(null, whole);
-      (map.getSource("contours") as GeoJSONSource | undefined)?.setData(data);
-      contoursFor.current = detail;
-    }, 0);
-    return () => clearTimeout(timer);
-  }, [ready, contoursOn, detail, area]);
+    if (!ready || !map) return;
+    map.setLayoutProperty("contours", "visibility", contoursOn ? "visible" : "none");
+    map.setPaintProperty("contours", "line-opacity", contoursOpacity);
+  }, [ready, contoursOn, contoursOpacity]);
+  useEffect(() => {
+    const map = mapInstance;
+    if (!ready || !map || !contoursOn || !area.overview.elevation) return;
+    if (contourCache.current?.area === area) {
+      (map.getSource("contours") as GeoJSONSource).setData(contourCache.current.data);
+      return;
+    }
+    const worker = new Worker(new URL("../worker/contours.worker.ts", import.meta.url), { type: "module" });
+    worker.onmessage = (event: MessageEvent<GeoJSON.FeatureCollection>) => {
+      contourCache.current = { area, data: event.data };
+      (map.getSource("contours") as GeoJSONSource).setData(event.data);
+      worker.terminate();
+    };
+    worker.postMessage({ grid: area.overview.grid, elevation: area.overview.elevation });
+    return () => worker.terminate();
+  }, [ready, contoursOn, area]);
 
   // ---------- science overlays (data fetched the first time each is switched on) ----------
   const sci = useStore((s) => s.sci);
@@ -836,21 +849,16 @@ export function MapView() {
     ringMarkers.current.forEach((m) => m.remove());
     ringMarkers.current = [];
     if (!rings || !overlays.rings.on) return;
-    const usable = reach?.usableS ?? 0;
     const labels: { el: HTMLElement; outline: number[][] }[] = [];
     for (const r of rings) {
+      if (r.kind === "limit") continue;
       // Candidate label spots: every vertex of the ring's (non-trivial) outer boundaries.
       const outline = r.coordinates.filter((poly) => poly[0] && ringAreaM2(poly[0]) >= MIN_RING_PART_M2).flatMap((poly) => poly[0]!);
       if (!outline.length) continue;
       const el = document.createElement("div");
-      el.className = RING_LABEL;
-      const isLimit = r.kind ? r.kind === "limit" : r.budgetS === Math.max(...rings.map((x) => x.budgetS));
-      el.textContent = isLimit ? `Limit${r.limitedBy ? ` · ${r.limitedBy}` : ""}` : fmtDur(r.budgetS);
-      el.title = isLimit
-        ? `Walk limit: the farthest you can go, work one stop and still get home with the reserve intact on time, energy and oxygen${r.limitedBy ? `. Here ${r.limitedBy} runs out first` : ""}`
-        : `Reachable and back to the start in ${fmtDur(r.budgetS)} of walking (round trip)`;
-      el.className += ` ${isLimit ? MAP_LABEL_TONE.warn : MAP_LABEL_TONE.neutral}`;
-      el.setAttribute("aria-label", el.title);
+      el.className = "ring-label";
+      el.textContent = fmtDur(r.budgetS);
+      el.title = `Reachable and back to the start in ${fmtDur(r.budgetS)} of walking (round trip)`;
       ringMarkers.current.push(new maplibregl.Marker({ element: el, anchor: "bottom" }).setLngLat(outline[0] as [number, number]).addTo(map));
       el.tabIndex = -1;
       labels.push({ el, outline });
@@ -906,6 +914,7 @@ export function MapView() {
     const markers = area.config.pois.map((p) => {
       const el = poiEl(p);
       el.addEventListener("click", (ev) => {
+        if (useStore.getState().pickingStart || useStore.getState().pickingStop) return;
         ev.stopPropagation();
         useStore.getState().set({ selectedPoi: p, selectedWaypoint: null, mapClick: null, tab: useStore.getState().tab });
       });
@@ -1045,6 +1054,21 @@ export function MapView() {
 
   const renderDistanceKm = useStore((s) => s.renderDistanceKm);
   useEffect(() => setRenderDistance(mapInstance, renderDistanceKm), [ready, renderDistanceKm]);
+
+  const picking = useStore((s) => s.pickingStart || s.pickingStop);
+  useEffect(() => {
+    const map = mapInstance;
+    if (!ready || !map || !picking) return;
+    map.getCanvas().style.cursor = "crosshair";
+    const cancel = (event: KeyboardEvent) => {
+      if (event.key === "Escape") useStore.getState().set({ pickingStart: false, pickingStop: false, mapClick: null });
+    };
+    window.addEventListener("keydown", cancel);
+    return () => {
+      map.getCanvas().style.cursor = "";
+      window.removeEventListener("keydown", cancel);
+    };
+  }, [ready, picking]);
 
   // ---------- click popup ----------
   const mapClick = useStore((s) => s.mapClick);

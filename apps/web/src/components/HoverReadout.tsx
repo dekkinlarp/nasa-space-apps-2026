@@ -16,7 +16,8 @@ export function HoverReadout() {
   const hover = useStore((s) => s.hover);
   const area = useStore((s) => s.area)!;
   const start = useStore((s) => s.start);
-  const picking = useStore((s) => s.pickingStart);
+  const picking = useStore((s) => s.pickingStart || s.pickingStop);
+  const pickingStop = useStore((s) => s.pickingStop);
   const surf = surfaceById(area.config.surfaceClasses, hover?.surfaceId);
   const sci = useStore((s) => s.sci);
   const sciData = useStore((s) => s.sciData);
@@ -36,8 +37,7 @@ export function HoverReadout() {
         "sheet:in-[.app:has(.go-panel)]:hidden sheet:in-[.app:has(.card-slot>*)]:hidden",
       )}
     >
-      <i className="glass-layer" aria-hidden />
-      {picking && <div className="font-medium whitespace-nowrap text-foreground">Click the map to place the start</div>}
+      {picking && <div className="mb-[3px] font-medium text-foreground">Click the map to place {pickingStop ? "a stop" : "the start"}</div>}
       {hover ? (
         <>
           <Ticker>

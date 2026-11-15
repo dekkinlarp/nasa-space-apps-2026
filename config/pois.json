@@ -261,6 +261,59 @@
       "sources": [
         "https://mars.nasa.gov/mmgis-maps/MSL/Layers/json/MSL_waypoints.json"
       ]
+    },
+    {
+      "id": "bradbury-landing",
+      "name": "Bradbury Landing",
+      "short": "Bradbury Landing",
+      "type": "landmark",
+      "lon": 137.4417,
+      "lat": -4.5895,
+      "summary": "Curiosity’s landing point in Gale crater on August 6, 2012.",
+      "positionSource": "NASA MSL landing assessment: 4.5895° S, 137.4417° E.",
+      "sources": [
+        "https://ntrs.nasa.gov/api/citations/20130011617/downloads/20130011617.pdf"
+      ]
+    },
+    {
+      "id": "yellowknife-bay",
+      "name": "Yellowknife Bay",
+      "short": "Yellowknife Bay",
+      "type": "landmark",
+      "lon": 137.449,
+      "lat": -4.595,
+      "summary": "A shallow depression explored early in Curiosity’s mission, including the John Klein and Cumberland drilling sites.",
+      "positionSource": "Approximate regional marker from the LPI Curiosity traverse map; not an exact drill-hole position.",
+      "sources": [
+        "https://www.lpi.usra.edu/education/workshops/MAVEN/Curiosity-MSL.pdf",
+        "https://www.nasa.gov/image-article/yellowknife-bay-formation-mars/"
+      ]
+    },
+    {
+      "id": "aeolis-mons",
+      "name": "Aeolis Mons (Mount Sharp)",
+      "short": "Aeolis Mons",
+      "type": "landmark",
+      "lon": 137.85,
+      "lat": -5.08,
+      "summary": "The central mountain of Gale crater. This regional reference point is outside the mapped terrain; Curiosity explores its lower slopes within the map.",
+      "positionSource": "IAU/USGS regional feature center, rounded to 0.01°; not a summit or sampled site. West longitude converted to east longitude.",
+      "sources": [
+        "https://planetarynames.wr.usgs.gov/Feature/15000"
+      ]
+    },
+    {
+      "id": "aeolis-palus",
+      "name": "Aeolis Palus",
+      "short": "Aeolis Palus",
+      "type": "landmark",
+      "lon": 137.42,
+      "lat": -4.47,
+      "summary": "The plain in Gale crater between its northern rim and Aeolis Mons. This pin marks the regional feature center, not a specific science target.",
+      "positionSource": "IAU/USGS regional feature center, rounded to 0.01°. West longitude converted to east longitude.",
+      "sources": [
+        "https://planetarynames.wr.usgs.gov/Feature/15001"
+      ]
     }
   ]
 }
