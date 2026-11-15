@@ -2,99 +2,64 @@
 
 NASA Space Apps 2026, challenge "Interplanetary Survival Guide: Martian Map".
 
-A Google-Maps-style tool for planning an astronaut walk on Mars. The map covers a 33 x 40 km region of
-Gale Crater: all of Curiosity's drive, from Bradbury Landing to the boxwork ridges it studied in
-2025-26. Pick a start and science stops anywhere in it, and the planner gives walking routes with time,
-distance, slope, surface, energy, oxygen and radiation per segment, shows where orbital data sees
-water-formed minerals, and draws how far a crew can walk and still get home.
+A Google-Maps-style tool for planning an astronaut walk (EVA) on Mars, built entirely on NASA and USGS
+orbital and rover data. The map covers a 33 x 40 km region of Gale Crater: all of Curiosity's drive,
+from Bradbury Landing to the boxwork ridges it studied in 2025-26. Pick a start and science stops, and
+the planner answers the questions a crew has before stepping outside:
 
-The region is too big to load whole at 2 m (330 million cells), so the data is stored as tiles. The app
-shows a 16 m overview of the whole region and loads full-resolution ground for an 8 km square around
-the walk (the *planning window*, drawn as a dashed square). Routes and walk limits are worked out on
-that square, and it moves when the start or stops move near its edge.
+- **Which way do we walk?** Three routes (fastest, least effort, safest) with time, distance, slope,
+  surface, energy, oxygen and radiation per segment.
+- **Can we make it back?** A walk-limit ring shows how far the crew can go and still get home inside the
+  suit's time, energy and oxygen budget, with a safety reserve held back. Each route gets a
+  "turn back by" time (point of no return).
+- **Where is the science?** Orbital mineral maps show where water-formed minerals (clay, hydrated
+  sulfate, bound water) were seen from orbit, and every point of interest says what Curiosity did
+  there, what it couldn't do, and what a crew could.
 
-**Golden case.** Curiosity spent most of a year at the boxwork, drilled three holes about 6 cm deep
+## Golden case: ridge to hollow in one walk
+
+Curiosity spent most of a year at the boxwork, a network of low ridges and sand-filled hollows that
+likely formed when groundwater flowed through cracks in the rock. It drilled three holes about 6 cm deep
 (clay in a ridge, carbonate in a hollow), slipped in the sand-filled hollows, and left the main
-questions open. A crew can cross ridge to hollow, sample ridge walls, dig under the sand and trace
-the network in one six-hour walk.
+questions open. A crew can do what the rover couldn't: cross ridge to hollow, sample ridge walls, dig
+under the sand to bedrock and trace the edge of the network, in one six-hour walk. "Try the boxwork
+walk" in the app loads one such plan: camp → hollow → ridge junction → sand dig.
 
-## Run it
+## What you can do
 
-```bash
-pnpm install
-pnpm data      # one-time: downloads ~4.3 GB from NASA/USGS, about 1 h in all; keeps ~550 MB in data/<id> plus ~8 GB of cache (gitignored)
-pnpm dev       # one Vite dev server on http://localhost:5173 (app, API Worker and map data)
-pnpm test      # routing core unit tests
-pnpm typecheck
-```
-
-`http://localhost:5173/?area=fixture` runs on
-synthetic test data (`pnpm --filter @marsmap/web fixture`).
-
-## Deploy (Cloudflare)
-
-One Worker named `marsmap` serves everything: the built web app and the map data are static assets,
-and Worker code only answers `/api/*`. Vite builds both (Cloudflare's Vite plugin), and Wrangler
-uploads the result without re-bundling. No R2 is needed: static assets allow 25 MiB per file and
-20 000 files per version (free plan), and the region ships as about 4500 files, none over a few MB
-(elevation and surface tiles, overviews, an imagery pyramid). Wrangler only uploads files whose
-content changed, so a data release re-uploads only the tiles that changed. Config is in `wrangler.jsonc`.
-
-```bash
-pnpm deploy            # build + wrangler deploy (production)
-pnpm preview:deploy    # build + wrangler preview (a Preview named after the current branch)
-```
-
-**Map data in builds.** `data/` is not in git. The build runs `scripts/fetch-data.mjs`, which downloads
-the tarball pinned in `config/data-release.json` from this repo's GitHub releases and checks its
-SHA-256, so builds never call NASA. It skips the download when `data/` is already present.
-While the repo is private the build needs a `GITHUB_TOKEN` (read-only access to this repo's contents).
-
-To publish new data after re-running `pnpm data`:
-
-```bash
-pnpm data:pack data-v2
-gh release create data-v2 data/marsmap-gale-boxwork-data-v2.tar.gz
-git commit -am "Pin map data data-v2"   # config/data-release.json changed
-```
-
-**GitHub integration (Workers Builds).** In the Cloudflare dashboard: Workers & Pages > marsmap >
-Settings > Builds > Connect, pick this repo, production branch `main`, build command `pnpm run build`,
-deploy command `npx wrangler deploy`, and enable builds for non-production branches so pull requests
-get a Preview URL. Add `GITHUB_TOKEN` as a build secret.
-
-## Layout
-
-| Path | What |
+| Tab / mode | What it does |
 |---|---|
-| `config/` | Everything tunable: `area.json` (bounds, tile size), `walk-params.json`, `surface-classes.json`, `pois.json` |
-| `scripts/` | Data pipeline. Downloads and prepares everything so the app never calls NASA live. [Details and sources](scripts/README.md) |
-| `packages/core/` | Routing, walk model, walk-limit rings, tile decoding and the planning window. Pure TypeScript, runs in a browser worker or on a server. [Equations and sources](packages/core/README.md) |
-| `apps/web/` | React + MapLibre GL app (2D and 3D). Its `vite.config.ts` also runs the Worker and serves `data/` |
-| `apps/server/` | Hono API as a Cloudflare Worker (`worker.ts`). Vite runs it in dev and builds it for deploy |
-| `data/` | Generated, not in git |
+| **Explore** | Curiosity's traverse, waypoints (click one for its sol, rover tilt and the Navcam photos taken there), its drill sites and hand-picked science targets. Each card shows elevation, slope, surface and the orbital mineral readings at that spot. |
+| **Plan** | Choose a start (a rover stop or any point), add stops from a card or by clicking the map, drag to reorder, set work time per stop, loop back to start. Compare the three routes, read the elevation and slope profile, and watch the time, energy and oxygen budget bars and the turn-back time. |
+| **Go** | Plays the planned walk as a simulated astronaut with time, energy and oxygen left, bearing and the walk home. "Use my location" maps your real movement on Earth onto the Mars route. |
+| **Layers** | Base imagery (HiRISE photo, CTX, THEMIS day/night infrared), slope, elevation, hillshade, estimated surface and its uncertainty, mineral indicators, walk cost from the start, walk-limit rings. 2D or 3D with adjustable vertical exaggeration. |
 
-## Where each piece of data comes from
+The Explore tab opens with typical conditions at Curiosity (air temperature range, daylight hours,
+radiation dose) from its REMS and RAD instruments.
+
+## Data sources
+
+Everything is downloaded and prepared ahead of time by the data pipeline; the app never calls NASA live.
 
 | Data | Source | Used for |
 |---|---|---|
-| Elevation, 1 m, resampled to 2 m | USGS Astrogeology "Mars MSL Gale Merged DEM 1m v3" (HiRISE/CTX/HRSC tied to MOLA), https://astrogeology.usgs.gov/search/map/mars_msl_gale_merged_dem_1m | Slope, routing, 3D terrain, elevation profile |
-| Slope | Derived from the elevation (Horn, 3x3 cells); the app computes it from the elevation tiles | Routing cost, impassable cells, slope layer |
-| Surface conditions | **Estimate** derived from elevation roughness and HiRISE brightness/texture; not ground-truthed | Routing cost, surface layer |
-| Orbital photo, 0.64 m/px | NASA Mars Trek WMTS `curiosity_hirise_mosaic` (MRO HiRISE, NASA/JPL/UArizona), https://trek.nasa.gov/mars/ | Base map |
-| Mineral indicators, 18-36 m/px | A mosaic of 19 MRO CRISM targeted observations (2007-2011; FRT scenes at 18 m first, HRL scenes at 36 m fill gaps), summary-parameter products from the NASA PDS Geosciences Node: clay (D2300), hydrated sulfate (SINDEX2), bound water (BD1900_2). Indicators, not abundances | "Minerals from orbit" layers, readings on each POI card |
-| Context and thermal imagery | Mars Trek `Gale_CTX_BlockAdj_dd` (MRO CTX), THEMIS day/night IR mosaics (Mars Odyssey) | Alternative base layers (thermal is ~100 m/px, context only) |
+| Elevation, 1 m, averaged to 2 m | USGS Astrogeology "Mars MSL Gale Merged DEM 1m v3" (HiRISE/CTX/HRSC tied to MOLA), https://astrogeology.usgs.gov/search/map/mars_msl_gale_merged_dem_1m | Slope, routing, 3D terrain, hillshade, elevation profile |
+| Slope | Derived from the elevation (Horn method, 3x3 cells) | Routing cost, impassable ground, slope layer |
+| Orbital photo, 0.64 m/px | NASA Mars Trek WMTS `curiosity_hirise_mosaic` (MRO HiRISE, NASA/JPL/UArizona), https://trek.nasa.gov/mars/ | Base map, surface estimate. The photo is grayscale; the Mars colour tint is cosmetic and can be switched off |
+| Context and thermal imagery | Mars Trek `Gale_CTX_BlockAdj_dd` (MRO CTX, 10 m/px), THEMIS day/night IR mosaics (Mars Odyssey, ~100 m/px) | Alternative base layers (thermal is context only) |
+| Mineral indicators, 18-36 m/px | 19 MRO CRISM targeted observations (2007-2011), summary-parameter products from the NASA PDS Geosciences Node: clay (D2300), hydrated sulfate (SINDEX2), bound water (BD1900_2). Indicators, not abundances | Mineral layers, readings on each card |
+| Surface conditions | **Estimate** from elevation roughness and HiRISE brightness/texture (sand, bedrock, rubble, firm soil); not ground-truthed | Routing cost, surface layer |
 | Curiosity track and waypoints | NASA/JPL MSL localized traverse, https://mars.nasa.gov/mmgis-maps/MSL/Layers/json/MSL_waypoints.json | Track layer, start spots, drill-site positions, slope check |
 | Rover photos | NASA Mars raw images feed (Curiosity Navcam), https://mars.nasa.gov/rss/api/?feed=raw_images&category=msl&feedtype=json | Ground-level previews |
 | Weather | Curiosity REMS feed, https://mars.nasa.gov/rss/api/?feed=weather&category=msl&feedtype=json (last record sol 4995, not live) | Conditions bar, shown as typical values |
-| Radiation | 0.67 mSv/day, Curiosity RAD (Hassler et al. 2014), https://www.swri.org/press-release/swri-scientists-publish-first-radiation-measurements-surface-mars | Dose per walk, static |
+| Radiation | 0.67 mSv/day, Curiosity RAD (Hassler et al. 2014), https://www.swri.org/press-release/swri-scientists-publish-first-radiation-measurements-surface-mars | Dose per walk |
 | Points of interest | Hand-written in `config/pois.json` from JPL and NASA Curiosity blog posts; drill sites use rover waypoint positions; science targets are marked illustrative | Pins and cards |
 
-Per-file processing steps are in [scripts/README.md](scripts/README.md).
+How each file is downloaded and processed: [scripts/README.md](scripts/README.md).
 
-## Where each walk-model number comes from
+### Where each walk-model number comes from
 
-Defaults live in `config/walk-params.json`; the full table with URLs, equations and caveats is in
+Defaults live in `config/walk-params.json`; equations, URLs and caveats are in
 [packages/core/README.md](packages/core/README.md).
 
 | Parameter | Default | Basis |
@@ -113,55 +78,101 @@ Defaults live in `config/walk-params.json`; the full table with URLs, equations 
 | Oxygen use | 0.071 g per kJ + 5 g/h leakage | Physiology (20.1 kJ per litre of O2); leakage is an assumption |
 | Radiation | 0.67 mSv/day | Curiosity RAD |
 
-## Checks we ran on the data
+### Checks we ran on the data
 
-`pnpm --filter @marsmap/scripts run verify` reads the data the way the app does (tiles decoded by the
-routing core) and writes `data/<id>/preview/verify-report.json`.
+`pnpm --filter @marsmap/scripts run verify` reads the data the way the app does and writes
+`data/<id>/preview/verify-report.json`.
 
-- **Georeferencing:** elevation at all 1389 of Curiosity's waypoints (every one is inside the region)
-  matches the waypoint's own elevation with a median difference of 2.7 cm (95% within 14 cm; mean
-  −0.4 cm). The MMGIS waypoint elevations are probably sampled from this same DEM, so this checks the
-  georeferencing and the tile encoding, not the DEM's absolute accuracy.
-- **Mineral layers vs the photo:** as delivered, the CRISM scenes sit 70 to 250 m off the HiRISE
-  photo. The pipeline finds, for each scene, the whole-pixel shift that best matches CRISM's 0.77 µm
-  reflectance to the photo and applies it: the main boxwork scene goes from r = 0.69 to 0.83 at
-  (7, 6) px, and every one of the 19 scenes lands within a few pixels of the same offset (about 8 px
-  east, 4-12 px south), r = 0.55 to 0.95 after the shift. Expect one to two 18 m pixels of residual error.
+- **Elevation vs the rover:** at all 1389 of Curiosity's waypoints, the map's elevation matches the
+  waypoint's own with a median difference of 2.7 cm (95% within 14 cm). The waypoint elevations are
+  probably sampled from this same DEM, so this checks georeferencing and tile encoding, not the DEM's
+  absolute accuracy.
 - **Slope vs the rover:** at the waypoints our slope and the rover's recorded tilt agree at the median
-  (7.2° vs 7.7°, median difference 1.7°). Over the region the median slope is 4°; 10% of cells are
-  steeper than 21°.
-- **Deploy limits:** every data file is under 25 MiB (largest 6.5 MiB) and there are about 4500 of
-  them, under the 20 000-file limit for static assets.
+  (7.2° vs 7.7°, median difference 1.7°). Over the region the median slope is 4°; 10% is steeper than 21°.
+- **Mineral layers vs the photo:** as delivered, the CRISM scenes sit 70 to 250 m off the HiRISE photo.
+  The pipeline shifts each scene to best match the photo (the main boxwork scene goes from r = 0.69 to
+  0.83); every scene lands at about the same offset. Expect one to two 18 m pixels of residual error.
 
 ## Honest limits
 
 - Mars has no GPS. "Go" plays a simulated walk; "Use my location" maps your real movement onto Mars.
+- The surface map is an estimate from orbit, not validated against rover observations.
 - The boxwork ridges are sharp in the photo but barely resolved in the elevation data, so ridge and
   hollow targets are hand-placed, not detected.
-- The map library treats Mars coordinates as Earth coordinates for display (about 0.35% distortion at
-  this latitude). All distances and times come from the routing core, not the map.
-- Routes move between 8 neighbouring cells, so paths can run up to about 8% longer than ideal.
+- Sand and dust hide minerals from orbit: CRISM shows no clay signal at Nevado Sajama, where
+  Curiosity's drill found clay. The CRISM map is a mosaic of 19 scenes taken years apart; seams are
+  real, so compare values within one scene. 21% of the region has no CRISM coverage.
+- The oxygen limit is a simple model with a placeholder tank size. Change it with the "Oxygen carried" slider.
+- A walk is planned on an 8 km square around the start and stops (see below). Stops more than about
+  8 km apart cannot be planned in one walk, and on the open plains, where a crew could walk farther,
+  the walk-limit ring is cut at the square's edge (the map key says so).
+- Walk limits take about 10 s to compute in the boxwork and about 35 s on the open plains.
 - Stops are visited in the order given; the planner does not reorder them.
-- The CRISM map is a mosaic of 19 scenes taken between 2007 and 2011. Where scenes overlap they agree
-  poorly (median r = 0.06 to 0.18 per indicator, at best about 0.3): seasons, dust and atmosphere
-  differ. Each scene is level-matched to the ones before it, but seams are real; compare values within
-  one scene (`crism/scene.bin`, `minerals.json`), not across a seam. 21% of the region has no CRISM coverage.
-- Routing runs on an 8 km planning window at 2 m. On flat ground a walk can reach farther than that
-  (about 9 km out and back), so on the plains the walk-limit ring is cut at the window's edge; the map
-  key says so when it happens. Stops more than about 8 km apart cannot be planned in one walk.
-- Walk limits are recomputed by flooding the whole window, out and back: about 10 s in the boxwork
-  and about 35 s on the open plains, where nearly every cell is walkable.
-- The app holds about 350 MB of window rasters in the page plus a copy in each of two routing workers,
-  and the 16 m overview of the region (about 50 MB). Not tried on an iPad.
-- About 11.6% of the region has no DEM (its corners outside the mosaic); the map leaves it blank and
-  routes avoid it. Outside the planning window the map shows the 16 m overview: slopes there are means
-  over 16 m cells and read gentler than they are.
-- The mineral layers are 18 m pixels of a spectral indicator. Sand and dust hide minerals from orbit:
-  CRISM shows no clay signal at Nevado Sajama, where Curiosity's drill found clay.
-- The oxygen limit is a simple model (breathing in proportion to metabolic energy, plus leakage) with a
-  placeholder tank size. Change it with the "Oxygen carried" slider.
+- Routes move between 8 neighbouring 2 m cells, so paths can run up to about 8% longer than ideal.
+- About 11.6% of the region (its corners, outside the DEM) has no elevation; the map leaves it blank
+  and routes avoid it.
+- Memory heavy: the app holds about 350 MB of full-resolution rasters in the page plus a copy in each
+  of two routing workers. Not tried on an iPad.
 
-## Changing things
+## Run it
+
+```bash
+pnpm install
+pnpm data      # one-time: downloads ~4.3 GB from NASA/USGS, about 1 h in all; keeps ~550 MB in data/<id> plus ~8 GB of cache (gitignored)
+pnpm dev       # one Vite dev server on http://localhost:5173 (app, API Worker and map data)
+pnpm test      # routing core and web unit tests
+pnpm typecheck
+```
+
+`http://localhost:5173/?area=fixture` runs on synthetic test data (`pnpm --filter @marsmap/web fixture`).
+
+Deploying to Cloudflare and publishing map data releases: [docs/deployment.md](docs/deployment.md).
+
+## How it works
+
+### Map rendering
+
+The map is MapLibre GL. MapLibre assumes Earth, so Mars longitude and latitude are drawn as if they
+were Earth's (about 0.35% scale distortion at this latitude); all distances and times come from the
+routing core, not the map.
+
+- **Base imagery** is full resolution across the whole region. The pipeline ships each imagery set as a
+  pyramid of JPEG pictures (level 0 at full resolution in pieces of at most 2048 px, each level up 4x
+  coarser). A custom `marsimg://` protocol cuts 256 px map tiles out of the level that matches the zoom
+  and applies the Mars tint on the fly (`apps/web/src/map/imageryTiles.ts`).
+- **Data layers** (elevation, slope, surface, uncertainty) are drawn twice: a 16 m overview of the whole
+  region, and on top of it full 2 m resolution inside the planning window. Outside the window slopes
+  are 16 m means and read gentler than they are. Mineral layers are on the 16 m grid everywhere, drawn
+  pixel by pixel. Walk cost and walk-limit rings exist only inside the window.
+- **3D terrain** is generated in the browser: a `marsdem://` protocol encodes Terrarium height tiles
+  from the same overview and window grids (`apps/web/src/map/dem.ts`). Heights are scaled by
+  R_earth / R_mars so that vertical ×1 is true Mars proportion; the slider goes to ×10. Hillshade uses
+  the same tiles.
+- **3D performance** (`apps/web/src/map/terrainPerf.ts`): only terrain inside a square around where the
+  camera looks is drawn (the "Draw" setting: 2, 4, 8 or 16 km, default 8), and picking what lies under
+  the mouse ray-marches the in-memory elevation grid instead of reading pixels back from the GPU.
+  `cameraClearance.ts` keeps the camera from dipping into hillsides.
+
+### Planning window
+
+The region is too big to load whole at 2 m (330 million cells), so the data is stored as 1 km tiles
+(512 x 512 cells). The app loads the 16 m overview of everything, plus full-resolution tiles for an
+8 km square around the walk (the *planning window*, drawn as a dashed square). Routes and walk limits
+are computed on that square in two Web Workers (one for routes, one for the slower walk-limit flood);
+the window moves when the start or a stop comes within 2 km of its edge.
+
+### Code layout
+
+| Path | What |
+|---|---|
+| `config/` | Everything tunable: `area.json` (bounds, tile size), `walk-params.json`, `surface-classes.json`, `pois.json` |
+| `scripts/` | Data pipeline. Downloads and prepares everything. [Details and sources](scripts/README.md) |
+| `packages/core/` | Routing, walk model, walk-limit rings, tile decoding and the planning window. Pure TypeScript. [Equations and sources](packages/core/README.md) |
+| `apps/web/` | React + MapLibre GL app (2D and 3D). Its `vite.config.ts` also runs the Worker and serves `data/` |
+| `apps/server/` | Small Hono API as a Cloudflare Worker (`/api/areas`, `/api/config`) |
+| `data/` | Generated, not in git |
+
+### Changing things
 
 - **Different region:** edit `config/area.json` (width and height multiples of `tileSize`), run
   `pnpm data`. The current region is about the largest box inside both the DEM and the HiRISE mosaic.
