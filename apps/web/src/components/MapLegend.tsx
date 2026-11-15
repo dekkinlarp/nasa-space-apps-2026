@@ -2,6 +2,7 @@ import { useEffect, useState, type ReactNode } from "react";
 import { selectedResult, useStore } from "../store";
 import { fmtDur } from "../format";
 import { getMap, isTrackFaded, profileColor, RELAYOUT_LABELS, RING_COLOR, RING_LIMIT_COLOR } from "../map/MapView";
+import { CONTOUR_COLOR, CONTOUR_FINE_M, CONTOUR_INDEX_M, CONTOUR_MID_M } from "../map/contours";
 import { ROUTE_SLOPE_COLORS, slopeBands } from "../map/routeSlope";
 import { ChevronDownIcon } from "lucide-react";
 import { Panel } from "@/components/ui/panel";
@@ -85,7 +86,7 @@ export function MapLegend() {
   useEffect(() => {
     const id = requestAnimationFrame(() => getMap()?.fire(RELAYOUT_LABELS));
     return () => cancelAnimationFrame(id);
-  }, [open, tab, !!sel, !!rings?.length, overlays.rings.on, overlays.track.on, overlays.pois.on, !!start, stops.length > 0]);
+  }, [open, tab, !!sel, !!rings?.length, overlays.rings.on, overlays.contours.on, overlays.track.on, overlays.pois.on, !!start, stops.length > 0]);
   const b = slopeBands(params);
   const C = ROUTE_SLOPE_COLORS;
   const alts = (results ?? []).map((r, i) => ({ id: r.profile.id, color: profileColor(r.profile.id, i) })).filter((r) => r.id !== sel?.profile.id);
@@ -198,6 +199,21 @@ export function MapLegend() {
                 tip="Routes and walk limits are worked out on 2 m ground loaded for this 8 km square around the walk. Elsewhere the map shows a 16 m overview. The square follows the start and stops."
               >
                 Planning window
+              </Row>
+            </Section>
+          )}
+
+          {overlays.contours.on && !!area.overview.elevation && (
+            <Section>
+              <Row
+                sw={<LineSwatch color={CONTOUR_COLOR} width={1.3} opacity={overlays.contours.opacity} />}
+                tip={
+                  area.tiles
+                    ? `Lines of equal elevation: every ${CONTOUR_MID_M} m, heavier every ${CONTOUR_INDEX_M} m. Zoomed in on the planning window: every ${CONTOUR_FINE_M} m, heavier every ${CONTOUR_MID_M} m.`
+                    : `Lines of equal elevation: every ${CONTOUR_FINE_M} m, heavier every ${CONTOUR_MID_M} m.`
+                }
+              >
+                Contours
               </Row>
             </Section>
           )}

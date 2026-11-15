@@ -43,7 +43,7 @@ export interface GoState {
   offRouteM: number | null;
 }
 
-export const OVERLAY_IDS = ["hillshade", "elevation", "slope", "surface", "confidence", "cost", "rings", "track", "pois"] as const;
+export const OVERLAY_IDS = ["hillshade", "contours", "elevation", "slope", "surface", "confidence", "cost", "rings", "track", "pois"] as const;
 export type OverlayId = (typeof OVERLAY_IDS)[number];
 
 interface State {
@@ -126,6 +126,7 @@ export const useStore = create<State>((set, get) => ({
   marsTint: true,
   overlays: {
     hillshade: { on: false, opacity: 0.35 },
+    contours: { on: false, opacity: 0.7 },
     elevation: { on: false, opacity: 0.55 },
     slope: { on: false, opacity: 0.6 },
     surface: { on: false, opacity: 0.5 },

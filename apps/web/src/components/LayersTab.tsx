@@ -3,6 +3,7 @@ import { useStore, type OverlayId } from "../store";
 import type { LayerEntry } from "@marsmap/core";
 import { scienceLayers, scienceRamp } from "../map/MapView";
 import { pictureGroup, tintable } from "../map/imageryTiles";
+import { CONTOUR_FINE_M, CONTOUR_INDEX_M, CONTOUR_MID_M } from "../map/contours";
 import { CONFIDENCE_CLEAR, CONFIDENCE_LOW, COST_RAMP, cssGradient, ELEV_RAMP, SLOPE_STOPS } from "../map/rasters";
 import type { AreaData } from "../types";
 import { Badge } from "@/components/ui/badge";
@@ -290,6 +291,13 @@ export function LayersTab() {
           <span>{Math.round(L.elevMax)} m</span>
         </LegendTicks>
         <Source text={layer("elevation")?.source} />
+      </Row>
+      <Row id="contours" title="Contour lines" disabled={L.elevation ? undefined : "No elevation layer"}>
+        <Hint>
+          {area.tiles
+            ? `A line every ${CONTOUR_MID_M} m of elevation, heavier every ${CONTOUR_INDEX_M} m. Zoom in on the planning window for ${CONTOUR_FINE_M} m lines.`
+            : `A line every ${CONTOUR_FINE_M} m of elevation, heavier every ${CONTOUR_MID_M} m. Zoom in to see them all.`}
+        </Hint>
       </Row>
       <Row id="hillshade" title="Hillshade (from DEM)" disabled={L.elevation ? undefined : "No elevation layer"}>
         <Hint>Opacity slider sets shading strength.</Hint>

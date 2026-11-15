@@ -8,6 +8,7 @@ import { M_PER_DEG_LAT } from "../geo";
 import { sampleBest } from "../lib";
 import { confidenceUrl, costUrl, elevationUrl, SCIENCE_RAMPS, scienceUrl, slopeUrl, surfaceUrl } from "./rasters";
 import { loadFloatLayer } from "../data";
+import { CONTOUR_COLOR, CONTOUR_FINE_ZOOM, CONTOUR_MID_ZOOM, contourFeatures } from "./contours";
 import { demMaxZoom, demTilesUrl, DEM_TILE_SIZE, registerDemProtocol, setDemSource } from "./dem";
 import { IMAGERY_TILE_SIZE, imageryGroups, imageryMaxZoom, imageryTilesUrl, registerImageryProtocol, setImageryArea } from "./imageryTiles";
 import { fmtDur } from "../format";
@@ -539,6 +540,14 @@ export function MapView() {
         map.addLayer({ id: `sci-${l.id}`, type: "raster", source: `sci-${l.id}`, layout: { visibility: "none" }, paint: { "raster-fade-duration": 0, "raster-resampling": "nearest" } });
       }
       // Outline of the planning window (the square of full-resolution ground routing runs on).
+      // Contour lines: heavy every 250 m; the 50 m and then the 10 m lines join in as the map zooms in.
+      map.addSource("contours", { type: "geojson", data: EMPTY_FC, tolerance: 0.2 });
+      const contourLayer = (id: string, tier: number, minzoom: number, width: maplibregl.ExpressionSpecification | number) =>
+        map.addLayer({ id, type: "line", source: "contours", minzoom, filter: ["==", ["get", "tier"], tier], layout: { visibility: "none", "line-join": "round" }, paint: { "line-color": CONTOUR_COLOR, "line-width": width } });
+      contourLayer("contours-fine", 1, CONTOUR_FINE_ZOOM, 0.6);
+      // Among the 10 m lines the 50 m ones are the heavy ones too.
+      contourLayer("contours-mid", 2, CONTOUR_MID_ZOOM, ["step", ["zoom"], 0.6, CONTOUR_FINE_ZOOM, 1.3]);
+      contourLayer("contours-index", 3, 0, 1.3);
       map.addSource("window", { type: "geojson", data: EMPTY_FC });
       map.addLayer({ id: "window", type: "line", source: "window", paint: { "line-color": "#ffffff", "line-opacity": 0.55, "line-width": 1.2, "line-dasharray": [4, 3] } });
       map.addSource("rings", { type: "geojson", data: EMPTY_FC });
@@ -734,6 +743,10 @@ export function MapView() {
     }
     map.setLayoutProperty("hillshade", "visibility", overlays.hillshade.on ? "visible" : "none");
     map.setPaintProperty("hillshade", "hillshade-exaggeration", overlays.hillshade.opacity);
+    for (const [l, k] of [["contours-fine", 0.75], ["contours-mid", 1], ["contours-index", 1]] as const) {
+      map.setLayoutProperty(l, "visibility", overlays.contours.on ? "visible" : "none");
+      map.setPaintProperty(l, "line-opacity", overlays.contours.opacity * k);
+    }
     map.setLayoutProperty("rings-line", "visibility", overlays.rings.on ? "visible" : "none");
     map.setPaintProperty("rings-line", "line-opacity", overlays.rings.opacity);
     map.setLayoutProperty("rings-limit", "visibility", overlays.rings.on ? "visible" : "none");
@@ -747,6 +760,25 @@ export function MapView() {
     map.setPaintProperty("waypoints", "circle-opacity", overlays.track.opacity * fade);
     map.setPaintProperty("waypoints", "circle-stroke-opacity", fade);
   }, [ready, overlays, reach, area, tab, detail]);
+
+  // ---------- contour lines (traced the first time they are switched on, and again when the window moves) ----------
+  const contoursOn = overlays.contours.on;
+  const contoursFor = useRef<DisplayLayers | null | undefined>(undefined);
+  useEffect(() => {
+    const map = mapInstance;
+    const ov = area.overview;
+    if (!ready || !map || !contoursOn || !ov.elevation || contoursFor.current === detail) return;
+    // After this frame, so the switch moves before the tracing starts.
+    const timer = setTimeout(() => {
+      const whole = { grid: ov.grid, elev: ov.elevation! };
+      const win = area.tiles && detail?.elevation ? { grid: detail.grid, elev: detail.elevation } : null;
+      // An untiled area is full-resolution ground throughout.
+      const data = area.tiles ? contourFeatures(whole, win) : contourFeatures(null, whole);
+      (map.getSource("contours") as GeoJSONSource | undefined)?.setData(data);
+      contoursFor.current = detail;
+    }, 0);
+    return () => clearTimeout(timer);
+  }, [ready, contoursOn, detail, area]);
 
   // ---------- science overlays (data fetched the first time each is switched on) ----------
   const sci = useStore((s) => s.sci);
