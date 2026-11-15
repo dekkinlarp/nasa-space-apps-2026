@@ -14,6 +14,9 @@ import { Panel } from "@/components/ui/panel";
 import { Segmented } from "@/components/ui/segmented";
 import { cn } from "@/lib/utils";
 
+/** On the bottom-sheet layout the Go panel takes the row and replaces the POI card and the hover readout. */
+const GO_PANEL = "go-panel w-80 max-w-full flex-none sheet:w-auto sheet:flex-1";
+
 /** One reading in the Go panel. */
 function Reading({ label, bad, children }: { label: string; bad?: boolean; children: ReactNode }) {
   return (
@@ -99,7 +102,7 @@ export function GoPanel() {
   if (go.mode === "off") return null;
   if (!r || !tl || !rp) {
     return (
-      <Panel size="lg" className="go-panel grid gap-2 p-4">
+      <Panel size="lg" className={cn(GO_PANEL, "grid gap-2 p-4")}>
         <div className="text-sm">No route to follow.</div>
         <Button variant="secondary" onClick={() => setGo({ mode: "off" })}>
           Close
@@ -140,7 +143,7 @@ export function GoPanel() {
   const brg = bearingDeg(here, nextPt);
 
   return (
-    <Panel size="lg" className="go-panel p-4 phone:p-3">
+    <Panel size="lg" className={cn(GO_PANEL, "p-4 phone:p-3")}>
       <div className="flex items-center justify-between">
         <Badge variant="sim">{go.mode === "sim" ? "Simulated position" : "Your location, mapped onto Mars"}</Badge>
         <FollowToggle />

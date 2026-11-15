@@ -26,7 +26,7 @@ export function HoverReadout() {
   return (
     <Panel
       className={cn(
-        "readout pointer-events-none max-w-full min-w-0 px-3 py-2 text-sm",
+        "readout pointer-events-none max-w-full min-w-0 px-3 py-2 text-sm sheet:in-[.app:has(.go-panel)]:hidden",
         !hover && "text-[11.5px] text-muted-foreground",
         // No hover on touch screens: drop the "hover the map" prompt, keep the values of the last tap.
         !hover && !picking && "[@media(hover:none)]:hidden",

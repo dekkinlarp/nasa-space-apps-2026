@@ -350,10 +350,35 @@ export function poiShortName(p: Poi): string {
   return s.charAt(0).toUpperCase() + s.slice(1);
 }
 
+/*
+ * Markers are built by hand for MapLibre, so their styles are utility strings rather than JSX.
+ * The class names in front (poi-pin, poi-label, stop-marker…) are hooks the label placement reads,
+ * and the pin's state classes (selected, in-plan, flip, lbl-off) drive the group-[…]/pin variants.
+ * Crisp shapes with a dark keyline and a light ring, legible on bright and dark ground.
+ */
+const POI_FILL: Record<string, string> = {
+  "drill-site": "bg-poi-drill-site",
+  "science-target": "bg-poi-science-target",
+  start: "bg-poi-start",
+  viewpoint: "bg-poi-viewpoint",
+};
+/** MapLibre makes markers position: absolute, which also anchors the label. */
+const POI_PIN = "poi-pin group/pin flex size-3.5 cursor-pointer items-center gap-1.5 hover:z-3 [&.selected]:z-3";
+const POI_DOT = "block size-3 rounded-full border-[1.5px] border-well shadow-[0_0_0_1px_rgba(255,255,255,0.75)] transition-transform duration-[120ms] ease-out-quint group-[:is(:hover,.selected)]/pin:scale-120 coarse:size-4";
+/** One label style for everything named on the map: 11px semibold, white, dark halo. */
+const MAP_LABEL = "text-[11px]/4 font-semibold whitespace-nowrap";
+/** Sits beside the dot (further out once the pin carries a stop number), flips to the left near an edge,
+    hides when it would collide, and becomes a boxed full name on hover or when selected. */
+const POI_LABEL = `poi-label ${MAP_LABEL} pointer-events-none absolute -top-px left-[19px] text-white text-shadow-[0_0_2px_#000,0_0_4px_#000,0_1px_6px_#000] group-[.in-plan]/pin:left-[23px] group-[.flip]/pin:right-[19px] group-[.flip]/pin:left-auto group-[.in-plan.flip]/pin:right-[23px] group-[.in-plan.flip]/pin:left-auto group-[.lbl-off:not(:hover,.selected)]/pin:invisible group-[:is(:hover,.selected)]/pin:-top-0.5 group-[:is(:hover,.selected)]/pin:rounded-sm group-[:is(:hover,.selected)]/pin:border group-[:is(:hover,.selected)]/pin:border-input group-[:is(:hover,.selected)]/pin:bg-[rgba(15,12,11,0.9)] group-[:is(:hover,.selected)]/pin:px-1.5 group-[:is(:hover,.selected)]/pin:text-shadow-none [.lowzoom_&]:hidden [.lowzoom_.poi-pin:hover_&]:inline`;
+const STOP_MARKER = "stop-marker grid size-[22px] cursor-grab place-items-center rounded-lg border-[1.5px] text-[11px] font-semibold coarse:size-[30px] coarse:text-base";
+const STOP_NUMBER = `${STOP_MARKER} border-white bg-well text-white shadow-[0_0_0_1px_rgba(0,0,0,0.6)]`;
+const STOP_START = `${STOP_MARKER} border-well bg-white text-well shadow-[0_0_0_1px_rgba(255,255,255,0.8)]`;
+const RING_LABEL = `ring-label ${MAP_LABEL} pointer-events-none cursor-help rounded-sm border bg-[rgba(15,17,20,0.86)] px-[5px]`;
+
 function poiEl(p: Poi): HTMLElement {
   const el = document.createElement("div");
-  el.className = `poi-pin poi-${p.type}`;
-  el.innerHTML = `<span class="poi-dot"></span><span class="poi-label"><span class="pl-short"></span><span class="pl-full"></span></span>`;
+  el.className = POI_PIN;
+  el.innerHTML = `<span class="${POI_DOT} ${POI_FILL[p.type] ?? ""} ${p.type === "start" ? "rounded-[2px]" : ""}"></span><span class="${POI_LABEL}"><span class="pl-short group-[:is(:hover,.selected)]/pin:hidden"></span><span class="pl-full hidden group-[:is(:hover,.selected)]/pin:inline"></span></span>`;
   (el.querySelector(".pl-short") as HTMLElement).textContent = poiShortName(p);
   (el.querySelector(".pl-full") as HTMLElement).textContent = p.name;
   el.title = p.name;
@@ -757,13 +782,13 @@ export function MapView() {
       const outline = r.coordinates.filter((poly) => poly[0] && ringAreaM2(poly[0]) >= MIN_RING_PART_M2).flatMap((poly) => poly[0]!);
       if (!outline.length) continue;
       const el = document.createElement("div");
-      el.className = "ring-label";
+      el.className = RING_LABEL;
       const isLimit = r.kind ? r.kind === "limit" : r.budgetS === Math.max(...rings.map((x) => x.budgetS));
       el.textContent = isLimit ? `Limit${r.limitedBy ? ` · ${r.limitedBy}` : ""}` : fmtDur(r.budgetS);
       el.title = isLimit
         ? `Walk limit: the farthest you can go, work one stop and still get home with the reserve intact on time, energy and oxygen${r.limitedBy ? `. Here ${r.limitedBy} runs out first` : ""}`
         : `Reachable and back to the start in ${fmtDur(r.budgetS)} of walking (round trip)`;
-      if (isLimit) el.classList.add("limit");
+      el.className += isLimit ? " border-warn/55 text-warn" : " border-input text-ink-2";
       ringMarkers.current.push(new maplibregl.Marker({ element: el, anchor: "bottom" }).setLngLat(outline[0] as [number, number]).addTo(map));
       labels.push({ el, outline });
     }
@@ -839,7 +864,7 @@ export function MapView() {
     const ms: maplibregl.Marker[] = [];
     if (start) {
       const el = document.createElement("div");
-      el.className = "stop-marker start-marker";
+      el.className = STOP_START;
       el.textContent = "S";
       el.title = `Start: ${start.name.replace(/^start:\s*/i, "")} (drag to move)`;
       const m = new maplibregl.Marker({ element: el, draggable: true }).setLngLat(start.lonLat).addTo(map);
@@ -851,7 +876,7 @@ export function MapView() {
     }
     stops.forEach((s, i) => {
       const el = document.createElement("div");
-      el.className = "stop-marker";
+      el.className = STOP_NUMBER;
       el.textContent = String(i + 1);
       el.title = `${i + 1}. ${s.name} (drag to move)`;
       const m = new maplibregl.Marker({ element: el, draggable: true }).setLngLat(s.lonLat).addTo(map);
@@ -980,7 +1005,7 @@ export function MapView() {
 
   return (
     <>
-      <div ref={containerRef} className="map" />
+      <div ref={containerRef} className="absolute inset-0 touch-none" />
       {popupEl && mapClick && createPortal(<ClickMenu lonLat={mapClick} />, popupEl)}
     </>
   );

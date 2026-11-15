@@ -42,14 +42,19 @@ export function MapSafety() {
     const map = getMap();
     if (!map || !pnr) return;
     const el = document.createElement("div");
-    el.className = `pnr-marker ${pnr.kind}`;
+    const isPnr = pnr.kind === "pnr";
+    el.className = "pnr-marker pointer-events-auto flex cursor-help flex-col items-center";
     const label = pnr.kind === "pnr" ? (pnr.atStop ? "Leave stop to turn back" : "Turn back here") : "Tightest point";
     const detail =
       pnr.kind === "pnr"
         ? `Point of no return: turn back by ${fmtDur(pnr.elapsedS)} elapsed${pnr.atStop ? " (leave this stop by then)" : ""}.`
         : `Tightest point of the walk: turning back here still leaves ${fmtDur(pnr.marginS)} spare.`;
-    if (pnr.atStop) el.classList.add("at-stop");
-    el.innerHTML = `<div class="pnr-chip"><span class="pnr-ico">⟲</span><b></b></div><div class="pnr-stem"></div><div class="pnr-pin"></div>`;
+    // A chip on a stem with a diamond at the spot; at a stop the stop's own marker is the spot.
+    el.innerHTML =
+      `<div class="flex items-center gap-[5px] rounded-sm border bg-[rgba(15,12,11,0.9)] pr-[7px] pl-[5px] whitespace-nowrap shadow-[0_2px_8px_rgba(0,0,0,0.6)] ${isPnr ? "border-warn" : "border-[rgba(111,212,138,0.7)]"}">` +
+      `<span class="text-[12px]/4 font-bold ${isPnr ? "text-warn" : "text-ok"}">⟲</span><b class="text-[11px]/4 font-semibold ${isPnr ? "text-[#ffe7a8]" : "text-[#c9f0d3]"}"></b></div>` +
+      `<div class="h-2 w-0.5 ${isPnr ? "bg-warn" : "bg-ok"}"></div>` +
+      (pnr.atStop ? "" : `<div class="-mb-[5px] size-2.5 rotate-45 border-2 border-[#120c0a] ${isPnr ? "bg-warn shadow-[0_0_0_1.5px_var(--warn),0_2px_6px_rgba(0,0,0,0.7)]" : "bg-ok shadow-[0_0_0_1.5px_var(--ok),0_2px_6px_rgba(0,0,0,0.7)]"}"></div>`);
     el.querySelector("b")!.textContent = label;
     el.title = `${detail}\n\n${PNR_METHOD_NOTE}`;
     const m = new maplibregl.Marker({ element: el, anchor: "bottom", offset: pnr.atStop ? [0, -12] : [0, 0] }).setLngLat(pnr.point).addTo(map);

@@ -23,15 +23,19 @@
 @import "shadcn/tailwind.css";
 /* MapLibre's own stylesheet goes in the base layer so the app's map styles below can override it. */
 @import "maplibre-gl/dist/maplibre-gl.css" layer(base);
-/* Map, markers and shell layout: DOM built by MapLibre or by hand, plus :has()-driven layout. */
-@import "./styles/map.css" layer(components);
+/* The only plain CSS left: MapLibre's own controls and popups, and the walker's animated SVG rig. */
+@import "./styles/maplibre.css" layer(components);
 @import "./styles/walker.css" layer(components);
 
 @custom-variant dark (&:is(.dark *));
-/* The side panel turns into a bottom sheet under 860 px; phones are under 600 px. */
+/* The side panel turns into a bottom sheet under 860 px; phones are under 600 px.
+   Declared widest first: a later variant wins, so the narrower screen overrides the wider one. */
+@custom-variant compact (@media (max-width: 1100px));
+@custom-variant wide (@media (width > 860px));
 @custom-variant sheet (@media (max-width: 860px));
 @custom-variant phone (@media (max-width: 600px));
-@custom-variant compact (@media (max-width: 1100px));
+/* Short landscape phones. */
+@custom-variant squat (@media (max-width: 860px) and (max-height: 480px));
 /* Fingers need bigger targets than a mouse pointer. */
 @custom-variant coarse (@media (pointer: coarse));
 

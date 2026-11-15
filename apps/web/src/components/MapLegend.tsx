@@ -97,7 +97,7 @@ export function MapLegend() {
   const trackFaded = isTrackFaded(tab, overlays.track);
 
   return (
-    <Panel className={cn("map-legend text-sm", open && "open")}>
+    <Panel className={cn("map-legend scrollbar-thin max-h-full flex-none overflow-y-auto text-sm", open ? "w-[164px] sheet:absolute sheet:z-4 sheet:max-h-[60%]" : "w-auto")}>
       <button
         className="caps flex h-9 w-full cursor-pointer items-center justify-between gap-2 px-3 text-foreground hover:text-foreground"
         onClick={toggle}

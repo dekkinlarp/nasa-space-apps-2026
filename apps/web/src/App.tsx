@@ -16,6 +16,7 @@ import { Slider } from "@/components/ui/slider";
 import { Spinner } from "@/components/ui/spinner";
 import { Tabs, TabsContent, TabsList, TabsTrigger } from "@/components/ui/tabs";
 import { Starfield } from "./map/Starfield";
+import { cn } from "@/lib/utils";
 import { ConditionsBar, SiteHeader } from "./components/SiteHeader";
 import { ExploreTab } from "./components/ExploreTab";
 import { PlanTab } from "./components/PlanTab";
@@ -38,6 +39,27 @@ const TABS: { id: Tab; label: string }[] = [
 
 /** Keep in step with --panel-ms in index.css. */
 export const PANEL_MS = 380;
+
+/**
+ * The shell is a full-window map with floating chrome. Three custom properties carry the panel state to
+ * everything that has to clear it (the stage, the map controls, the image credit):
+ * --stage-left is where the stage starts, --sheet-h the height of the bottom sheet, and --dock the height
+ * of the elevation profile, which the root reads off its own descendants with has-[…].
+ */
+const SHELL =
+  "app relative h-full overflow-hidden [--dock:0px] has-[.profile:not(.collapsed)]:[--dock:calc(188px+var(--gap))] has-[.profile.collapsed]:[--dock:calc(40px+var(--gap))] sheet:[--stage-left:max(var(--gap),env(safe-area-inset-left))] sheet:has-[.profile:not(.collapsed)]:[--dock:calc(160px+var(--gap))]";
+/** Phones and short landscape screens give the profile's room to the open sheet. */
+const SHELL_OPEN =
+  "sheet-open [--sheet-h:0px] [--stage-left:calc(var(--side-w)+var(--gap)*2)] sheet:[--sheet-h:46dvh] phone:[--dock:0px]! phone:[--sheet-h:50dvh] squat:[--dock:0px]! squat:[--sheet-h:56dvh]";
+const SHELL_CLOSED = "sheet-closed [--sheet-h:0px] [--stage-left:var(--gap)] sheet:[--sheet-h:calc(58px+env(safe-area-inset-bottom))]";
+
+/** The side panel leaves and returns by the left edge; under 860 px it is a bottom sheet that folds to its tab bar. */
+const SIDE =
+  "glass-thick absolute top-[max(var(--gap),env(safe-area-inset-top))] bottom-(--gap) left-[max(var(--gap),env(safe-area-inset-left))] z-3 min-h-0 w-(--side-w) gap-0 overflow-hidden rounded-2xl shadow-float [transition:translate_var(--panel-ms)_var(--spring),visibility_0s] sheet:inset-x-0 sheet:top-auto sheet:bottom-0 sheet:h-(--sheet-h) sheet:w-auto sheet:rounded-b-none sheet:border-b-0 sheet:pb-[env(safe-area-inset-bottom)] sheet:[transition:height_var(--panel-ms)_var(--spring)]";
+const SIDE_CLOSED = "wide:invisible wide:-translate-x-[calc(100%+var(--gap)*2)] wide:[transition:translate_var(--panel-ms)_var(--spring),visibility_0s_linear_var(--panel-ms)]";
+
+const TAB_BODY =
+  "tab-body scrollbar-thin overflow-y-auto px-4 pt-4 pb-10 text-base sheet:touch-pan-y sheet:overscroll-contain sheet:pt-3 sheet:pr-[max(16px,env(safe-area-inset-right))] sheet:pb-7 sheet:pl-[max(16px,env(safe-area-inset-left))] sheet:in-[.sheet-closed]:hidden";
 
 const narrowScreen = () => typeof matchMedia === "function" && matchMedia("(max-width: 860px)").matches;
 
@@ -94,7 +116,7 @@ function ViewControls() {
   const set = useStore((s) => s.set);
   const hasElev = useStore((s) => !!s.area?.overview.elevation);
   return (
-    <div className="flex items-center gap-2">
+    <div className="pointer-events-auto flex items-center gap-2">
       {view3d && (
         <Panel className="flex h-11 items-center gap-3 px-4 text-ink-2 phone:hidden">
           <span className="caps whitespace-nowrap">Vertical ×{ex}</span>
@@ -222,20 +244,20 @@ export function App() {
     );
 
   return (
-    <div className={`app ${sheetOpen ? "sheet-open" : "sheet-closed"}`}>
+    <div className={cn(SHELL, sheetOpen ? SHELL_OPEN : SHELL_CLOSED)}>
       {/* The map is the whole window; everything else floats over it. */}
-      <div className="map-layer">
+      <div className="absolute inset-0 bg-background">
         <Starfield />
         <MapView />
         <GoWalker />
-        <div className="map-credit">{area.manifest.imagery.find((i) => pictureGroup(i) === baseImagery)?.source ?? ""}</div>
+        <div className="pointer-events-none absolute bottom-[calc(var(--sheet-h)+2px)] left-1/2 max-w-[60%] -translate-x-1/2 truncate text-[9.5px] text-white/50 text-shadow-[0_1px_2px_#000] in-[.app:has(.profile)]:hidden">{area.manifest.imagery.find((i) => pictureGroup(i) === baseImagery)?.source ?? ""}</div>
       </div>
 
       <Tabs
         value={tab}
         onValueChange={(v) => set({ tab: v as Tab })}
         render={<aside ref={sideRef} />}
-        className="side glass-thick gap-0 rounded-2xl shadow-float sheet:rounded-b-none sheet:border-b-0"
+        className={cn(SIDE, !sheetOpen && SIDE_CLOSED)}
       >
         <SiteHeader onCollapse={() => setSheetOpen(false)} />
         <nav
@@ -269,25 +291,25 @@ export function App() {
             aria-expanded={sheetOpen}
             onClick={() => setSheetOpen(!sheetOpen)}
           >
-            <ChevronLeftIcon className="size-4 transition-transform" />
+            <ChevronLeftIcon className={cn("size-4 transition-transform", sheetOpen ? "sheet:-rotate-90" : "sheet:rotate-90")} />
           </Button>
         </nav>
-        <TabsContent value="explore" className="tab-body text-base">
+        <TabsContent value="explore" className={TAB_BODY}>
           <ExploreTab />
         </TabsContent>
-        <TabsContent value="plan" className="tab-body text-base">
+        <TabsContent value="plan" className={TAB_BODY}>
           <PlanTab />
         </TabsContent>
-        <TabsContent value="layers" className="tab-body text-base">
+        <TabsContent value="layers" className={TAB_BODY}>
           <LayersTab />
         </TabsContent>
       </Tabs>
 
       {/* The stage is the part of the map the side panel leaves visible. Floating pieces are laid out in it. */}
-      <div className="stage">
-        <div className="stage-top">
+      <div className="pointer-events-none absolute top-[max(var(--gap),env(safe-area-inset-top))] right-[max(var(--gap),env(safe-area-inset-right))] bottom-[calc(var(--sheet-h)+var(--gap))] left-(--stage-left) z-2 flex min-h-0 flex-col gap-(--gap) transition-[left] duration-(--panel-ms) ease-spring sheet:transition-[bottom]">
+        <div className="flex flex-none items-start gap-2 sheet:relative">
           {!sheetOpen && (
-            <Button variant="glass" size="icon-xl" className="sheet:hidden" aria-label="Show sidebar" title="Show sidebar" aria-expanded={false} onClick={() => setSheetOpen(true)}>
+            <Button variant="glass" size="icon-xl" className="pointer-events-auto sheet:hidden" aria-label="Show sidebar" title="Show sidebar" aria-expanded={false} onClick={() => setSheetOpen(true)}>
               <SidebarIcon on={false} />
             </Button>
           )}
@@ -295,19 +317,20 @@ export function App() {
           <span className="flex-1" />
           <ViewControls />
         </div>
-        <div className="stage-mid">
+        <div className="flex min-h-0 flex-1 items-start justify-end sheet:relative">
           <MapLegend />
           <span className="flex-1" />
-          <div className="card-slot">{poi ? <PoiCard poi={poi} /> : wp ? <WaypointCard /> : null}</div>
+          <div className="card-slot flex max-h-[calc(100%-96px)] w-[340px] max-w-full flex-col compact:w-[300px] sheet:max-h-full sheet:w-full sheet:in-[.app:has(.go-panel)]:hidden">{poi ? <PoiCard poi={poi} /> : wp ? <WaypointCard /> : null}</div>
         </div>
-        <div className="stage-bottom">
-          <div className="stage-row">
+        <div className="flex min-w-0 flex-none flex-col gap-(--gap)">
+          {/* The right padding leaves the corner to the zoom and compass buttons. */}
+          <div className="flex min-w-0 items-end gap-2 pr-12 sheet:pr-[52px]">
             <HoverReadout />
             <span className="grow" />
             <MapSafety />
             <GoPanel />
           </div>
-          <div className="dock" ref={dockRef}>
+          <div className="empty:hidden" ref={dockRef}>
             {hasRoute && <ProfileStrip />}
           </div>
         </div>

@@ -1,0 +1,30 @@
+/*
+ * MapLibre builds its own controls and popups, so they cannot carry utility classes. This file restyles
+ * that DOM to match the app's glass panels. Everything the app itself renders, React or hand-built
+ * markers, is styled with Tailwind utilities where the element is created.
+ * Imported into the components layer by index.css, after MapLibre's stylesheet in the base layer.
+ */
+
+/* Zoom, compass and scale: bottom-right, lifted clear of the bottom sheet and the profile dock. */
+.maplibregl-ctrl-bottom-right { right: max(var(--gap), env(safe-area-inset-right)) !important; bottom: calc(var(--sheet-h) + var(--dock) + var(--gap)) !important; transition: bottom var(--panel-ms) var(--spring); }
+.maplibregl-ctrl-group { background: var(--glass) !important; -webkit-backdrop-filter: var(--blur); backdrop-filter: var(--blur); border: 1px solid var(--glass-edge); border-radius: 12px !important; box-shadow: var(--float-sm) !important; overflow: hidden; }
+.maplibregl-ctrl-group button { width: 36px !important; height: 36px !important; }
+.maplibregl-ctrl-group button + button { border-top: 1px solid var(--seam-2) !important; }
+.maplibregl-ctrl-group button:not(:disabled):hover { background-color: rgba(255, 255, 255, 0.1) !important; }
+.maplibregl-ctrl-group button .maplibregl-ctrl-icon { filter: invert(0.85); }
+.maplibregl-ctrl-bottom-right .maplibregl-ctrl { margin: 8px 0 0 0; }
+.maplibregl-ctrl-scale { background: rgba(15, 17, 20, 0.6) !important; color: var(--ink-2) !important; border: 1px solid var(--ink-3) !important; border-top: 0 !important; font: 10px/14px var(--font) !important; padding: 0 4px !important; }
+
+/* The click menu's popup: the content itself is React (ClickMenu). */
+.click-popup .maplibregl-popup-content { padding: 10px 12px; color: var(--ink); font: 13.5px/1.45 var(--font); background: var(--glass); -webkit-backdrop-filter: var(--blur); backdrop-filter: var(--blur); border: 1px solid var(--glass-edge); border-radius: 12px; box-shadow: var(--float-sm); }
+.click-popup.maplibregl-popup-anchor-bottom .maplibregl-popup-tip, .click-popup.maplibregl-popup-anchor-bottom-left .maplibregl-popup-tip, .click-popup.maplibregl-popup-anchor-bottom-right .maplibregl-popup-tip { border-top-color: var(--hull); }
+.click-popup.maplibregl-popup-anchor-top .maplibregl-popup-tip, .click-popup.maplibregl-popup-anchor-top-left .maplibregl-popup-tip, .click-popup.maplibregl-popup-anchor-top-right .maplibregl-popup-tip { border-bottom-color: var(--hull); }
+.click-popup.maplibregl-popup-anchor-left .maplibregl-popup-tip { border-right-color: var(--hull); }
+.click-popup.maplibregl-popup-anchor-right .maplibregl-popup-tip { border-left-color: var(--hull); }
+.click-popup .maplibregl-popup-close-button { color: var(--ink-3); font-size: 16px; width: 24px; height: 24px; border-radius: 8px; }
+.click-popup .maplibregl-popup-close-button:hover { color: var(--ink); background: var(--hull-3); }
+
+@media (pointer: coarse) {
+  .maplibregl-ctrl-group button { width: 44px !important; height: 44px !important; }
+  .maplibregl-popup-close-button { min-width: 36px; min-height: 36px; }
+}

@@ -159,7 +159,14 @@ export function ProfileStrip() {
   };
 
   return (
-    <Panel size="lg" className={cn("profile overflow-hidden", !open && "collapsed")}>
+    <Panel
+      size="lg"
+      className={cn(
+        // Folds down to its title bar, where the same button brings it back. Phones give its room to the open sheet.
+        "profile flex flex-none flex-col overflow-hidden transition-[height] duration-(--panel-ms) ease-spring phone:in-[.sheet-open]:hidden squat:in-[.sheet-open]:hidden",
+        open ? "h-[188px] sheet:h-40" : "collapsed h-10",
+      )}
+    >
       <div className="caps flex h-10 flex-none items-center gap-1.5 pr-2 pl-4 text-ink-2">
         <span>Elevation</span>
         <span className="font-normal tracking-normal text-muted-foreground normal-case">
@@ -181,7 +188,7 @@ export function ProfileStrip() {
           <BottomPaneIcon on={open} />
         </Button>
       </div>
-      <div className="profile-body flex min-h-0 flex-1">
+      <div className={cn("flex min-h-0 flex-1", !open && "invisible [transition:visibility_0s_linear_var(--panel-ms)]")}>
         <div className="relative min-w-0 flex-1" ref={ref}>
           <svg className="block cursor-crosshair" width={w} height={H} onMouseMove={onMove} onMouseLeave={onLeave}>
             {geom.ticks.map((t) => (
