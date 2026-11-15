@@ -470,7 +470,8 @@ export function App() {
           <div className="flex min-w-0 items-end gap-2 sheet:flex-wrap-reverse sheet:gap-y-0">
             <span className="grow" />
             <MapSafety planVisible={sheetOpen && tab === "plan"} />
-            {narrow && <GoPanel />}
+            {/* On the sheet a walk opens as one row; unfolding it folds the sheet, so the two are never both open. */}
+            {narrow && <GoPanel startFolded onExpand={foldSheet} />}
             <ViewControls />
           </div>
           {/* The foot of the map: the elevation profile when it is open, then the status bar, which carries its toggle.

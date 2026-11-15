@@ -396,7 +396,9 @@ muted; no colour is added. A route that does not fit says so in red under its na
 The mode as plain text in the Sim colour, a Follow toggle and a close button; the clock; one line for what
 is happening and, while the crew works at a stop, their task under it. Then the distance and bearing to
 the next point, what is left of time, energy and oxygen on segmented meters, and the walk home. Beside the
-clock is the headline: what is left of the tightest budget.
+clock is the headline: what is left of the tightest budget. It folds to a single row: clock, status, play,
+follow, unfold, stop. On the bottom-sheet layout every walk opens folded, and unfolding it folds the sheet, so
+the full panel and the open sheet are never both over the map.
 
 ### Segmented meter
 What is left of one budget, read like a battery (`SegMeter`, in `MiniBar`): a sunk track of 14 or 20

@@ -23,7 +23,11 @@ const SPEEDS = [30, 120, 600, 1800];
 const OFF_ROUTE_M = 25;
 const COMPASS = ["N", "NE", "E", "SE", "S", "SW", "W", "NW"];
 
-export function GoPanel() {
+/**
+ * `startFolded`: each walk opens as the single row (the bottom-sheet layout, where the full panel and the open
+ * sheet together leave no map). `onExpand` is told when the planner unfolds it, so the sheet can make room.
+ */
+export function GoPanel({ startFolded = false, onExpand }: { startFolded?: boolean; onExpand?: () => void } = {}) {
   const go = useStore((s) => s.go);
   const setGo = useStore((s) => s.setGo);
   const results = useStore((s) => s.results);
@@ -40,7 +44,11 @@ export function GoPanel() {
   const names = pointNames(start, stops, returnToStart);
   const raf = useRef<number>(0);
   // Folded, the panel is a single row.
-  const [collapsed, setCollapsed] = useState(false);
+  const [collapsed, setCollapsed] = useState(startFolded);
+  const walking = go.mode !== "off";
+  useEffect(() => {
+    if (walking) setCollapsed(startFolded);
+  }, [walking, startFolded]);
 
   // ---------- simulated walk ----------
   useEffect(() => {
@@ -172,7 +180,10 @@ export function GoPanel() {
           variant="ghost"
           size="icon-xs"
           className="text-muted-foreground"
-          onClick={() => setCollapsed(!collapsed)}
+          onClick={() => {
+            if (collapsed) onExpand?.();
+            setCollapsed(!collapsed);
+          }}
           aria-expanded={!collapsed}
           title={collapsed ? "Show details" : "Hide details"}
           aria-label={collapsed ? "Show walk details" : "Hide walk details"}
