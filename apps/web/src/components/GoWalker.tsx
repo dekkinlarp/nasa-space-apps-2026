@@ -20,6 +20,7 @@ import { GROUND_SVG, WALKER_SVG, bootPrintImage } from "./walkerArt";
 import { cycleSeconds, headingAlong, lerpAngle, meanSpeed, routePrints, trackPrints, walkedLine, walkerFrame, type Print, type WalkerState } from "./walkerMath";
 import { LocateFixedIcon, LocateIcon } from "lucide-react";
 import { MAP_LABEL_BOX, MAP_LABEL_MARK, MAP_LABEL_TONE } from "../map/mapLabel";
+import { mapPalette } from "../map/mapPalette";
 import { Button } from "@/components/ui/button";
 import { cn } from "@/lib/utils";
 
@@ -41,11 +42,11 @@ function ensureLayers(map: MLMap) {
   if (map.getSource("go-trail")) return;
   const img = bootPrintImage();
   if (img && !map.hasImage(BOOT_IMG)) map.addImage(BOOT_IMG, img, { pixelRatio: 2 });
-  const before = map.getLayer("cursor-halo") ? "cursor-halo" : undefined;
+  const before = map.getLayer("route-ticks") ? "route-ticks" : map.getLayer("cursor-halo") ? "cursor-halo" : undefined;
   map.addSource("go-done", { type: "geojson", data: EMPTY_FC });
   map.addSource("go-trail", { type: "geojson", data: EMPTY_FC });
-  map.addLayer({ id: "go-done-glow", type: "line", source: "go-done", layout: { "line-join": "round", "line-cap": "round" }, paint: { "line-color": "#36d1c4", "line-width": 9, "line-opacity": 0.22, "line-blur": 3 } }, before);
-  map.addLayer({ id: "go-done", type: "line", source: "go-done", layout: { "line-join": "round", "line-cap": "round" }, paint: { "line-color": "#e9fffc", "line-width": 2.2, "line-opacity": 0.95 } }, before);
+  // The walked part of the route: one solid line in the simulated-position colour, over the route's own casing.
+  map.addLayer({ id: "go-done", type: "line", source: "go-done", layout: { "line-join": "round", "line-cap": "round" }, paint: { "line-color": mapPalette().sim, "line-width": 3 } }, before);
   map.addLayer(
     {
       id: "go-trail",
@@ -104,7 +105,7 @@ export function GoWalker() {
     // ----- DOM -----
     const el = document.createElement("div");
     el.className = "walker idle";
-    el.innerHTML = `<div class="w-label ${MAP_LABEL_BOX} ${MAP_LABEL_TONE.strong}">${LABEL_HTML}</div><div class="w-shadow"></div><div class="w-flip"><div class="w-lean">${WALKER_SVG}</div></div>`;
+    el.innerHTML = `<div class="w-label"><div class="${MAP_LABEL_BOX} ${MAP_LABEL_TONE.strong} gap-[5px]">${LABEL_HTML}</div></div><div class="w-shadow"></div><div class="w-flip"><div class="w-lean">${WALKER_SVG}</div></div>`;
     const lean = el.querySelector(".w-lean") as HTMLElement;
     const l1 = el.querySelector(".w-l1") as HTMLElement;
     const ringArc = el.querySelector(".w-ring circle:last-child") as SVGCircleElement;
@@ -253,9 +254,17 @@ export function GoWalker() {
 }
 
 /** "Follow" toggle for the Go panel: an ordinary pressed-state toggle. It carries no status colour of its own. */
-export function FollowToggle() {
+/** `compact` is the icon alone, for the folded Go panel. */
+export function FollowToggle({ compact = false }: { compact?: boolean }) {
   const follow = useWalkerUi((s) => s.follow);
   const setFollow = useWalkerUi((s) => s.setFollow);
+  const title = follow ? "The camera follows the walker" : "The camera stays put";
+  if (compact)
+    return (
+      <Button variant="ghost" size="icon-xs" className={follow ? "text-foreground" : "text-muted-foreground"} aria-pressed={follow} aria-label="Follow the walker" onClick={() => setFollow(!follow)} title={title}>
+        {follow ? <LocateFixedIcon aria-hidden /> : <LocateIcon aria-hidden />}
+      </Button>
+    );
   return (
     <Button
       variant="secondary"

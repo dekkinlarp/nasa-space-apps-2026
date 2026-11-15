@@ -256,7 +256,7 @@ function ViewControls() {
             { value: "2d", label: "2D" },
             { value: "3d", label: "3D", disabled: !hasElev },
           ]}
-          className="h-full border-0 bg-transparent p-0"
+          className="h-full rounded-lg border-0 bg-transparent p-0 inset-shadow-none"
           itemClassName="h-full rounded-lg px-4 text-base coarse:h-full"
         />
       </Panel>
@@ -413,7 +413,7 @@ export function App() {
           className="tabs flex flex-none gap-2 border-b px-4 pb-3 sheet:pt-2.5 sheet:pr-[max(var(--gutter),env(safe-area-inset-right))] sheet:pl-[max(var(--gutter),env(safe-area-inset-left))] sheet:in-[.sheet-closed]:border-b-0"
           aria-label="Sections"
         >
-          <TabsList className="relative flex-1 gap-0.5 rounded-lg bg-white/6 p-0.5 group-data-horizontal/tabs:h-auto">
+          <TabsList className="relative flex-1 gap-0.5 rounded-lg border border-input bg-black/25 p-0.5 inset-shadow-sunk group-data-horizontal/tabs:h-auto">
             <SlidingThumb className="bg-white/16" />
             {TABS.map((t) => (
               <TabsTrigger
@@ -459,16 +459,18 @@ export function App() {
               <SidebarIcon on={false} />
             </Button>
           )}
+          {/* The Go panel: top left here, out of the way of the route and the view controls. */}
+          {!narrow && <GoPanel />}
           <HoverReadout />
           <span className="flex-1 sheet:hidden" />
           <div className="card-slot relative z-5 flex max-h-[calc(100%-144px)] w-[340px] max-w-full flex-col mr-12 compact:w-[300px] coarse:mr-14 sheet:mr-0 sheet:max-h-full phone:mr-12 phone:max-h-[62%] phone:w-auto phone:flex-1 sheet:in-[.app:has(.go-panel)]:hidden">{poi ? <PoiCard poi={poi} /> : wp ? <WaypointCard /> : null}</div>
         </div>
         <div className="flex min-w-0 flex-none flex-col gap-(--gap)">
-          {/* The verdict or suit meter and the Go panel, with the view controls at the right end. On the bottom-sheet layout the view controls take a line of their own, above. */}
+          {/* The verdict or suit meter, with the view controls at the right end; on the bottom-sheet layout the Go panel too. On the bottom-sheet layout the view controls take a line of their own, above. */}
           <div className="flex min-w-0 items-end gap-2 sheet:flex-wrap-reverse sheet:gap-y-0">
             <span className="grow" />
             <MapSafety planVisible={sheetOpen && tab === "plan"} />
-            <GoPanel />
+            {narrow && <GoPanel />}
             <ViewControls />
           </div>
           {/* The foot of the map: the elevation profile when it is open, then the status bar, which carries its toggle.

@@ -3,7 +3,8 @@ import { ZoomHomeControl } from "./zoomHomeControl";
 import { useEffect, useRef, useState } from "react";
 import { createPortal } from "react-dom";
 import maplibregl, { type GeoJSONSource, type ImageSource, type Map as MLMap } from "maplibre-gl";
-import { MAP_LABEL, MAP_LABEL_BOX, MAP_LABEL_HALO, MAP_LABEL_TONE, mapLabelDot, STOP_BADGE, STOP_BADGE_NUMBER, STOP_BADGE_START } from "./mapLabel";
+import { MAP_LABEL_BASE, MAP_LABEL_BOX, MAP_LABEL_POST, MAP_LABEL_TONE, mapLabelDot, STOP_BADGE, STOP_BADGE_NUMBER, STOP_BADGE_START } from "./mapLabel";
+import { mapPalette } from "./mapPalette";
 import type { GridSpec, LonLat, ReachRing, RouteResult } from "@marsmap/core";
 import { selectedResult, useStore, type LayerState, type OverlayId } from "../store";
 import type { AreaData, DisplayLayers, Poi } from "../types";
@@ -16,74 +17,82 @@ import { demHeight, demMaxZoom, demTilesUrl, DEM_TILE_SIZE, registerDemProtocol,
 import { IMAGERY_TILE_SIZE, imageryGroups, imageryMaxZoom, imageryTilesUrl, registerImageryProtocol, setImageryArea } from "./imageryTiles";
 import { fmtDur } from "../format";
 import { ClickMenu } from "../components/ClickMenu";
-import { routeSlopeFeatures } from "./routeSlope";
+import { routeSlopeFeatures, routeTickFeatures } from "./routeSlope";
 import { setRenderDistance, tuneTerrain } from "./terrainPerf";
 import { followGroundAfterEase, keepCameraAboveGround } from "./cameraClearance";
 
-let mapInstance: MLMap | null = null;
-export const getMap = () => mapInstance;
+/**
+ * The live map and the state that belongs to it. One object, so that in development it can be kept on
+ * Vite's hot-module data: when a component this file imports is edited, Vite evaluates this file again,
+ * and a fresh copy with no map would be swapped in under the mounted <MapView>, which then ignores the app.
+ */
+interface Live {
+  map: MLMap | null;
+  ready: boolean;
+  /** The scale bar is MapLibre's element, moved out of its corner into a slot the app lays out. */
+  scaleEl: HTMLElement | null;
+  scaleSlot: HTMLElement | null;
+  /** Set while the map is still opening: fits the opening view again (see the map's load handler). */
+  refitOpening: (() => void) | null;
+  pendingInsets: { top?: number; right?: number; bottom?: number; left?: number } | null;
+  /** Set when a hold has just opened the menu, so the tap that ends the hold does not reopen it elsewhere. */
+  suppressNextClick: number;
+  /** True while the 2D/3D state is being changed by a tilt gesture rather than the 2D/3D buttons. */
+  tiltDriven: boolean;
+  /** True while the 2D/3D buttons are swinging the camera, so that animation is not read as a tilt gesture. */
+  switching: boolean;
+  stopTerrainAnim: (() => void) | null;
+  stopGlide: (() => void) | null;
+}
+const newLive = (): Live => ({ map: null, ready: false, scaleEl: null, scaleSlot: null, refitOpening: null, pendingInsets: null, suppressNextClick: 0, tiltDriven: false, switching: false, stopTerrainAnim: null, stopGlide: null });
+const hotData = import.meta.hot?.data as { live?: Live } | undefined;
+const live: Live = hotData ? (hotData.live ??= newLive()) : newLive();
+export const getMap = () => live.map;
 
 const BLANK = "data:image/png;base64,iVBORw0KGgoAAAANSUhEUgAAAAEAAAABCAQAAAC1HAwCAAAAC0lEQVR42mNkYAAAAAYAAjCB0C8AAAAASUVORK5CYII=";
 const EMPTY_FC: GeoJSON.FeatureCollection = { type: "FeatureCollection", features: [] };
-
-export const PROFILE_COLORS: Record<string, string> = {
-  fastest: "#f4f5f7",
-  "least-effort": "#4fc3f7",
-  leastEffort: "#4fc3f7",
-  least_effort: "#4fc3f7",
-  safest: "#7ee081",
-};
-export const profileColor = (id: string, i = 0) => PROFILE_COLORS[id] ?? ["#f4f5f7", "#4fc3f7", "#7ee081"][i % 3]!;
 
 export { imageryGroup } from "./imageryTiles";
 
 /** How often POI labels are re-placed while the map is moving. */
 const LABEL_MOVE_INTERVAL_MS = 120;
-/** Round-trip time rings are teal; the outermost (walk-limit) ring is amber. Shared with the map key. */
-export const RING_COLOR = "#36d1c4";
-export const RING_LIMIT_COLOR = "#ffb347";
+/** Round-trip time rings are dotted ink; the outermost (walk-limit) ring is the warning colour. Shared with the map key. */
+export const ringColors = () => ({ ring: mapPalette().ink, limit: mapPalette().warn });
 /** Opacity multiplier for Curiosity's traverse while the Plan tab is open. */
 const TRACK_PLAN_FADE = 0.28;
 const DEFAULT_TRACK_STATE = useStore.getState().overlays.track;
 /** True when the traverse should recede: Plan tab open and the user has not set the track layer themselves. */
 export const isTrackFaded = (tab: string, track: LayerState) => tab === "plan" && track === DEFAULT_TRACK_STATE;
-let mapReady = false;
 
-// The scale bar is MapLibre's element, moved out of its corner into a slot the app lays out.
-let scaleEl: HTMLElement | null = null;
-let scaleSlot: HTMLElement | null = null;
 const placeScaleBar = () => {
-  if (scaleEl && scaleSlot && scaleEl.parentElement !== scaleSlot) scaleSlot.appendChild(scaleEl);
+  if (live.scaleEl && live.scaleSlot && live.scaleEl.parentElement !== live.scaleSlot) live.scaleSlot.appendChild(live.scaleEl);
 };
 /** Give the scale bar a home in the app's own layout. Safe to call before or after the map exists. */
 export function mountScaleBar(slot: HTMLElement | null) {
-  scaleSlot = slot;
+  live.scaleSlot = slot;
   placeScaleBar();
 }
-/** Set while the map is still opening: fits the opening view again (see the map's load handler). */
-let refitOpening: (() => void) | null = null;
 const OPENING_SETTLE_MS = 3000;
-let pendingInsets: { top?: number; right?: number; bottom?: number; left?: number } | null = null;
 
 /**
  * Tell the map how much of its canvas is covered by floating panels, so "centre" means the centre of
  * the part the user can see. Eased, so the ground glides aside as a panel opens.
  */
 export function setMapInsets(p: { top?: number; right?: number; bottom?: number; left?: number }, ms = 380) {
-  const map = mapInstance;
+  const map = live.map;
   if (!map) return;
-  if (!mapReady) {
+  if (!live.ready) {
     // Asked before the map's first frame: remembered, and applied without animation when it loads.
-    pendingInsets = p;
+    live.pendingInsets = p;
     return;
   }
   const padding = { top: p.top ?? 0, right: p.right ?? 0, bottom: p.bottom ?? 0, left: p.left ?? 0 };
   const cur = map.getPadding();
   if (cur.top === padding.top && cur.right === padding.right && cur.bottom === padding.bottom && cur.left === padding.left) return;
-  if (refitOpening) {
+  if (live.refitOpening) {
     // Still opening: take the insets at once and fit the opening view inside them.
     map.jumpTo({ padding });
-    refitOpening();
+    live.refitOpening();
     return;
   }
   map.easeTo({ padding, duration: ms, easing: (t) => 1 - Math.pow(1 - t, 3) });
@@ -93,7 +102,7 @@ export function setMapInsets(p: { top?: number; right?: number; bottom?: number;
 export function resizeMapDuring(ms: number) {
   const until = performance.now() + ms + 80;
   const step = () => {
-    mapInstance?.resize();
+    live.map?.resize();
     if (performance.now() < until) requestAnimationFrame(step);
   };
   requestAnimationFrame(step);
@@ -141,12 +150,6 @@ const TAP_DELAY_MS = 260;
 /** Tilting past ENTER switches the terrain on; levelling below LEAVE switches it off. */
 const TILT_ENTER_3D = 4;
 const TILT_LEAVE_3D = 1;
-/** Set when a hold has just opened the menu, so the tap that ends the hold does not reopen it elsewhere. */
-let suppressNextClick = 0;
-/** True while the 2D/3D state is being changed by a tilt gesture rather than the 2D/3D buttons. */
-let tiltDriven = false;
-/** True while the 2D/3D buttons are swinging the camera, so that animation is not read as a tilt gesture. */
-let switching = false;
 
 /** How long the ground takes to rise when the 3D button is pressed, to sink for the 2D button, and to do either for a tilt gesture. */
 const TERRAIN_RISE_MS = 900;
@@ -157,7 +160,6 @@ const TERRAIN_WAIT_MS = 600;
 /** Terrain is switched on at this height (not 0, so loaded heights can be told from missing ones). */
 const TERRAIN_FLAT = 0.001;
 const easeInOut = (t: number) => (t < 0.5 ? 4 * t * t * t : 1 - Math.pow(-2 * t + 2, 3) / 2);
-let stopTerrainAnim: (() => void) | null = null;
 
 /**
  * The 2D/3D transition: ease the height of the terrain to a vertical exaggeration (0 is flat) and, when
@@ -168,8 +170,8 @@ let stopTerrainAnim: (() => void) | null = null;
  * holds the height it started with. Touching the map hands the camera back to the user; the ground still finishes moving.
  */
 function animateTerrain(map: MLMap, exaggeration: number, camera: { pitch: number; bearing: number } | null, ms: number, done?: () => void) {
-  stopTerrainAnim?.();
-  if (camera) stopGlide?.();
+  live.stopTerrainAnim?.();
+  if (camera) live.stopGlide?.();
   const terrain = map.terrain;
   if (!terrain) return;
   const from = { exaggeration: terrain.exaggeration, pitch: map.getPitch(), bearing: map.getBearing() };
@@ -181,17 +183,17 @@ function animateTerrain(map: MLMap, exaggeration: number, camera: { pitch: numbe
   let steering = !!camera;
   const release = () => {
     steering = false;
-    switching = false;
+    live.switching = false;
   };
   const stop = () => {
     cancelAnimationFrame(raf);
     for (const ev of INPUT) el.removeEventListener(ev, release);
-    if (steering) switching = false;
-    stopTerrainAnim = null;
+    if (steering) live.switching = false;
+    live.stopTerrainAnim = null;
   };
-  stopTerrainAnim = stop;
+  live.stopTerrainAnim = stop;
   if (steering) {
-    switching = true;
+    live.switching = true;
     for (const ev of INPUT) el.addEventListener(ev, release, { passive: true });
   }
   // Rising from flat waits (briefly) for the heights under the centre to load, so the camera is never
@@ -230,9 +232,8 @@ function animateTerrain(map: MLMap, exaggeration: number, camera: { pitch: numbe
   step();
 }
 
-let stopGlide: (() => void) | null = null;
 /** True while glideTo is moving the camera (map.isMoving() is false between its steps). */
-export const isCameraGliding = () => !!stopGlide;
+export const isCameraGliding = () => !!live.stopGlide;
 
 /**
  * Move the camera to a view over `ms`, one jumpTo per frame. Used instead of easeTo because in 3D
@@ -241,7 +242,7 @@ export const isCameraGliding = () => !!stopGlide;
  * its own centre. Touching the map stops it where it is.
  */
 function glideTo(map: MLMap, to: { center: maplibregl.LngLat; zoom: number; pitch: number; bearing: number }, ms: number) {
-  stopGlide?.();
+  live.stopGlide?.();
   const from = { center: map.getCenter(), zoom: map.getZoom(), pitch: map.getPitch(), bearing: map.getBearing() };
   const turn = ((to.bearing - from.bearing + 540) % 360) - 180;
   const el = map.getCanvasContainer();
@@ -250,11 +251,11 @@ function glideTo(map: MLMap, to: { center: maplibregl.LngLat; zoom: number; pitc
   const stop = () => {
     cancelAnimationFrame(raf);
     for (const ev of INPUT) el.removeEventListener(ev, stop);
-    switching = false;
-    stopGlide = null;
+    live.switching = false;
+    live.stopGlide = null;
   };
-  stopGlide = stop;
-  switching = true;
+  live.stopGlide = stop;
+  live.switching = true;
   for (const ev of INPUT) el.addEventListener(ev, stop, { passive: true });
   const t0 = performance.now();
   const step = () => {
@@ -279,7 +280,7 @@ function glideTo(map: MLMap, to: { center: maplibregl.LngLat; zoom: number; pitc
  * MapLibre's own flight; in 3D it is glideTo, keeping the tilt and heading the user has set.
  */
 export function showOnMap(target: { center: LonLat; zoom: number } | { bounds: [LonLat, LonLat]; padding: number; maxZoom: number }, ms = 900) {
-  const map = mapInstance;
+  const map = live.map;
   if (!map) return;
   if ("center" in target) {
     if (!map.terrain) map.flyTo({ center: target.center, zoom: target.zoom, duration: ms });
@@ -373,7 +374,7 @@ function attachGestures(map: MLMap): () => void {
       if (!holdAt) return;
       const ll = pointer({ clientX: holdAt.x, clientY: holdAt.y });
       holdAt = null;
-      suppressNextClick = performance.now();
+      live.suppressNextClick = performance.now();
       useStore.getState().set({ mapClick: [ll.lng, ll.lat], selectedWaypoint: null });
     }, HOLD_MS);
   };
@@ -412,16 +413,59 @@ function gridCoords(g: GridSpec): [[number, number], [number, number], [number, 
   return [[g.west, g.north], [g.east, g.north], [g.east, g.south], [g.west, g.south]];
 }
 
+/**
+ * The planning window as four corner brackets. It is a boundary, not an estimate, so it is not drawn dashed;
+ * brackets mark the square without ruling a line across the ground.
+ */
+function windowBrackets(c: [number, number][]): GeoJSON.FeatureCollection {
+  const [nw, ne, se, sw] = c as [[number, number], [number, number], [number, number], [number, number]];
+  const ARM = 0.06;
+  const dx = (ne[0] - nw[0]) * ARM, dy = (nw[1] - sw[1]) * ARM;
+  const corner = (p: [number, number], sx: number, sy: number): GeoJSON.Feature => ({
+    type: "Feature",
+    properties: {},
+    geometry: { type: "LineString", coordinates: [[p[0] + sx * dx, p[1]], p, [p[0], p[1] + sy * dy]] },
+  });
+  return { type: "FeatureCollection", features: [corner(nw, 1, -1), corner(ne, -1, -1), corner(se, -1, 1), corner(sw, 1, 1)] };
+}
+
+/** The bar drawn across the selected route every 100 m: ink with a black keyline, 14 x 4 px. */
+const TICK_IMG = "route-tick";
+function tickImage(ink: string, casing: string): ImageData | null {
+  const c = document.createElement("canvas");
+  c.width = 28;
+  c.height = 8;
+  const g = c.getContext("2d");
+  if (!g) return null;
+  g.fillStyle = casing;
+  g.fillRect(0, 0, 28, 8);
+  g.fillStyle = ink;
+  g.fillRect(2, 2, 24, 4);
+  return g.getImageData(0, 0, 28, 8);
+}
+
+/**
+ * In 3D nearer markers draw over farther ones: each marker's stacking order is how far down the screen it
+ * sits. In 2D the order is left to the markers themselves.
+ */
+function sortMarkersByDepth(map: MLMap) {
+  const c = map.getContainer();
+  const in3d = c.classList.contains("map-3d");
+  c.querySelectorAll<HTMLElement>(".maplibregl-marker").forEach((el) => {
+    el.style.zIndex = in3d ? String(Math.round(el.getBoundingClientRect().bottom)) : "";
+  });
+}
+
 function routeFeatures(results: RouteResult[] | null): GeoJSON.FeatureCollection {
   if (!results) return EMPTY_FC;
   const features: GeoJSON.Feature[] = [];
-  results.forEach((r, ri) => {
+  results.forEach((r) => {
     const over = r.totals.firstSegmentOverLimit;
     r.segments.forEach((s, si) => {
       if (s.path.length < 2) return;
       features.push({
         type: "Feature",
-        properties: { profile: r.profile.id, seg: si, over: over != null && si >= over ? 1 : 0, color: profileColor(r.profile.id, ri) },
+        properties: { profile: r.profile.id, seg: si, over: over != null && si >= over ? 1 : 0 },
         geometry: { type: "LineString", coordinates: s.path },
       });
     });
@@ -534,17 +578,18 @@ const POI_FILL: Record<string, string> = {
   viewpoint: "bg-poi-viewpoint",
 };
 /** MapLibre makes markers position: absolute, which also anchors the label. */
-const POI_PIN = "poi-pin group/pin flex size-3.5 cursor-pointer items-center gap-1.5 hover:z-3 [&.selected]:z-3";
+const POI_PIN = "poi-pin group/pin flex size-3.5 cursor-pointer items-center gap-1.5 hover:z-[100000]! [&.selected]:z-[100000]!";
 const POI_DOT = "block size-3 rounded-full border-[1.5px] border-well shadow-[0_0_0_1px_rgba(255,255,255,0.75)] transition-transform duration-[120ms] ease-out-quint group-[:is(:hover,.selected)]/pin:scale-120 coarse:size-4";
-/** Sits beside the dot (further out once the pin carries a stop number), flips to the left near an edge,
-    hides when it would collide, and becomes a boxed full name on hover or when selected: the box is MAP_LABEL_BOX
-    (map/mapLabel.ts) spelled out behind the group variant. */
-const POI_LABEL = `poi-label ${MAP_LABEL} pointer-events-none absolute -top-px left-[19px] ${MAP_LABEL_HALO} group-[.in-plan]/pin:left-[23px] group-[.flip]/pin:right-[19px] group-[.flip]/pin:left-auto group-[.in-plan.flip]/pin:right-[23px] group-[.in-plan.flip]/pin:left-auto group-[.lbl-off:not(:hover,.selected)]/pin:invisible group-[:is(:hover,.selected)]/pin:-top-0.5 group-[:is(:hover,.selected)]/pin:rounded-sm group-[:is(:hover,.selected)]/pin:border group-[:is(:hover,.selected)]/pin:border-input group-[:is(:hover,.selected)]/pin:bg-glass-thick group-[:is(:hover,.selected)]/pin:px-1.5 group-[:is(:hover,.selected)]/pin:[-webkit-text-stroke:0px] [.lowzoom_&]:hidden [.lowzoom_.poi-pin:hover_&]:inline`;
+/** A place name is a plate (MAP_LABEL_BOX). In 2D it sits beside the dot (further out once the pin carries a stop
+    number) and flips to the left near an edge. In 3D it stands on a post above the dot, which is the post's foot.
+    Either way it hides when it would collide, and shows the full name on hover or when selected. */
+const POI_LABEL = `poi-label ${MAP_LABEL_BOX} ${MAP_LABEL_TONE.strong} pointer-events-none absolute -top-0.5 left-[19px] transition-[top,left,right,translate] duration-200 ease-out-quint group-[.in-plan]/pin:left-[23px] group-[.flip]/pin:right-[19px] group-[.flip]/pin:left-auto group-[.in-plan.flip]/pin:right-[23px] group-[.in-plan.flip]/pin:left-auto group-[.lbl-off:not(:hover,.selected)]/pin:invisible [.lowzoom_&]:hidden [.lowzoom_.poi-pin:hover_&]:inline-flex [.map-3d_&]:-top-[32px] [.map-3d_&]:right-auto! [.map-3d_&]:left-1/2! [.map-3d_&]:-translate-x-1/2 [.map-3d_&]:after:absolute [.map-3d_&]:after:top-full [.map-3d_&]:after:left-1/2 [.map-3d_&]:after:-ml-px [.map-3d_&]:after:map-post [.map-3d_&]:after:content-['']`;
 /** Stop markers carry the same badge as the stop numbers in the Plan tab's list, larger and with a keyline for the ground. */
 const STOP_MARKER = `stop-marker ${STOP_BADGE} size-[22px] cursor-grab text-[11px] coarse:size-[30px] coarse:text-base`;
 const STOP_NUMBER = `${STOP_MARKER} ${STOP_BADGE_NUMBER} shadow-[0_0_0_1px_rgba(0,0,0,0.6)]`;
 const STOP_START = `${STOP_MARKER} ${STOP_BADGE_START} shadow-[0_0_0_1px_rgba(255,255,255,0.8)]`;
-const RING_LABEL = `ring-label ${MAP_LABEL_BOX} pointer-events-none cursor-help`;
+/** A ring label: the plate, and in 3D the post and foot under it. The marker is anchored at its bottom, on the ring. */
+const RING_LABEL = "ring-label pointer-events-none flex cursor-help flex-col items-center";
 
 function poiEl(p: Poi): HTMLElement {
   const el = document.createElement("div");
@@ -584,20 +629,24 @@ function placePoiLabels(map: MLMap, pins: { el: HTMLElement; ll: LonLat; rank: n
   });
   const placed: Box[] = [];
   const M = 6;
+  // In 3D the plate stands above its dot on a 14px post; in 2D it lies to one side.
+  const in3d = container.classList.contains("map-3d");
   [...pins]
     .map((pin, i) => ({ ...pin, i }))
     .sort((a, b) => a.rank - b.rank)
     .forEach(({ el, i }) => {
-      const label = el.querySelector(el.classList.contains("selected") ? ".pl-full" : ".pl-short") as HTMLElement | null;
-      const w = (label?.offsetWidth || 80) + 14, h = 16;
+      const label = el.querySelector(".poi-label") as HTMLElement | null;
+      const w = label?.offsetWidth || 94, h = 18;
       const d = dots[i]!;
       const cx = (d.l + d.r) / 2, cy = (d.t + d.b) / 2;
       // Gap between pin centre and label: wider when a plan marker (S / 1, 2, ...) sits on the pin.
       const off = el.classList.contains("in-plan") ? 14 : 10;
-      const sides = [
-        { flip: false, box: { l: cx + off, t: cy - h / 2, r: cx + off + w, b: cy + h / 2 } },
-        { flip: true, box: { l: cx - off - w, t: cy - h / 2, r: cx - off, b: cy + h / 2 } },
-      ];
+      const sides = in3d
+        ? [{ flip: false, box: { l: cx - w / 2, t: cy - 7 - 14 - h, r: cx + w / 2, b: cy - 7 } }]
+        : [
+            { flip: false, box: { l: cx + off, t: cy - h / 2, r: cx + off + w, b: cy + h / 2 } },
+            { flip: true, box: { l: cx - off - w, t: cy - h / 2, r: cx - off, b: cy + h / 2 } },
+          ];
       // A plan marker sitting on the pin is its own, not an obstacle. A panel over the pin still is: the label hides with it.
       const own = (o: Box) => o.r - o.l <= 40 && o.l <= cx && o.r >= cx && o.t <= cy && o.b >= cy;
       const ok = sides.find(({ box }) => {
@@ -605,7 +654,7 @@ function placePoiLabels(map: MLMap, pins: { el: HTMLElement; ll: LonLat; rank: n
         if (obstacles.some((o) => !own(o) && boxesHit(box, o)) || placed.some((o) => boxesHit(box, o))) return false;
         return !dots.some((o, j) => j !== i && boxesHit(box, o));
       });
-      el.classList.toggle("flip", ok ? ok.flip : d.r + w > W - M);
+      el.classList.toggle("flip", !in3d && (ok ? ok.flip : d.r + w > W - M));
       el.classList.toggle("lbl-off", !ok);
       if (ok) placed.push(ok.box);
     });
@@ -671,7 +720,7 @@ export function MapView() {
       scrollZoom: false, // replaced by attachGestures
       renderWorldCopies: false,
     });
-    mapInstance = map;
+    live.map = map;
     const detachGestures = attachGestures(map);
     keepCameraAboveGround(map);
     followGroundAfterEase(map);
@@ -682,7 +731,7 @@ export function MapView() {
       const bearing = in3d ? HOME_3D.bearing : HOME_BEARING;
       const cam = map.cameraForBounds(initialBounds(area), { padding: HOME_PADDING, bearing });
       // Not while the 2D/3D switch is still swinging the camera.
-      if (!cam?.center || cam.zoom == null || (switching && !stopGlide)) return;
+      if (!cam?.center || cam.zoom == null || (live.switching && !live.stopGlide)) return;
       glideTo(map, { center: maplibregl.LngLat.convert(cam.center), zoom: cam.zoom, pitch: in3d ? HOME_3D.pitch : 0, bearing }, HOME_MS);
     };
     // Top-right corner, stacking downward: the zoom and home strip, then the compass dial.
@@ -690,15 +739,15 @@ export function MapView() {
     map.addControl(new CompassControl(), "top-right");
     // MapLibre draws the scale bar; the app shows it beside the view controls (see mountScaleBar).
     map.addControl(new maplibregl.ScaleControl({ unit: "metric" }), "bottom-right");
-    scaleEl = map.getContainer().querySelector<HTMLElement>(".maplibregl-ctrl-scale");
+    live.scaleEl = map.getContainer().querySelector<HTMLElement>(".maplibregl-ctrl-scale");
     placeScaleBar();
     (window as unknown as { __map: MLMap }).__map = map;
 
     map.on("load", () => {
-      mapReady = true;
-      if (pendingInsets) {
-        const p = pendingInsets;
-        pendingInsets = null;
+      live.ready = true;
+      if (live.pendingInsets) {
+        const p = live.pendingInsets;
+        live.pendingInsets = null;
         setMapInsets(p, 0);
       }
       // Fit the opening view again now the map has its final size and insets, so it is the view home returns to.
@@ -708,9 +757,9 @@ export function MapView() {
         if (cam) map.jumpTo(cam);
       };
       refit();
-      refitOpening = refit;
+      live.refitOpening = refit;
       const settle = () => {
-        refitOpening = null;
+        live.refitOpening = null;
         for (const ev of ["pointerdown", "wheel", "touchstart"]) map.getCanvasContainer().removeEventListener(ev, settle);
       };
       for (const ev of ["pointerdown", "wheel", "touchstart"]) map.getCanvasContainer().addEventListener(ev, settle, { passive: true });
@@ -757,32 +806,48 @@ export function MapView() {
       contourLayer("contours-mid", 2, CONTOUR_MID_ZOOM, ["step", ["zoom"], 0.6, CONTOUR_FINE_ZOOM, 1.3]);
       contourLayer("contours-index", 3, 0, 1.3);
       map.addSource("window", { type: "geojson", data: EMPTY_FC });
-      map.addLayer({ id: "window", type: "line", source: "window", paint: { "line-color": "#ffffff", "line-opacity": 0.55, "line-width": 1.2, "line-dasharray": [4, 3] } });
+      const C = mapPalette();
+      map.addLayer({ id: "window-casing", type: "line", source: "window", layout: { "line-cap": "square", "line-join": "miter" }, paint: { "line-color": C.casing, "line-width": 4, "line-opacity": 0.5 } });
+      map.addLayer({ id: "window", type: "line", source: "window", layout: { "line-cap": "square", "line-join": "miter" }, paint: { "line-color": C.ink, "line-width": 1.5, "line-opacity": 0.85 } });
       map.addSource("rings", { type: "geojson", data: EMPTY_FC });
-      map.addLayer({ id: "rings-line", type: "line", source: "rings", filter: ["<", ["get", "t"], 1], paint: { "line-color": RING_COLOR, "line-width": ["interpolate", ["linear"], ["get", "t"], 0, 1.2, 1, 2.2], "line-dasharray": [3, 2] } });
-      // Walk-limit ring (and the no-go loops inside it): solid amber, drawn over the time rings where they coincide.
-      map.addLayer({ id: "rings-limit", type: "line", source: "rings", filter: [">=", ["get", "t"], 1], layout: { "line-join": "round" }, paint: { "line-color": RING_LIMIT_COLOR, "line-width": 1.6 } });
+      // Time rings are modelled, so they are broken lines: dotted ink on a dark keyline.
+      map.addLayer({ id: "rings-casing", type: "line", source: "rings", layout: { "line-join": "round" }, paint: { "line-color": C.casing, "line-width": 3.5, "line-opacity": 0.45 } });
+      map.addLayer({ id: "rings-line", type: "line", source: "rings", filter: ["<", ["get", "t"], 1], paint: { "line-color": C.ink, "line-width": 1.25, "line-dasharray": [1.6, 3] } });
+      // Walk-limit ring (and the no-go loops inside it): solid, in the warning colour, drawn over the time rings where they coincide.
+      map.addLayer({ id: "rings-limit", type: "line", source: "rings", filter: [">=", ["get", "t"], 1], layout: { "line-join": "round" }, paint: { "line-color": C.warn, "line-width": 1.6 } });
 
       map.addSource("track", { type: "geojson", data: area.rover.traverse ?? EMPTY_FC });
-      map.addLayer({ id: "track-casing", type: "line", source: "track", paint: { "line-color": "#000", "line-width": 4, "line-opacity": 0.5 } });
-      map.addLayer({ id: "track", type: "line", source: "track", paint: { "line-color": "#f5f0e6", "line-width": 1.6, "line-dasharray": [2, 1.5] } });
+      // The rover's track was measured, so it is a solid line.
+      map.addLayer({ id: "track-casing", type: "line", source: "track", layout: { "line-join": "round" }, paint: { "line-color": C.casing, "line-width": 3.5, "line-opacity": 0.5 } });
+      map.addLayer({ id: "track", type: "line", source: "track", layout: { "line-join": "round" }, paint: { "line-color": C.rover, "line-width": 1.25 } });
       map.addSource("waypoints", {
         type: "geojson",
         data: { type: "FeatureCollection", features: area.rover.waypoints.map((w, i) => ({ type: "Feature", properties: { i, sol: w.sol }, geometry: { type: "Point", coordinates: w.lonLat } })) },
       });
-      map.addLayer({ id: "waypoints", type: "circle", source: "waypoints", paint: { "circle-radius": ["interpolate", ["linear"], ["zoom"], 13, 2.5, 18, 6], "circle-color": "#f5f0e6", "circle-stroke-color": "#0a0b0d", "circle-stroke-width": 1.5, "circle-pitch-alignment": "map", "circle-pitch-scale": "map" } });
+      map.addLayer({ id: "waypoints", type: "circle", source: "waypoints", paint: { "circle-radius": ["interpolate", ["linear"], ["zoom"], 13, 2, 18, 4.5], "circle-color": C.rover, "circle-stroke-color": C.casing, "circle-stroke-width": 1.5, "circle-pitch-alignment": "map", "circle-pitch-scale": "map" } });
 
       map.addSource("routes", { type: "geojson", data: EMPTY_FC });
-      map.addLayer({ id: "routes-alt", type: "line", source: "routes", layout: { "line-join": "round", "line-cap": "round" }, paint: { "line-color": ["get", "color"], "line-width": 3, "line-opacity": 0.35 } });
-      map.addLayer({ id: "route-casing", type: "line", source: "routes", layout: { "line-join": "round", "line-cap": "round" }, paint: { "line-color": ["case", ["==", ["get", "over"], 1], "#4a0d0b", "#120c0a"], "line-width": 8.5, "line-opacity": 0.9 } });
-      // Selected route, coloured along its length by slope (pieces built from the segment profiles).
+      // The routes not chosen: grey hairlines on a thin casing. The one pointed at in the route table is brightened (see hoverProfile).
+      map.addLayer({ id: "routes-alt-casing", type: "line", source: "routes", layout: { "line-join": "round", "line-cap": "round" }, paint: { "line-color": C.casing, "line-width": 4, "line-opacity": 0.7 } });
+      map.addLayer({ id: "routes-alt", type: "line", source: "routes", layout: { "line-join": "round", "line-cap": "round" }, paint: { "line-color": C.ink2, "line-width": 1.5 } });
+      map.addLayer({ id: "route-casing", type: "line", source: "routes", layout: { "line-join": "round", "line-cap": "round" }, paint: { "line-color": C.casing, "line-width": 7 } });
+      // Selected route: ink, taking the warning colour on hazard slope and the over-limit colour at the no-go slope
+      // (pieces built from the segment profiles).
       map.addSource("route-slope", { type: "geojson", data: EMPTY_FC });
-      map.addLayer({ id: "route-sel", type: "line", source: "route-slope", layout: { "line-join": "round", "line-cap": "round" }, paint: { "line-color": ["get", "color"], "line-width": 4.5 } });
-      map.addLayer({ id: "route-over", type: "line", source: "routes", layout: { "line-join": "round" }, paint: { "line-color": "#ffd2d2", "line-width": 1.5, "line-dasharray": [1, 2] } });
+      map.addLayer({ id: "route-sel", type: "line", source: "route-slope", layout: { "line-join": "round", "line-cap": "round" }, paint: { "line-color": ["get", "color"], "line-width": 3 } });
+      // Legs past the limit are hypothetical, so they are dashed.
+      map.addLayer({ id: "route-over", type: "line", source: "routes", layout: { "line-join": "round" }, paint: { "line-color": C.bad, "line-width": 3, "line-dasharray": [1.2, 1.2] } });
+      // A bar across the selected route every 100 m, so the line reads as a ruler.
+      const tick = tickImage(C.ink, C.casing);
+      if (tick && !map.hasImage(TICK_IMG)) map.addImage(TICK_IMG, tick, { pixelRatio: 2 });
+      map.addSource("route-ticks", { type: "geojson", data: EMPTY_FC });
+      map.addLayer({ id: "route-ticks", type: "symbol", source: "route-ticks", layout: { "icon-image": TICK_IMG, "icon-rotate": ["get", "rot"], "icon-rotation-alignment": "map", "icon-pitch-alignment": "map", "icon-allow-overlap": true, "icon-ignore-placement": true } });
 
       map.addSource("cursor", { type: "geojson", data: EMPTY_FC });
-      map.addLayer({ id: "cursor-halo", type: "circle", source: "cursor", paint: { "circle-radius": ["case", ["==", ["get", "kind"], "go"], 14, 9], "circle-color": ["case", ["==", ["get", "kind"], "go"], "#36d1c4", "#ffffff"], "circle-opacity": 0.25 } });
-      map.addLayer({ id: "cursor", type: "circle", source: "cursor", paint: { "circle-radius": ["case", ["==", ["get", "kind"], "go"], 7, 5], "circle-color": ["case", ["==", ["get", "kind"], "go"], "#36d1c4", "#ffffff"], "circle-stroke-color": "#0a0b0d", "circle-stroke-width": 2 } });
+      // The walk's position is a dot in a thin ring, both keylined; the profile's cursor keeps its soft halo.
+      map.addLayer({ id: "cursor-ring-casing", type: "circle", source: "cursor", filter: ["==", ["get", "kind"], "go"], paint: { "circle-radius": 12, "circle-opacity": 0, "circle-stroke-color": C.casing, "circle-stroke-width": 4 } });
+      map.addLayer({ id: "cursor-halo", type: "circle", source: "cursor", paint: { "circle-radius": ["case", ["==", ["get", "kind"], "go"], 12, 9], "circle-color": "#ffffff", "circle-opacity": ["case", ["==", ["get", "kind"], "go"], 0, 0.25], "circle-stroke-color": C.sim, "circle-stroke-width": ["case", ["==", ["get", "kind"], "go"], 1.5, 0] } });
+      map.addLayer({ id: "cursor", type: "circle", source: "cursor", paint: { "circle-radius": ["case", ["==", ["get", "kind"], "go"], 5.5, 5], "circle-color": ["case", ["==", ["get", "kind"], "go"], C.sim, "#ffffff"], "circle-stroke-color": C.casing, "circle-stroke-width": 2 } });
 
       setReady(true);
     });
@@ -818,31 +883,31 @@ export function MapView() {
           return;
         }
       }
-      if (performance.now() - suppressNextClick < 700) return;
+      if (performance.now() - live.suppressNextClick < 700) return;
       clearTimeout(tapTimer);
       tapTimer = setTimeout(() => useStore.getState().set({ mapClick: ll, selectedWaypoint: null }), TAP_DELAY_MS);
     });
     map.on("dblclick", () => clearTimeout(tapTimer));
     // Apple Maps style: tilting the flat map slides into 3D, levelling it out returns to 2D.
     map.on("pitch", () => {
-      if (switching || !area.overview.elevation || useStore.getState().view3d || map.getPitch() < TILT_ENTER_3D) return;
-      tiltDriven = true;
+      if (live.switching || !area.overview.elevation || useStore.getState().view3d || map.getPitch() < TILT_ENTER_3D) return;
+      live.tiltDriven = true;
       useStore.getState().set({ view3d: true });
     });
     map.on("moveend", () => {
-      if (switching || !useStore.getState().view3d || map.getPitch() > TILT_LEAVE_3D || map.isMoving()) return;
-      tiltDriven = true;
+      if (live.switching || !useStore.getState().view3d || map.getPitch() > TILT_LEAVE_3D || map.isMoving()) return;
+      live.tiltDriven = true;
       useStore.getState().set({ view3d: false });
     });
 
     return () => {
-      stopTerrainAnim?.();
-      stopGlide?.();
-      refitOpening = null;
+      live.stopTerrainAnim?.();
+      live.stopGlide?.();
+      live.refitOpening = null;
       detachGestures();
       map.remove();
-      mapInstance = null;
-      mapReady = false;
+      live.map = null;
+      live.ready = false;
     };
   }, [area]);
 
@@ -851,7 +916,7 @@ export function MapView() {
   const baseOpacity = useStore((s) => s.baseOpacity);
   const marsTint = useStore((s) => s.marsTint);
   useEffect(() => {
-    const map = mapInstance;
+    const map = live.map;
     if (!ready || !map) return;
     for (const grp of imageryGroups()) {
       const id = `img-${grp.id}`;
@@ -869,19 +934,17 @@ export function MapView() {
   // ---------- planning window: terrain heights ----------
   const detail = useStore((s) => s.detail);
   useEffect(() => {
-    const map = mapInstance;
+    const map = live.map;
     const ov = area.overview;
     if (!ready || !map || !ov.elevation || !area.tiles) return;
     const url = setDemSource({ grid: ov.grid, elev: ov.elevation }, detail?.elevation ? { grid: detail.grid, elev: detail.elevation } : null, ov.elevRef);
     for (const id of ["dem", "dem-hs"]) (map.getSource(id) as maplibregl.RasterDEMTileSource | undefined)?.setTiles([url]);
   }, [ready, detail, area]);
   useEffect(() => {
-    const map = mapInstance;
+    const map = live.map;
     if (!ready || !map || !area.tiles) return;
     const c = detail ? gridCoords(detail.grid) : null;
-    (map.getSource("window") as GeoJSONSource | undefined)?.setData(
-      c ? { type: "Feature", properties: {}, geometry: { type: "Polygon", coordinates: [[...c, c[0]]] } } : EMPTY_FC,
-    );
+    (map.getSource("window") as GeoJSONSource | undefined)?.setData(c ? windowBrackets(c) : EMPTY_FC);
   }, [ready, detail, area]);
 
   // ---------- raster overlays ----------
@@ -904,7 +967,7 @@ export function MapView() {
     detailGen.current++;
   }, [detail]);
   useEffect(() => {
-    const map = mapInstance;
+    const map = live.map;
     if (!ready || !map) return;
     const show = (layer: string, on: boolean, opacity: number) => {
       if (!map.getLayer(layer)) return;
@@ -958,7 +1021,8 @@ export function MapView() {
       map.setLayoutProperty(l, "visibility", overlays.contours.on ? "visible" : "none");
       map.setPaintProperty(l, "line-opacity", overlays.contours.opacity * k);
     }
-    map.setLayoutProperty("rings-line", "visibility", overlays.rings.on ? "visible" : "none");
+    for (const l of ["rings-casing", "rings-line"]) map.setLayoutProperty(l, "visibility", overlays.rings.on ? "visible" : "none");
+    map.setPaintProperty("rings-casing", "line-opacity", 0.45 * overlays.rings.opacity);
     map.setPaintProperty("rings-line", "line-opacity", overlays.rings.opacity);
     map.setLayoutProperty("rings-limit", "visibility", overlays.rings.on ? "visible" : "none");
     map.setPaintProperty("rings-limit", "line-opacity", overlays.rings.opacity * 0.85);
@@ -976,7 +1040,7 @@ export function MapView() {
   const contoursOn = overlays.contours.on;
   const contoursFor = useRef<DisplayLayers | null | undefined>(undefined);
   useEffect(() => {
-    const map = mapInstance;
+    const map = live.map;
     const ov = area.overview;
     if (!ready || !map || !contoursOn || !ov.elevation || contoursFor.current === detail) return;
     // After this frame, so the switch moves before the tracing starts.
@@ -996,7 +1060,7 @@ export function MapView() {
   const sciData = useStore((s) => s.sciData);
   const sciUrls = useRef<Record<string, string>>({});
   useEffect(() => {
-    const map = mapInstance;
+    const map = live.map;
     if (!ready || !map) return;
     for (const l of scienceLayers(area)) {
       const st = sci[l.id];
@@ -1023,7 +1087,7 @@ export function MapView() {
   const rings = useStore((s) => s.rings);
   const ringMarkers = useRef<maplibregl.Marker[]>([]);
   useEffect(() => {
-    const map = mapInstance;
+    const map = live.map;
     if (!ready || !map) return;
     (map.getSource("rings") as GeoJSONSource).setData(ringFeatures(rings));
     ringMarkers.current.forEach((m) => m.remove());
@@ -1037,14 +1101,17 @@ export function MapView() {
       if (!outline.length) continue;
       const el = document.createElement("div");
       el.className = RING_LABEL;
+      const plate = document.createElement("div");
       const isLimit = r.kind ? r.kind === "limit" : r.budgetS === Math.max(...rings.map((x) => x.budgetS));
       // The limit is a status, shown once on a dot in the line's own warning colour; the times are plain measures.
-      if (isLimit) el.innerHTML = mapLabelDot("warn");
-      el.append(isLimit ? `Limit${r.limitedBy ? ` · ${r.limitedBy}` : ""}` : fmtDur(r.budgetS));
+      if (isLimit) plate.innerHTML = mapLabelDot("warn");
+      plate.append(isLimit ? `Limit${r.limitedBy ? ` · ${r.limitedBy}` : ""}` : fmtDur(r.budgetS));
       el.title = isLimit
         ? `Walk limit: the farthest you can go, work one stop and still get home with the reserve intact on time, energy and oxygen${r.limitedBy ? `. Here ${r.limitedBy} runs out first` : ""}`
         : `Reachable and back to the start in ${fmtDur(r.budgetS)} of walking (round trip)`;
-      el.className += ` ${isLimit ? MAP_LABEL_TONE.strong : MAP_LABEL_TONE.neutral}`;
+      plate.className = `${MAP_LABEL_BOX} ${isLimit ? MAP_LABEL_TONE.strong : MAP_LABEL_TONE.neutral}`;
+      el.append(plate);
+      el.insertAdjacentHTML("beforeend", `<i class="${MAP_LABEL_POST}"></i><i class="${MAP_LABEL_BASE}"></i>`);
       el.setAttribute("aria-label", el.title);
       ringMarkers.current.push(new maplibregl.Marker({ element: el, anchor: "bottom" }).setLngLat(outline[0] as [number, number]).addTo(map));
       el.tabIndex = -1;
@@ -1072,30 +1139,45 @@ export function MapView() {
   const results = useStore((s) => s.results);
   const selectedProfile = useStore((s) => s.selectedProfile);
   useEffect(() => {
-    const map = mapInstance;
+    const map = live.map;
     if (!ready || !map) return;
     (map.getSource("routes") as GeoJSONSource).setData(routeFeatures(results));
     const sel = selectedResult({ results, selectedProfile })?.profile.id ?? "";
-    map.setFilter("routes-alt", ["!=", ["get", "profile"], sel]);
+    for (const l of ["routes-alt-casing", "routes-alt"]) map.setFilter(l, ["!=", ["get", "profile"], sel]);
     map.setFilter("route-casing", ["==", ["get", "profile"], sel]);
-    map.setFilter("route-sel", ["==", ["get", "profile"], sel]);
+    // Legs past the limit are drawn by route-over alone.
+    map.setFilter("route-sel", ["all", ["==", ["get", "profile"], sel], ["==", ["get", "over"], 0]]);
     map.setFilter("route-over", ["all", ["==", ["get", "profile"], sel], ["==", ["get", "over"], 1]]);
   }, [ready, results, selectedProfile]);
 
   // ---------- selected route coloured by slope ----------
   const walkParams = useStore((s) => s.params);
   useEffect(() => {
-    const map = mapInstance;
+    const map = live.map;
     if (!ready || !map) return;
-    (map.getSource("route-slope") as GeoJSONSource | undefined)?.setData(routeSlopeFeatures(selectedResult({ results, selectedProfile }), walkParams));
+    const sel = selectedResult({ results, selectedProfile });
+    (map.getSource("route-slope") as GeoJSONSource | undefined)?.setData(routeSlopeFeatures(sel, walkParams));
+    (map.getSource("route-ticks") as GeoJSONSource | undefined)?.setData(routeTickFeatures(sel));
   }, [ready, results, selectedProfile, walkParams]);
+
+  // ---------- the route pointed at in the route table ----------
+  // The routes not chosen are all the same grey, so the one under the pointer (or keyboard focus) is brightened.
+  const hoverProfile = useStore((s) => s.hoverProfile);
+  useEffect(() => {
+    const map = live.map;
+    if (!ready || !map) return;
+    const C = mapPalette();
+    const hot: maplibregl.ExpressionSpecification = ["==", ["get", "profile"], hoverProfile ?? ""];
+    map.setPaintProperty("routes-alt", "line-color", ["case", hot, C.ink, C.ink2]);
+    map.setPaintProperty("routes-alt", "line-width", ["case", hot, 2.5, 1.5]);
+  }, [ready, hoverProfile]);
 
   // ---------- POI markers ----------
   const poisOn = useStore((s) => s.overlays.pois.on);
   const selectedPoi = useStore((s) => s.selectedPoi);
   const poiPins = useRef<{ el: HTMLElement; poi: Poi }[]>([]);
   useEffect(() => {
-    const map = mapInstance;
+    const map = live.map;
     if (!ready || !map || !poisOn) return;
     poiPins.current = [];
     const markers = area.config.pois.map((p) => {
@@ -1117,7 +1199,7 @@ export function MapView() {
   const start = useStore((s) => s.start);
   const stops = useStore((s) => s.stops);
   useEffect(() => {
-    const map = mapInstance;
+    const map = live.map;
     if (!ready || !map) return;
     const ms: maplibregl.Marker[] = [];
     if (start) {
@@ -1152,7 +1234,7 @@ export function MapView() {
 
   // ---------- POI label placement (after the plan markers, which are obstacles) ----------
   useEffect(() => {
-    const map = mapInstance;
+    const map = live.map;
     if (!ready || !map || !poisOn) return;
     const inPlan = new Set([start?.poiId, ...stops.map((s) => s.poiId)].filter(Boolean));
     const pins = poiPins.current.map(({ el, poi }, i) => {
@@ -1161,7 +1243,10 @@ export function MapView() {
       el.classList.toggle("in-plan", inPlan.has(poi.id));
       return { el, ll: [poi.lon, poi.lat] as LonLat, rank: (sel ? 0 : inPlan.has(poi.id) ? 100 : 200) + i };
     });
-    const place = () => placePoiLabels(map, pins);
+    const place = () => {
+      sortMarkersByDepth(map);
+      placePoiLabels(map, pins);
+    };
     const raf = requestAnimationFrame(place);
     // Again once cards / chips that mount in the same update have laid out.
     const late = window.setTimeout(place, 300);
@@ -1191,7 +1276,7 @@ export function MapView() {
   // ---------- cursor (profile scrub; the Go position is the animated walker in GoWalker) ----------
   const cursor = useStore((s) => s.profileCursor);
   useEffect(() => {
-    const map = mapInstance;
+    const map = live.map;
     if (!ready || !map) return;
     const f: GeoJSON.Feature[] = [];
     if (cursor) f.push({ type: "Feature", properties: { kind: "profile" }, geometry: { type: "Point", coordinates: cursor } });
@@ -1203,10 +1288,10 @@ export function MapView() {
   const exaggeration = useStore((s) => s.exaggeration);
   const last3d = useRef(false);
   useEffect(() => {
-    const map = mapInstance;
+    const map = live.map;
     if (!ready || !map) return;
-    const byTilt = tiltDriven;
-    tiltDriven = false;
+    const byTilt = live.tiltDriven;
+    live.tiltDriven = false;
     // Only a 2D/3D switch moves the camera; changing the vertical scale must not.
     const switched = last3d.current !== view3d;
     last3d.current = view3d;
@@ -1215,6 +1300,9 @@ export function MapView() {
     map.setMaxPitch(hasElev ? 80 : 0);
     if (hasElev) map.touchPitch.enable();
     else map.touchPitch.disable();
+    // In 3D the label plates stand on posts (see mapLabel.ts); the labels are then placed again for their new shape.
+    containerRef.current?.classList.toggle("map-3d", view3d && hasElev);
+    if (switched) map.fire(RELAYOUT_LABELS);
     if (view3d && hasElev) {
       // The ground rises out of the flat map while the camera swings down, instead of popping up at full height.
       if (!map.terrain) {
@@ -1233,12 +1321,12 @@ export function MapView() {
   }, [ready, view3d, exaggeration, area]);
 
   const renderDistanceKm = useStore((s) => s.renderDistanceKm);
-  useEffect(() => setRenderDistance(mapInstance, renderDistanceKm), [ready, renderDistanceKm]);
+  useEffect(() => setRenderDistance(live.map, renderDistanceKm), [ready, renderDistanceKm]);
 
   // ---------- click popup ----------
   const mapClick = useStore((s) => s.mapClick);
   useEffect(() => {
-    const map = mapInstance;
+    const map = live.map;
     if (!ready || !map || !mapClick) {
       setPopupEl(null);
       return;

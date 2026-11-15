@@ -4,7 +4,7 @@ import { useStore, type OverlayId } from "../store";
 import { useUrls } from "./usePreviewUrls";
 import { loadFloatLayer } from "../data";
 import type { LayerEntry, LonLat } from "@marsmap/core";
-import { RING_COLOR, RING_LIMIT_COLOR, scienceLayers, scienceRamp } from "../map/MapView";
+import { scienceLayers, scienceRamp } from "../map/MapView";
 import { pictureGroup, tintable } from "../map/imageryTiles";
 import { CONTOUR_FINE_M, CONTOUR_INDEX_M, CONTOUR_MID_M } from "../map/contours";
 import { basePreview, costPreview, covers, MINERAL_PREVIEW_M, PREVIEW_M, previewFrame, sciencePreview, terrainPreviews, tintPreview, type Frame } from "../map/layerPreviews";
@@ -96,25 +96,25 @@ function Thumb({ ground, layer, opacity = 1, className, children }: { ground?: s
 
 const GLYPH = "absolute inset-0 size-full";
 
-/** Walk-limit rings as the map draws them: dashed teal time rings inside a solid amber limit. */
+/** Walk-limit rings as the map draws them: dotted ink time rings inside a solid limit in the warning colour. */
 const RingsGlyph = () => (
   <svg viewBox="0 0 40 40" className={GLYPH} fill="none">
-    <circle cx="20" cy="20" r="6" stroke={RING_COLOR} strokeWidth="1.2" strokeDasharray="3 2" />
-    <circle cx="20" cy="20" r="11.5" stroke={RING_COLOR} strokeWidth="1.4" strokeDasharray="3 2" />
-    <circle cx="20" cy="20" r="17" stroke={RING_LIMIT_COLOR} strokeWidth="1.6" />
+    <circle cx="20" cy="20" r="6" stroke="var(--ink)" strokeWidth="1.25" strokeDasharray="1.6 3" />
+    <circle cx="20" cy="20" r="11.5" stroke="var(--ink)" strokeWidth="1.25" strokeDasharray="1.6 3" />
+    <circle cx="20" cy="20" r="17" stroke="var(--warn)" strokeWidth="1.6" />
     <circle cx="20" cy="20" r="1.8" fill="#fff" />
   </svg>
 );
 
-/** Curiosity's route as the map draws it: a dashed warm-white line with a dot at each waypoint. */
+/** Curiosity's route as the map draws it: a thin solid line in the rover colour with a dot at each waypoint. */
 const TrackGlyph = () => {
   const d = "M5 31 L14 24 L19 27 L27 15 L35 9";
   return (
     <svg viewBox="0 0 40 40" className={GLYPH} fill="none" strokeLinecap="round" strokeLinejoin="round">
-      <path d={d} stroke="#000" strokeOpacity="0.5" strokeWidth="4" />
-      <path d={d} stroke="#f5f0e6" strokeWidth="1.6" strokeDasharray="2 2.5" />
+      <path d={d} stroke="#000" strokeOpacity="0.5" strokeWidth="3.5" />
+      <path d={d} stroke="var(--poi-rover)" strokeWidth="1.25" />
       {[[14, 24], [27, 15]].map(([x, y]) => (
-        <circle key={x} cx={x} cy={y} r="2.6" fill="#f5f0e6" stroke="#0a0b0d" strokeWidth="1.5" />
+        <circle key={x} cx={x} cy={y} r="2.2" fill="var(--poi-rover)" stroke="#000" strokeWidth="1.5" />
       ))}
     </svg>
   );

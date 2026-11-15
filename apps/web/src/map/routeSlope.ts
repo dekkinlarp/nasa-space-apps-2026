@@ -1,18 +1,7 @@
-/** Colour the selected route along its length by terrain slope (from the segment profiles). */
+/** Colour the selected route along its length by what the slope means (from the segment profiles), and mark its distance. */
 import type { LonLat, RouteResult, WalkParams } from "@marsmap/core";
 import { M_PER_DEG_LAT } from "../geo";
-
-/** Route slope colours, bright enough to read on the grey HiRISE photo. */
-export const ROUTE_SLOPE_COLORS = {
-  easy: "#4fdc7a",
-  moderate: "#ffe14d",
-  caution: "#ff9a2e",
-  limit: "#ff3b3b",
-} as const;
-
-type RGB = [number, number, number];
-const hex = (c: string): RGB => [parseInt(c.slice(1, 3), 16), parseInt(c.slice(3, 5), 16), parseInt(c.slice(5, 7), 16)];
-const toHex = (c: RGB) => `#${c.map((v) => Math.round(v).toString(16).padStart(2, "0")).join("")}`;
+import { mapPalette } from "./mapPalette";
 
 /** Slope thresholds, degrees, derived from the walk params (caution / max slope). */
 export function slopeBands(p: Pick<WalkParams, "cautionSlopeDeg" | "maxSlopeDeg"> | null) {
@@ -21,29 +10,23 @@ export function slopeBands(p: Pick<WalkParams, "cautionSlopeDeg" | "maxSlopeDeg"
   return { easyBelow: Math.max(0, caution - 5), caution, max };
 }
 
-/** Piecewise colour ramp: green below caution-5°, yellow up to caution, orange to the limit, red at it. */
-export function routeSlopeColor(slopeDeg: number, p: Pick<WalkParams, "cautionSlopeDeg" | "maxSlopeDeg"> | null): string {
+/** What the slope underfoot means for a walker: nothing to report, hazard ground, or the no-go slope. */
+export type SlopeState = "clear" | "caution" | "nogo";
+export function slopeState(slopeDeg: number, p: Pick<WalkParams, "cautionSlopeDeg" | "maxSlopeDeg"> | null): SlopeState {
   const b = slopeBands(p);
-  const C = ROUTE_SLOPE_COLORS;
-  const stops: [number, string][] = [
-    [b.easyBelow - 1, C.easy],
-    [b.easyBelow + 1, C.moderate],
-    [b.caution - 0.75, C.moderate],
-    [b.caution + 0.75, C.caution],
-    [b.max - 1.5, C.caution],
-    [b.max, C.limit],
-  ];
-  if (slopeDeg <= stops[0]![0]) return stops[0]![1];
-  for (let i = 1; i < stops.length; i++) {
-    const [t1, c1] = stops[i]!;
-    const [t0, c0] = stops[i - 1]!;
-    if (slopeDeg <= t1) {
-      const k = (slopeDeg - t0) / (t1 - t0 || 1);
-      const a = hex(c0), z = hex(c1);
-      return toHex([a[0] + (z[0] - a[0]) * k, a[1] + (z[1] - a[1]) * k, a[2] + (z[2] - a[2]) * k]);
-    }
-  }
-  return C.limit;
+  // Routes never cross ground steeper than the limit, so "at the limit" is the last degree below it.
+  return slopeDeg >= b.max - 1 ? "nogo" : slopeDeg >= b.caution ? "caution" : "clear";
+}
+
+/**
+ * The colour of the route line at a slope. Like the budget bars, the line carries no colour until there is
+ * a status to report: ink on clear ground, the warning colour on hazard slope, the over-limit colour at the
+ * no-go slope.
+ */
+export function routeSlopeColor(slopeDeg: number, p: Pick<WalkParams, "cautionSlopeDeg" | "maxSlopeDeg"> | null): string {
+  const c = mapPalette();
+  const st = slopeState(slopeDeg, p);
+  return st === "nogo" ? c.bad : st === "caution" ? c.warn : c.ink;
 }
 
 function cumMetres(path: LonLat[]): number[] {
@@ -123,5 +106,38 @@ export function routeSlopeFeatures(r: RouteResult | null, params: WalkParams | n
     }
     flush(prof.length - 1, runBin);
   });
+  return { type: "FeatureCollection", features };
+}
+
+/** Distance between the ticks drawn across the selected route, metres. */
+export const ROUTE_TICK_M = 100;
+
+/**
+ * One point every `stepM` along the whole route (the count runs on across stops), each with `rot`, the
+ * compass bearing the route is heading in there, and `m`, its distance from the start. The map draws a
+ * short bar across the line at each, so the route reads as a ruler.
+ */
+export function routeTickFeatures(r: RouteResult | null, stepM = ROUTE_TICK_M): GeoJSON.FeatureCollection {
+  const features: GeoJSON.Feature[] = [];
+  if (!r || stepM <= 0) return { type: "FeatureCollection", features };
+  let before = 0;
+  let next = stepM;
+  for (const s of r.segments) {
+    const path = s.path;
+    if (path.length < 2) continue;
+    const cum = cumMetres(path);
+    const len = cum[cum.length - 1]!;
+    let hint = 0;
+    while (next <= before + len) {
+      const [pt, j] = pointAt(path, cum, next - before, hint);
+      hint = j;
+      const a = path[j]!, b = path[j + 1] ?? a;
+      const kx = Math.cos((((a[1] + b[1]) / 2) * Math.PI) / 180);
+      const rot = (Math.atan2((b[0] - a[0]) * kx, b[1] - a[1]) * 180) / Math.PI;
+      features.push({ type: "Feature", properties: { rot: (rot + 360) % 360, m: next }, geometry: { type: "Point", coordinates: pt } });
+      next += stepM;
+    }
+    before += len;
+  }
   return { type: "FeatureCollection", features };
 }

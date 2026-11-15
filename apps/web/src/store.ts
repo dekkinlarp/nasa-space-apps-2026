@@ -97,6 +97,8 @@ interface State {
 
   profileHoverM: number | null;
   profileCursor: LonLat | null;
+  /** The route whose row in the route table is pointed at or focused: its line is brightened on the map. */
+  hoverProfile: string | null;
   go: GoState;
 
   set: (p: Partial<State>) => void;
@@ -166,6 +168,7 @@ export const useStore = create<State>((set, get) => ({
 
   profileHoverM: null,
   profileCursor: null,
+  hoverProfile: null,
   go: { mode: "off", playing: false, speed: 120, elapsedS: 0, alongM: 0, position: null, gpsAccuracyM: null, gpsError: null, offRouteM: null },
 
   set: (p) => set(p),

@@ -91,7 +91,7 @@ components:
     textColor: "{colors.ink}"
     rounded: "{rounded.lg}"
     height: "32px"
-    padding: "0 10px"
+    padding: "0 12px"
   button-demo:
     backgroundColor: "{colors.mars-deep}"
     textColor: "#ffffff"
@@ -255,20 +255,30 @@ The map layer is its own stacking context: a raised marker stacks among the mark
 
 ## Shapes
 
-Rounded rectangles on a short scale: 4px for badges and map labels, 8px for controls, 12px for small
-floating panels, 18px for large ones. Borders are 1px hairlines. Point-of-interest pins are 12px
+Rounded rectangles on a short scale: 4px for badges and map labels, 8px for controls, fields and tiles, 12px for small
+floating panels, 18px for large ones. Nothing is a pill except the switch and the slider thumb. Borders are 1px hairlines. Point-of-interest pins are 12px
 circles with a dark keyline and a light ring; a start is a rounded square. Stop markers are 22px
 rounded squares carrying their number.
 
 ## Components
 
 ### Buttons
-- **Shape:** 8px radius, 32px tall, 12.5px medium text.
-- **Primary:** Ink fill with Well text. One per group ("Simulate walk", "Add as stop").
-- **Secondary:** an 8% white fill with a hairline; the everyday button.
-- **Ghost and link:** icon buttons and inline "show" links.
-- **Glass:** a control that floats on the map.
-- **Demo:** the one coloured button, Mars Rust, flat, no gradient or glow.
+Buttons are skeuomorphic: small solid things lit from above, not flat fills.
+- **Shape:** a rounded rectangle, 8px radius (6px for the small sizes), 32px tall, 12.5px medium text. Not a pill.
+- **Raised** (`shadow-raised`): a dark 1px keyline, a bright top lip, a faint inner edge and a short drop
+  shadow. No CSS border: the edge is in the shadow, flush with the fill.
+- **Primary:** Ink fill with Well text, on the strong form (`shadow-raised-strong`), which adds a soft
+  highlight across the top and shade along the bottom. Keep it faint: it should round the fill, not read as a gradient. One per group
+  ("Simulate walk", "Add as stop").
+- **Secondary:** an 8% white fill, raised; the everyday button. Select triggers are the same.
+- **Pressed** (`shadow-pressed`): the drop shadow goes and the top edge darkens, on press and on a
+  toggled-on button ("Pick on map" while picking).
+- **Ghost and link:** icon buttons and inline "show" links. They have no surface, so no relief.
+- **Glass:** a control that floats on the map, with a bright top lip.
+- **Demo:** the one coloured button, Mars Rust, on the strong raised form. Still no glow.
+- **Sunk** (`inset-shadow-sunk`): the opposite of raised, for what a thumb runs in or text is typed into:
+  the tab bar, segmented controls and input fields are shaded under their top edge.
+- The relief is drawn with shadows only, never a gradient fill, so a button's colour stays one token.
 - **Focus:** a 2px Ink outline, 2px offset, on everything.
 
 ### Badges
@@ -312,7 +322,7 @@ cards showing the same 4 km of ground; the chosen one has an Ink outline and a c
 ### Navigation
 - Three tabs (Explore, Plan, Layers) as a segmented control; the active tab is a lighter fill. On the
   bottom sheet, tapping the active tab folds the sheet.
-- **Segmented controls** are 8px with 2px of padding and a 6px thumb, so the corners are concentric. The
+- **Segmented controls** and the tab bar are sunk 8px tracks with 2px of padding and a raised 6px thumb, so the corners are concentric. The
   2D/3D switch floats on the map, so it sits in a 12px panel with 4px of padding and 8px segments.
 
 - **The thumb slides.** In a tab bar or segmented control the highlight is one element that moves and
@@ -323,14 +333,42 @@ cards showing the same 4 km of ground; the chosen one has an Ink outline and a c
   scroll edges.
 
 ### Map labels
-The walk-limit ring label, the turn-back or tightest-point chip, the walker's countdown and a hovered
-place name share one box (`MAP_LABEL_BOX` in `map/mapLabel.ts`): 4px radius, hairline border, thick-glass
-fill, 11px semibold in the app font, with a neutral border and neutral text. A label that reports a status
-carries it once, on its icon or a 6px dot (`MAP_LABEL_MARK`), never on the border or the text.
-The walker's label holds only the work time left at a stop.
+Every label on the map is one physical thing: a small black plate with engraved text (`MAP_LABEL_BOX` in
+`map/mapLabel.ts`). The time-ring and walk-limit labels, the turn-back or tightest-point chip, the walker's
+countdown and place names all use it. This is the one place the map is skeuomorphic, and it follows the
+raised controls and the segmented meters: lit from above, drawn with shadows only.
 
-Place names are not boxed: white text with a crisp dark outline round the letters (`MAP_LABEL_HALO`), no
-glow. A name reads as a place and a box reads as an annotation; a hovered or selected place takes the box.
+- **The plate:** 18px tall, 4px corner, the Well fill, 11px medium in the mono face. No border: `shadow-plate`
+  gives it a dark keyline, a bright top lip with a soft highlight under it, a dark bottom edge and a short
+  shadow on the ground.
+- **The text** is cut in: a 1px dark line above the letters. Ink 2 for a plain measure (a ring's time), Ink
+  for a place, an event or a limit. Sentence case.
+- **Status shows once, on a mark** (`MAP_LABEL_MARK`): the label's icon, or a 6px lamp with a highlight, a dark
+  rim and a faint ring of its own colour. The plate and the text never take a status colour. The lamp is the
+  only thing on the map that glows.
+- **Place names are plates too.** There is no bare text on the map. A hovered or selected place shows its
+  full name.
+- **In 2D** a plate lies beside its point. **In 3D** it stands on a 14px post above it (`MAP_LABEL_POST`), with
+  the pin, a foot mark or the turn-back diamond where the post meets the ground. Plates stay flat to the
+  screen. Nearer ones draw over farther ones, and one whose point is behind a hill is dimmed (MapLibre's
+  own covered-marker opacity).
+- The walker's label holds only the work time left at a stop.
+
+### Map lines
+Lines are flat, thin and keylined, with no glow. Their colours are the tokens, read once in
+`map/mapPalette.ts` because MapLibre paint cannot use CSS variables. A broken line means estimated, modelled
+or hypothetical, and nothing else.
+
+- **Chosen route:** 3px on a 7px black casing. Ink, taking Warn from the caution slope and Bad in the last
+  degree before the no-go slope. Like the budget bars it carries no colour until there is a status. A bar
+  crosses it every 100 m.
+- **Routes not chosen:** 1.5px Ink 2 hairlines on a thin casing. Pointing at or focusing a row of the route
+  table brightens that route's line.
+- **Legs past the limit:** dashed Bad on the black casing.
+- **Walked part of a route:** solid Sim, 3px. The walk's position is a Sim dot in a thin Sim ring.
+- **Time rings:** dotted Ink on a dark keyline (they are modelled). **Walk limit:** solid Warn.
+- **Rover track:** solid, 1.25px, in the rover colour, with small waypoint dots (it was measured).
+- **Planning window:** four corner brackets, not a dashed square (it is a boundary, not an estimate).
 
 ### Stop numbers
 One badge in the Plan tab's list, on the map and in the map key (`STOP_BADGE`): a rounded square with a
@@ -343,14 +381,28 @@ The start row holds the start select and "Pick on map". Stops reorder by draggin
 on the grip. What the crew does at a stop is on the place's card and, during a walk, in the walk panel.
 
 ### Route table
-One row per route, selectable: a swatch in the route's map colour, its name, and right-aligned columns
+One row per route, selectable: its name and right-aligned columns
 for time, distance, energy and hazard metres. The best figure in each column is in Ink and the rest are
 muted; no colour is added. A route that does not fit says so in red under its name.
 
 ### Walk panel
 The mode as plain text in the Sim colour, a Follow toggle and a close button; the clock; one line for what
 is happening and, while the crew works at a stop, their task under it. Then the distance and bearing to
-the next point, what is left of time, energy and oxygen on the suit meter's mini bars, and the walk home.
+the next point, what is left of time, energy and oxygen on segmented meters, and the walk home. Beside the
+clock is the headline: what is left of the tightest budget.
+
+### Segmented meter
+What is left of one budget, read like a battery (`SegMeter`, in `MiniBar`): a sunk track of 14 or 20
+segments that light from the left. Each segment is coloured for what being down to it means: red for the
+last tenth, amber for the last quarter, green above. So the last lit segment is the status, and the figure
+beside the meter takes the same colour. Used where one glance has to do: the suit panel on the map and the
+walk panel. Above the meters, the tightest budget is the headline: its percentage left in 26px, with its
+name (`MeterHeadline`). Not used on the Plan tab, whose budget bars show the split a meter cannot.
+
+### Slope bars
+In Segment details, each leg carries 18 small bars of its slope from start to end: a bar is the steepest
+ground in its stretch, as tall as that is against the no-go slope and in the colour the route line has
+there on the map.
 
 ### Budget bar (signature)
 One row per limit (EVA time, energy, oxygen), directly under the verdict: the name, the bar, and used /
@@ -380,6 +432,6 @@ a note never prints the manifest's `method` string.
 - **Don't** add a status dot, pill or badge for a state that is true almost all the time.
 - **Don't** use uppercase outside section headings, or set text under 11px.
 - **Don't** use unicode glyphs or emoji as icons; use lucide.
-- **Don't** put a coloured left or right edge on an alert, or a gradient or glow on a button.
+- **Don't** put a coloured left or right edge on an alert, or a gradient fill or glow on a button.
 - **Don't** hide an explanation in a `title` tooltip.
 - **Don't** let a panel cover the place the planner just selected.

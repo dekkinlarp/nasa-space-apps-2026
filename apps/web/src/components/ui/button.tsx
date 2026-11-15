@@ -7,12 +7,14 @@ const buttonVariants = cva(
   {
     variants: {
       variant: {
-        default: "bg-primary text-primary-foreground hover:bg-primary/80",
+        // Raised buttons drop the 1px border: their keyline and inner edge are in the shadow, flush with the fill.
+        /** The one main action of a group: a filled, domed button. */
+        default: "border-0 bg-primary text-primary-foreground shadow-raised-strong hover:bg-white active:shadow-pressed",
         outline:
           "border-border bg-background hover:bg-muted hover:text-foreground aria-expanded:bg-muted aria-expanded:text-foreground dark:border-input dark:bg-input/30 dark:hover:bg-input/50",
-        /** The everyday button: a faint fill and a hairline. */
+        /** The everyday button: a faint fill, raised off the panel. */
         secondary:
-          "border-input bg-secondary text-secondary-foreground hover:border-seam-strong hover:bg-white/13 aria-expanded:bg-secondary aria-expanded:text-secondary-foreground",
+          "border-0 bg-secondary text-secondary-foreground shadow-raised hover:bg-white/13 active:bg-white/5 active:shadow-pressed aria-expanded:bg-secondary aria-expanded:text-secondary-foreground aria-pressed:bg-white/5 aria-pressed:shadow-pressed",
         ghost:
           "hover:bg-muted hover:text-foreground aria-expanded:bg-muted aria-expanded:text-foreground dark:hover:bg-muted/50",
         destructive:
@@ -25,19 +27,19 @@ const buttonVariants = cva(
         // No border change on hover, press or toggle: over the map a brighter edge picks up the ground's colour and
         // reads as an orange outline. State shows in the icon's brightness; keyboard focus is a plain light outline.
         glass:
-          "glass border-glass-edge bg-clip-border text-ink-2 shadow-float-sm hover:text-foreground aria-expanded:text-foreground focus-visible:border-glass-edge focus-visible:ring-0 focus-visible:outline-2 focus-visible:outline-offset-2 focus-visible:outline-foreground",
+          "glass border-glass-edge bg-clip-border text-ink-2 shadow-float-sm inset-shadow-[0_1px_0_rgba(255,255,255,0.1)] hover:text-foreground active:inset-shadow-sunk aria-expanded:text-foreground focus-visible:border-glass-edge focus-visible:ring-0 focus-visible:outline-2 focus-visible:outline-offset-2 focus-visible:outline-foreground",
       },
       size: {
         default:
           "h-8 gap-1.5 px-3 coarse:h-10 has-data-[icon=inline-end]:pr-2 has-data-[icon=inline-start]:pl-2",
-        xs: "h-6 gap-1 rounded-[min(var(--radius-md),10px)] px-2 text-xs in-data-[slot=button-group]:rounded-lg has-data-[icon=inline-end]:pr-1.5 has-data-[icon=inline-start]:pl-1.5 [&_svg:not([class*='size-'])]:size-3",
-        sm: "h-7 gap-1 rounded-[min(var(--radius-md),12px)] px-2.5 text-[0.8rem] in-data-[slot=button-group]:rounded-lg has-data-[icon=inline-end]:pr-1.5 has-data-[icon=inline-start]:pl-1.5 [&_svg:not([class*='size-'])]:size-3.5",
+        xs: "h-6 gap-1 rounded-md px-2 text-xs in-data-[slot=button-group]:rounded-lg has-data-[icon=inline-end]:pr-1.5 has-data-[icon=inline-start]:pl-1.5 [&_svg:not([class*='size-'])]:size-3",
+        sm: "h-7 gap-1 rounded-md px-2.5 text-[0.8rem] in-data-[slot=button-group]:rounded-lg has-data-[icon=inline-end]:pr-1.5 has-data-[icon=inline-start]:pl-1.5 [&_svg:not([class*='size-'])]:size-3.5",
         lg: "h-9 gap-1.5 px-2.5 has-data-[icon=inline-end]:pr-2 has-data-[icon=inline-start]:pl-2",
         icon: "size-8",
         "icon-xs":
-          "size-6 coarse:size-10 rounded-[min(var(--radius-md),10px)] in-data-[slot=button-group]:rounded-lg [&_svg:not([class*='size-'])]:size-3",
+          "size-6 coarse:size-10 rounded-md in-data-[slot=button-group]:rounded-lg [&_svg:not([class*='size-'])]:size-3",
         "icon-sm":
-          "size-7 rounded-[min(var(--radius-md),12px)] in-data-[slot=button-group]:rounded-lg",
+          "size-7 rounded-md in-data-[slot=button-group]:rounded-lg",
         "icon-lg": "size-9",
         "icon-xl": "size-11 rounded-xl",
         /** No box: for link buttons that sit in running text. */

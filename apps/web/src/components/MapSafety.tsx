@@ -9,7 +9,7 @@ import { fmtMin as fmtDur } from "./SafetyBudget";
 import { getMap, RELAYOUT_LABELS } from "../map/MapView";
 import { PNR_METHOD_NOTE, usePnr } from "../usePnr";
 import { MAP_LABEL_BOX, MAP_LABEL_MARK, MAP_LABEL_TONE } from "../map/mapLabel";
-import { MiniBar } from "@/components/ui/mini-bar";
+import { MeterHeadline, MiniBar } from "@/components/ui/mini-bar";
 import { Panel } from "@/components/ui/panel";
 import { cn } from "@/lib/utils";
 
@@ -35,11 +35,11 @@ export function MapSafety({ planVisible }: { planVisible: boolean }) {
       pnr.kind === "pnr"
         ? `Point of no return: turn back by ${fmtDur(pnr.elapsedS)} elapsed${pnr.atStop ? " (leave this stop by then)" : ""}.`
         : `Tightest point of the walk: turning back here still leaves ${fmtDur(pnr.marginS)} spare.`;
-    // A map label on a stem with a diamond at the spot; at a stop the stop's own marker is the spot.
+    // A plate on a post with a diamond at the spot (the post is taller in 3D); at a stop the stop's own marker is the spot.
     el.innerHTML =
       `<div class="pnr-chip flex items-center gap-[5px] ${MAP_LABEL_BOX} ${MAP_LABEL_TONE.strong}">` +
       `<svg class="size-3 flex-none ${isPnr ? MAP_LABEL_MARK.warn : MAP_LABEL_MARK.ok}" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.5" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><path d="M9 14 4 9l5-5"/><path d="M4 9h10.5a5.5 5.5 0 0 1 5.5 5.5a5.5 5.5 0 0 1-5.5 5.5H11"/></svg><b class="font-semibold"></b></div>` +
-      `<div class="h-2 w-0.5 ${isPnr ? "bg-warn" : "bg-ok"}"></div>` +
+      `<div class="h-2 w-0.5 shadow-[0_0_0_1px_rgba(0,0,0,0.75)] [.map-3d_&]:h-3.5 ${isPnr ? "bg-warn" : "bg-ok"}"></div>` +
       (pnr.atStop ? "" : `<div class="-mb-[5px] size-2.5 rotate-45 border-2 border-well ${isPnr ? "bg-warn shadow-[0_0_0_1.5px_var(--warn)]" : "bg-ok shadow-[0_0_0_1.5px_var(--ok)]"}"></div>`);
     el.querySelector("b")!.textContent = label;
     // A note on the map, not a control: named for screen readers, kept out of the tab order.
@@ -65,7 +65,7 @@ export function MapSafety({ planVisible }: { planVisible: boolean }) {
   const over = t.limitingFactor === "oxygen" ? "Over O₂" : t.limitingFactor === "energy" ? "Over energy" : "Over time";
   // The full meter: the Plan tab's stand-in on wide screens when that tab is out of sight.
   const full = (
-    <Panel className={cn("map-safety w-[190px] flex-none px-2.5 pt-1.5 pb-[7px] text-xs sheet:hidden", !ok && "border-bad/55")}>
+    <Panel className={cn("map-safety w-[200px] flex-none px-2.5 pt-1.5 pb-2 text-xs sheet:hidden", !ok && "border-bad/55")}>
       <div className="mb-1 flex items-center justify-between">
         <span className="text-sm font-semibold">Suit</span>
         <span
@@ -75,6 +75,8 @@ export function MapSafety({ planVisible }: { planVisible: boolean }) {
           {ok ? "Fits the limits" : over}
         </span>
       </div>
+      {/* The tightest budget as the one number to glance at, then a meter for each. */}
+      <MeterHeadline className="mt-1.5 mb-1.5" budgets={[{ name: "Time", f: ft }, { name: "Energy", f: fe }, ...(fo != null ? [{ name: "Oxygen", f: fo }] : [])]} />
       <MiniBar label="Time" f={ft} text={`${fmtDur(t.totalTimeS)} of ${fmtDur(usableT)} usable (limit ${fmtDur(params.evaLimitS)} minus ${Math.round(params.reserveFraction * 100)}% reserve)`} />
       <MiniBar label="Energy" f={fe} text={`${fmtEnergy(t.energyKJ)} of ${fmtEnergy(usableE)} usable metabolic energy`} />
       {fo != null && t.o2Kg != null && (

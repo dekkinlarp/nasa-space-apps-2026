@@ -27,7 +27,7 @@ function Segmented<T extends string>({
       // Single choice: pressing the picked option again keeps it, rather than leaving none.
       onValueChange={(v: string[]) => v[0] != null && onValueChange(v[0] as T)}
       spacing={0.5}
-      className={cn("relative rounded-lg border border-input bg-white/6 p-0.5", className)}
+      className={cn("relative rounded-lg border border-input bg-black/25 p-0.5 inset-shadow-sunk", className)}
     >
       <SlidingThumb />
       {options.map((o) => (
