@@ -207,7 +207,7 @@ the window moves when the start or a stop comes within 2 km of its edge.
 
 ## License
 
-The code in this repository is released under the MIT License. In short: you may use, copy, modify, merge,
+The code in this repository is released under the [MIT License](LICENSE). In short: you may use, copy, modify, merge,
 publish, distribute, sublicense and sell it, in source or built form, provided the copyright notice and the
 licence text are kept with it. It comes "as is", with no warranty of any kind, and the authors are not
 liable for anything that follows from using it.
