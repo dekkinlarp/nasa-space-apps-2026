@@ -17,10 +17,12 @@
  * Additions (all optional / extra): DEFAULT_WALK_PARAMS, createCostModel(..., extraFactors?),
  * BUILTIN_FACTORS + CostFactor/StepState (extension point), a trailing `options` argument on
  * planRoute / planRouteAlternatives / computeReach ({ model?, extraFactors?, maxCost? }),
- * computeSlope, snapToPassable, and the generic search engine (astar, flood, MinHeap).
+ * computeSlope, snapToPassable, the generic search engine (astar, flood, MinHeap), the oxygen
+ * model (oxygenUsedKg, oxygenModelOn; optional o2* fields on WalkParams) and
+ * walkLimitRing(grid, reach, params, dwellS?) -> ReachRing (time, energy and oxygen together).
  */
 export * from "./types";
-export { DEFAULT_WALK_PARAMS, EARTH_GRAVITY } from "./params";
+export { DEFAULT_WALK_PARAMS, EARTH_GRAVITY, oxygenUsedKg, oxygenModelOn } from "./params";
 export { lonLatToCell, cellToLonLat, rowColToLonLat, distanceM, samplePoint, type CellRef } from "./grid";
 export { loadLayers, computeSlope } from "./load";
 export {
@@ -54,4 +56,4 @@ export {
   type PlanOptions,
 } from "./route";
 export { computeReach, type ReachOptions } from "./reach";
-export { reachRings, isolines, type ReachRingOptions } from "./contour";
+export { reachRings, walkLimitRing, isolines, type ReachRingOptions } from "./contour";
