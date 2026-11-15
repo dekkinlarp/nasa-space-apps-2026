@@ -1,0 +1,372 @@
+{
+  "schemaVersion": 2,
+  "generatedAt": "2026-11-15T16:07:04+00:00",
+  "title": "Design System: EVAres",
+  "extensions": {
+    "colorMeta": {
+      "mars-deep": {
+        "role": "primary",
+        "displayName": "Mars Rust",
+        "canonical": "#c1440e"
+      },
+      "mars": {
+        "role": "primary",
+        "displayName": "Mars Orange",
+        "canonical": "#ff8a3d"
+      },
+      "void": {
+        "role": "neutral",
+        "displayName": "Void",
+        "canonical": "#08090b"
+      },
+      "hull": {
+        "role": "neutral",
+        "displayName": "Hull",
+        "canonical": "#0f1114"
+      },
+      "ink": {
+        "role": "neutral",
+        "displayName": "Ink",
+        "canonical": "#e8eaed"
+      },
+      "ink-3": {
+        "role": "neutral",
+        "displayName": "Ink 3 (muted text)",
+        "canonical": "#7a808a"
+      },
+      "ok": {
+        "role": "tertiary",
+        "displayName": "OK",
+        "canonical": "#4cc38a"
+      },
+      "warn": {
+        "role": "tertiary",
+        "displayName": "Warn",
+        "canonical": "#e5a93c"
+      },
+      "bad": {
+        "role": "tertiary",
+        "displayName": "Bad",
+        "canonical": "#f2594b"
+      },
+      "sim": {
+        "role": "tertiary",
+        "displayName": "Sim",
+        "canonical": "#36d1c4"
+      }
+    },
+    "typographyMeta": {
+      "display": {
+        "displayName": "Display",
+        "purpose": "The site name in the panel header."
+      },
+      "headline": {
+        "displayName": "Headline",
+        "purpose": "A tab's opening line and card titles."
+      },
+      "title": {
+        "displayName": "Title",
+        "purpose": "The headline number on a route card."
+      },
+      "body": {
+        "displayName": "Body",
+        "purpose": "Tab content."
+      },
+      "small": {
+        "displayName": "Small",
+        "purpose": "Secondary text, controls, notes."
+      },
+      "label": {
+        "displayName": "Label",
+        "purpose": "Section headings only, uppercase."
+      },
+      "mono": {
+        "displayName": "Mono",
+        "purpose": "Coordinates and identifiers."
+      }
+    },
+    "shadows": [
+      {
+        "name": "float",
+        "value": "0 0 0 0.5px rgba(0,0,0,0.7), 0 10px 30px rgba(0,0,0,0.45)",
+        "purpose": "The side panel, cards and the dock."
+      },
+      {
+        "name": "float-sm",
+        "value": "0 0 0 0.5px rgba(0,0,0,0.7), 0 4px 14px rgba(0,0,0,0.4)",
+        "purpose": "Control bars, the key, readouts."
+      }
+    ],
+    "motion": [
+      {
+        "name": "spring",
+        "value": "cubic-bezier(0.32, 0.72, 0, 1)",
+        "purpose": "Panels opening and folding, 380ms."
+      },
+      {
+        "name": "ease",
+        "value": "cubic-bezier(0.23, 1, 0.32, 1)",
+        "purpose": "Small state changes such as a pin scaling on hover, 120ms."
+      }
+    ],
+    "breakpoints": [
+      {
+        "name": "compact",
+        "value": "1100px"
+      },
+      {
+        "name": "sheet",
+        "value": "860px"
+      },
+      {
+        "name": "phone",
+        "value": "600px"
+      }
+    ]
+  },
+  "components": [
+    {
+      "name": "Primary button",
+      "kind": "button",
+      "refersTo": "button-primary",
+      "description": "The one main action in a group, such as Simulate walk.",
+      "html": "<button class=\"ds-btn-primary\">Simulate walk</button>",
+      "css": ".ds-btn-primary{font:500 12.5px/1 \"Helvetica Neue\",\"Inter Tight Variable\",Helvetica,Arial,sans-serif;height:32px;padding:0 10px;border-radius:8px;border:1px solid transparent;background:#e8eaed;color:#0a0b0d;cursor:pointer}.ds-btn-primary:hover{background:rgba(232,234,237,.8)}.ds-btn-primary:focus-visible{outline:2px solid #e8eaed;outline-offset:2px}"
+    },
+    {
+      "name": "Secondary button",
+      "kind": "button",
+      "refersTo": "button-secondary",
+      "description": "The everyday button: a faint fill and a hairline.",
+      "html": "<button class=\"ds-btn-secondary\">Pick on map</button>",
+      "css": ".ds-btn-secondary{font:500 12.5px/1 \"Helvetica Neue\",\"Inter Tight Variable\",Helvetica,Arial,sans-serif;height:32px;padding:0 10px;border-radius:8px;border:1px solid rgba(255,255,255,.13);background:rgba(255,255,255,.08);color:#e8eaed;cursor:pointer}.ds-btn-secondary:hover{border-color:rgba(255,255,255,.32);background:rgba(255,255,255,.13)}.ds-btn-secondary:focus-visible{outline:2px solid #e8eaed;outline-offset:2px}"
+    },
+    {
+      "name": "Demo button",
+      "kind": "button",
+      "refersTo": "button-demo",
+      "description": "The one coloured action: starts the sample walk.",
+      "html": "<button class=\"ds-btn-demo\"><b>Try the boxwork walk</b><span>Camp → hollow → ridge junction → sand dig</span></button>",
+      "css": ".ds-btn-demo{display:grid;gap:2px;width:280px;text-align:left;font:500 11px/1.35 \"Helvetica Neue\",\"Inter Tight Variable\",Helvetica,Arial,sans-serif;padding:10px 12px;border-radius:12px;border:0;background:#c1440e;color:#fff;cursor:pointer}.ds-btn-demo b{font-size:13.5px}.ds-btn-demo:hover{background:#d4521a}.ds-btn-demo:focus-visible{outline:2px solid #e8eaed;outline-offset:2px}"
+    },
+    {
+      "name": "Badges",
+      "kind": "chip",
+      "refersTo": "badge",
+      "description": "What the data can be trusted for. Dashed always means estimated.",
+      "html": "<span class=\"ds-badge\">Orbit</span> <span class=\"ds-badge ds-badge-est\">estimated</span> <span class=\"ds-badge ds-badge-warn\">Synthetic test data</span>",
+      "css": ".ds-badge{display:inline-flex;align-items:center;height:16px;padding:0 6px;border-radius:4px;border:1px solid rgba(255,255,255,.13);font:400 11px/16px \"Helvetica Neue\",\"Inter Tight Variable\",Helvetica,Arial,sans-serif;color:#a8adb5}.ds-badge-est{border-style:dashed;border-color:rgba(255,255,255,.32)}.ds-badge-warn{border-color:rgba(229,169,60,.55);color:#e5a93c}"
+    },
+    {
+      "name": "Verdict line",
+      "kind": "custom",
+      "description": "The one place that says whether the selected route fits.",
+      "html": "<p class=\"ds-verdict\"><svg viewBox=\"0 0 24 24\" width=\"16\" height=\"16\" fill=\"none\" stroke=\"#4cc38a\" stroke-width=\"2\" stroke-linecap=\"round\" stroke-linejoin=\"round\"><path d=\"M20 6 9 17l-5-5\"/></svg><b>Fits the limits</b><span>1h 31m of 5h 00m usable, 17% in reserve</span></p>",
+      "css": ".ds-verdict{display:flex;flex-wrap:wrap;align-items:center;gap:0 6px;margin:0;font:400 13.5px/1.42 \"Helvetica Neue\",\"Inter Tight Variable\",Helvetica,Arial,sans-serif;color:#e8eaed}.ds-verdict b{font-weight:600}.ds-verdict span{color:#7a808a}"
+    },
+    {
+      "name": "Budget bar",
+      "kind": "custom",
+      "description": "Used, left and the hatched safety reserve against one limit.",
+      "html": "<div class=\"ds-budget\"><div class=\"ds-budget-head\"><b>EVA time</b><span><b>1h 31m</b> / 5h 00m</span></div><div class=\"ds-budget-bar\"><i class=\"ds-walk\"></i><i class=\"ds-stops\"></i><i class=\"ds-reserve\"></i></div></div>",
+      "css": ".ds-budget{width:300px;font:400 12.5px/1.4 \"Helvetica Neue\",\"Inter Tight Variable\",Helvetica,Arial,sans-serif;color:#e8eaed}.ds-budget-head{display:flex;justify-content:space-between;margin-bottom:7px}.ds-budget-head span{color:#7a808a}.ds-budget-head span b{color:#e8eaed}.ds-budget-bar{position:relative;height:14px;border-radius:4px;background:rgba(111,212,138,.16);box-shadow:inset 0 0 0 1px rgba(111,212,138,.55)}.ds-budget-bar i{position:absolute;top:0;bottom:0}.ds-walk{left:0;width:2%;background:#ff8a3d;border-radius:4px 0 0 4px}.ds-stops{left:2%;width:23%;background:#b594ff}.ds-reserve{left:83%;width:17%;border-radius:0 4px 4px 0;background:repeating-linear-gradient(135deg,#3d302a 0 3px,#241c18 3px 7px);box-shadow:inset 1px 0 0 #6b5a50}"
+    }
+  ],
+  "narrative": {
+    "northStar": "The Field Notebook",
+    "overview": "This is a scientist's working map. A planner lays a walk over real ground and the interface keeps the\nevidence, the caveats and the sources in view beside it. Nothing decorates: each mark either is data\nor says how far the data can be trusted. The language is plain, with the mission's own terms (sol,\nEVA, reserve, turn back) where they are the right words.\n\nThe map is the page. Panels float over it on one dark glass material and stay out of its way; the\nchrome is monochrome on a single cool hue so that colour is free to mean something. Density is that\nof a tool used for a long session at a desk, and it has to hold up on a phone too.",
+    "keyCharacteristics": [
+      "The verdict (\"Fits the limits\", or what breaks them) has one home and comes before the detail.",
+      "Colour is reserved for status, data ramps, point-of-interest types and the one demo action.",
+      "A dashed outline always means estimated or inferred. Evidence is tagged Rover, Orbit or Our reading.",
+      "Hatching marks the safety reserve on a budget bar and nothing else.",
+      "Explanations a reader may need open from an info button; they are never tooltip-only.",
+      "",
+      "Colors",
+      "",
+      "near-black cool neutral in lightness steps, with a small set of saturated colours that each carry",
+      "e meaning.",
+      "",
+      "# Primary",
+      "**Mars Rust** (#c1440e, with **Mars Orange** #ff8a3d as its light step): the one coloured action in",
+      "the panel (the demo walk) and the walking segment of a budget bar. Not used for decoration.",
+      "",
+      "# Neutral",
+      "**Void** (#08090b): behind the map.",
+      "**Hull** (#0f1114), **Hull Raised** (#15181c), **Hull Pressed** (#1d2126): docked, raised and",
+      "pressed surfaces; popovers sit on Hull Raised.",
+      "**Well** (#0a0b0d): inset fields and marker fills.",
+      "**Ink** (#e8eaed), **Ink 2** (#a8adb5), **Ink 3** (#7a808a), **Ink 4** (#4e545d): text from primary",
+      "to disabled. Ink 3 is the muted text colour and sits at about 4.5:1 on the panel, so it is not used",
+      "on lighter surfaces such as a selected card; step up to Ink 2 there.",
+      "**Seams** (white at 7%, 13% and 32%): hairlines, input borders, and hover or dashed borders.",
+      "**Glass** (rgba(17,19,23,0.78)) and **Thick Glass** (rgba(15,17,20,0.86)): the floating material,",
+      "with a 12% white edge and a 28px blur.",
+      "",
+      "# Status and data",
+      "**OK** (#4cc38a), **Warn** (#e5a93c), **Bad** (#f2594b): fits, close to or at a limit, over a limit.",
+      "**Sim** (#36d1c4): the simulated or GPS position during a walk.",
+      "**POI types**: drill site #ff8a3d, science target #b594ff, start #5fd08a, viewpoint #5cc4f5,",
+      "rover #f2f0ea. The same colour is used in the list, on the card and on the map pin.",
+      "",
+      "# Named Rules",
+      "The Meaning Rule.** If a colour is on screen it is telling the planner something: a status, a data",
+      "lue, a kind of place. Chrome stays neutral.",
+      "",
+      "The Dashed Rule.** A dashed outline means estimated or inferred, everywhere, and is used for nothing else.",
+      "",
+      "Typography",
+      "",
+      "Display and body font:** Helvetica Now Display where installed, Helvetica Neue on Apple devices,",
+      "ter Tight elsewhere.",
+      "Mono font:** Geist Mono, for coordinates and identifiers only.",
+      "",
+      "Character:** One tight grotesque throughout, with tabular figures so numbers line up. Headings are",
+      "rge with negative tracking; everything else is small and even.",
+      "",
+      "# Hierarchy",
+      "**Display** (700, 26px, 1.05): the site name in the panel header.",
+      "**Headline** (500, 22px, 1.1): a tab's opening line and card titles.",
+      "**Title** (500, 17px, 1.25): the headline number on a route card.",
+      "**Body** (400, 13.5px, 1.42): tab content.",
+      "**Small** (400, 12.5px, 1.4): secondary text, controls, notes.",
+      "**Label** (500, 11px, 0.045em, uppercase): section headings only.",
+      "**Mono** (400, 11px): coordinates.",
+      "",
+      "# Named Rules",
+      "The Eleven Rule.** Nothing is set under 11px. The miniature markers inside the map key are the one exception.",
+      "",
+      "The Caps Rule.** Uppercase is for the heading that opens a section of a panel. Value labels, buttons,",
+      "mes and badges are sentence case.",
+      "",
+      "Layout",
+      "",
+      "e map fills the window and everything else floats over it. A *stage* covers the part of the map the",
+      "de panel leaves visible and only lays things out: it ignores the pointer, and each panel takes the",
+      "inter back, so the map stays draggable in every gap.",
+      "",
+      "**Side panel:** 372px (336px under 1100px), 12px from the window edge, with header, tabs and one",
+      "scrolling tab body. It collapses off the left edge.",
+      "**Top row:** map key on the left, view controls on the right, 44px tall.",
+      "**Middle:** the point-of-interest card on the right, 340px (300px under 1100px).",
+      "**Bottom row:** hover readout, verdict or suit meter, then the elevation dock, which starts folded.",
+      "**Under 860px** the side panel becomes a bottom sheet (46dvh, 50dvh on phones) that folds to its tab",
+      "bar; cards move to the left; a one-line verdict rides on the map.",
+      "**Under 600px** the card takes the full width and the open sheet takes the elevation dock's room.",
+      "",
+      "e map is told how much of it is covered, so \"centre\" means the centre of what the planner can see,",
+      "d a selected place is never left under its own card.",
+      "",
+      "Elevation & Depth",
+      "",
+      "pth is drawn with hairlines. Only surfaces that float over the imagery get a shadow, and there are",
+      "o of them.",
+      "",
+      "# Shadow Vocabulary",
+      "**Float** (`0 0 0 0.5px rgba(0,0,0,0.7), 0 10px 30px rgba(0,0,0,0.45)`): the side panel, cards, the dock.",
+      "**Float small** (`0 0 0 0.5px rgba(0,0,0,0.7), 0 4px 14px rgba(0,0,0,0.4)`): control bars, the key, readouts.",
+      "",
+      "e map layer is its own stacking context: a raised marker stacks among the markers and never above a panel.",
+      "",
+      "Shapes",
+      "",
+      "unded rectangles on a short scale: 4px for badges and map labels, 8px for controls, 12px for small",
+      "oating panels, 18px for large ones. Borders are 1px hairlines. Point-of-interest pins are 12px",
+      "rcles with a dark keyline and a light ring; a start is a rounded square. Stop markers are 22px",
+      "unded squares carrying their number.",
+      "",
+      "Components",
+      "",
+      "# Buttons",
+      "**Shape:** 8px radius, 32px tall, 12.5px medium text.",
+      "**Primary:** Ink fill with Well text. One per group (\"Simulate walk\", \"Add as stop\").",
+      "**Secondary:** an 8% white fill with a hairline; the everyday button.",
+      "**Ghost and link:** icon buttons and inline \"show\" links.",
+      "**Glass:** a control that floats on the map.",
+      "**Demo:** the one coloured button, Mars Rust, flat, no gradient or glow.",
+      "**Focus:** a 2px Ink outline, 2px offset, on everything.",
+      "",
+      "# Badges",
+      "**Style:** 16px tall, 4px radius, 11px text, a hairline border and no fill.",
+      "**Estimate:** dashed border. **Strong:** brighter border for primary objectives and rover evidence.",
+      "**Warning:** amber border and text, used for \"Synthetic test data\".",
+      "",
+      "# Panels and cards",
+      "**Material:** glass, with a 12% white edge and a float shadow. The side panel uses thick glass.",
+      "**Corner:** 12px for bars and readouts, 18px for cards and the side panel.",
+      "**Padding:** 16px. A card's actions sit in a footer that stays put while the body scrolls.",
+      "",
+      "# Inputs",
+      "**Style:** transparent with a 13% white border, 8px radius, 32px tall. Number fields for dwell time sit in a Well fill.",
+      "",
+      "# Navigation",
+      "Three tabs (Explore, Plan, Layers) as a segmented control; the active tab is a lighter fill. On the",
+      "bottom sheet, tapping the active tab folds the sheet.",
+      "",
+      "# Budget bar (signature)",
+      "e bar per limit (EVA time, energy, oxygen): used segments in colour, what is left in a faint green,",
+      "e safety reserve hatched at the end, a marker for the turn-back time, and a red hatched overrun if",
+      "e plan exceeds the usable budget. Each has an info button and a full text label for screen readers.",
+      "",
+      "# Info button",
+      "small \"i\" that opens a popover. Use it for any explanation a reader may need; a `title` tooltip is",
+      "ly for a hint that repeats what is already visible.",
+      "",
+      "Do's and Don'ts",
+      "",
+      "# Do:",
+      "**Do** state the verdict once, above the detail, in the same words everywhere (\"Fits the limits\").",
+      "**Do** label anything estimated, illustrative or synthetic, with the dashed style or in words.",
+      "**Do** credit the data source wherever data is shown.",
+      "**Do** use tokens (`text-muted-foreground`, `bg-well`, `text-warn`) rather than raw hex.",
+      "**Do** give every control a name, a keyboard path and a touch size that works on a phone.",
+      "**Do** round a duration the same way wherever one route's time is shown.",
+      "",
+      "# Don't:",
+      "**Don't** add a status dot, pill or badge for a state that is true almost all the time.",
+      "**Don't** use uppercase outside section headings, or set text under 11px.",
+      "**Don't** use unicode glyphs or emoji as icons; use lucide.",
+      "**Don't** put a coloured left or right edge on an alert, or a gradient or glow on a button.",
+      "**Don't** hide an explanation in a `title` tooltip.",
+      "**Don't** let a panel cover the place the planner just selected."
+    ],
+    "rules": [
+      {
+        "name": "The Meaning Rule",
+        "body": "If a colour is on screen it is telling the planner something: a status, a data value, a kind of place. Chrome stays neutral.",
+        "section": "colors"
+      },
+      {
+        "name": "The Dashed Rule",
+        "body": "A dashed outline means estimated or inferred, everywhere, and is used for nothing else.",
+        "section": "colors"
+      },
+      {
+        "name": "The Eleven Rule",
+        "body": "Nothing is set under 11px. The miniature markers inside the map key are the one exception.",
+        "section": "typography"
+      },
+      {
+        "name": "The Caps Rule",
+        "body": "Uppercase is for the heading that opens a section of a panel. Value labels, buttons, names and badges are sentence case.",
+        "section": "typography"
+      }
+    ],
+    "dos": [
+      "Do state the verdict once, above the detail, in the same words everywhere (\"Fits the limits\").",
+      "Do label anything estimated, illustrative or synthetic, with the dashed style or in words.",
+      "Do credit the data source wherever data is shown.",
+      "Do use tokens (`text-muted-foreground`, `bg-well`, `text-warn`) rather than raw hex.",
+      "Do give every control a name, a keyboard path and a touch size that works on a phone.",
+      "Do round a duration the same way wherever one route's time is shown."
+    ],
+    "donts": [
+      "Don't add a status dot, pill or badge for a state that is true almost all the time.",
+      "Don't use uppercase outside section headings, or set text under 11px.",
+      "Don't use unicode glyphs or emoji as icons; use lucide.",
+      "Don't put a coloured left or right edge on an alert, or a gradient or glow on a button.",
+      "Don't hide an explanation in a `title` tooltip.",
+      "Don't let a panel cover the place the planner just selected."
+    ]
+  }
+}

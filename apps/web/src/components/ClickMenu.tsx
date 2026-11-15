@@ -32,7 +32,7 @@ export function ClickMenu({ lonLat }: { lonLat: LonLat }) {
           )}
         </div>
       )}
-      <div className="mt-px mb-2 font-mono text-2xs text-muted-foreground">{fmtLonLat(lonLat)}</div>
+      <div className="mt-px mb-2 font-mono text-xs text-muted-foreground">{fmtLonLat(lonLat)}</div>
       {inside ? (
         <div className="flex gap-1.5">
           <Button

@@ -1,6 +1,8 @@
+import { CompassControl } from "./compassControl";
 import { useEffect, useRef, useState } from "react";
 import { createPortal } from "react-dom";
 import maplibregl, { type GeoJSONSource, type ImageSource, type Map as MLMap } from "maplibre-gl";
+import { MAP_LABEL, MAP_LABEL_BOX, MAP_LABEL_TONE, STOP_BADGE, STOP_BADGE_NUMBER, STOP_BADGE_START } from "./mapLabel";
 import type { GridSpec, LonLat, ReachRing, RouteResult } from "@marsmap/core";
 import { selectedResult, useStore, type LayerState, type OverlayId } from "../store";
 import type { AreaData, DisplayLayers, Poi } from "../types";
@@ -8,6 +10,7 @@ import { M_PER_DEG_LAT } from "../geo";
 import { sampleBest } from "../lib";
 import { confidenceUrl, costUrl, elevationUrl, SCIENCE_RAMPS, scienceUrl, slopeUrl, surfaceUrl } from "./rasters";
 import { loadFloatLayer } from "../data";
+import { CONTOUR_COLOR, CONTOUR_FINE_ZOOM, CONTOUR_MID_ZOOM, contourFeatures } from "./contours";
 import { demMaxZoom, demTilesUrl, DEM_TILE_SIZE, registerDemProtocol, setDemSource } from "./dem";
 import { IMAGERY_TILE_SIZE, imageryGroups, imageryMaxZoom, imageryTilesUrl, registerImageryProtocol, setImageryArea } from "./imageryTiles";
 import { fmtDur } from "../format";
@@ -44,6 +47,18 @@ const DEFAULT_TRACK_STATE = useStore.getState().overlays.track;
 /** True when the traverse should recede: Plan tab open and the user has not set the track layer themselves. */
 export const isTrackFaded = (tab: string, track: LayerState) => tab === "plan" && track === DEFAULT_TRACK_STATE;
 let mapReady = false;
+
+// The scale bar is MapLibre's element, moved out of its corner into a slot the app lays out.
+let scaleEl: HTMLElement | null = null;
+let scaleSlot: HTMLElement | null = null;
+const placeScaleBar = () => {
+  if (scaleEl && scaleSlot && scaleEl.parentElement !== scaleSlot) scaleSlot.appendChild(scaleEl);
+};
+/** Give the scale bar a home in the app's own layout. Safe to call before or after the map exists. */
+export function mountScaleBar(slot: HTMLElement | null) {
+  scaleSlot = slot;
+  placeScaleBar();
+}
 let pendingInsets: { top?: number; right?: number; bottom?: number; left?: number } | null = null;
 
 /**
@@ -303,7 +318,10 @@ export const RELAYOUT_LABELS = "marsmap:relayout-labels";
 type Box = { l: number; t: number; r: number; b: number };
 const boxesHit = (a: Box, b: Box) => a.l < b.r && a.r > b.l && a.t < b.b && a.b > b.t;
 /** Map furniture a ring label must not sit under (relative to the map container). */
-const LABEL_OBSTACLES = ".view-ctl, .maplibregl-ctrl-top-right, .map-legend, .readout, .card-slot > *, .go-panel, .maplibregl-ctrl-bottom-right";
+const LABEL_OBSTACLES = ".view-ctl, .maplibregl-ctrl-top-right, .map-legend, .readout, .card-slot > *, .go-panel, .map-safety, .profile, .status-bar";
+
+/** The floating panels live beside the map layer, not inside it, so obstacles are looked up from the app root. */
+const obstacleRoot = (container: HTMLElement) => container.closest(".app") ?? container.parentElement;
 
 /**
  * Put each ring label on the topmost point of its ring that keeps the whole label inside the
@@ -314,7 +332,7 @@ function placeRingLabels(map: MLMap, markers: maplibregl.Marker[], labels: { el:
   const W = container.clientWidth, H = container.clientHeight;
   const cr = container.getBoundingClientRect();
   const obstacles: Box[] = [];
-  container.parentElement?.querySelectorAll(LABEL_OBSTACLES).forEach((n) => {
+  obstacleRoot(container)?.querySelectorAll(LABEL_OBSTACLES).forEach((n) => {
     const r = (n as HTMLElement).getBoundingClientRect();
     if (r.width && r.height) obstacles.push({ l: r.left - cr.left - 4, t: r.top - cr.top - 4, r: r.right - cr.left + 4, b: r.bottom - cr.top + 4 });
   });
@@ -350,13 +368,45 @@ export function poiShortName(p: Poi): string {
   return s.charAt(0).toUpperCase() + s.slice(1);
 }
 
+/*
+ * Markers are built by hand for MapLibre, so their styles are utility strings rather than JSX.
+ * The class names in front (poi-pin, poi-label, stop-marker…) are hooks the label placement reads,
+ * and the pin's state classes (selected, in-plan, flip, lbl-off) drive the group-[…]/pin variants.
+ * Crisp shapes with a dark keyline and a light ring, legible on bright and dark ground.
+ */
+const POI_FILL: Record<string, string> = {
+  "drill-site": "bg-poi-drill-site",
+  "science-target": "bg-poi-science-target",
+  start: "bg-poi-start",
+  viewpoint: "bg-poi-viewpoint",
+};
+/** MapLibre makes markers position: absolute, which also anchors the label. */
+const POI_PIN = "poi-pin group/pin flex size-3.5 cursor-pointer items-center gap-1.5 hover:z-3 [&.selected]:z-3";
+const POI_DOT = "block size-3 rounded-full border-[1.5px] border-well shadow-[0_0_0_1px_rgba(255,255,255,0.75)] transition-transform duration-[120ms] ease-out-quint group-[:is(:hover,.selected)]/pin:scale-120 coarse:size-4";
+/** Sits beside the dot (further out once the pin carries a stop number), flips to the left near an edge,
+    hides when it would collide, and becomes a boxed full name on hover or when selected: the box is MAP_LABEL_BOX
+    (map/mapLabel.ts) spelled out behind the group variant. */
+const POI_LABEL = `poi-label ${MAP_LABEL} pointer-events-none absolute -top-px left-[19px] text-white text-shadow-[0_0_2px_#000,0_0_4px_#000,0_1px_6px_#000] group-[.in-plan]/pin:left-[23px] group-[.flip]/pin:right-[19px] group-[.flip]/pin:left-auto group-[.in-plan.flip]/pin:right-[23px] group-[.in-plan.flip]/pin:left-auto group-[.lbl-off:not(:hover,.selected)]/pin:invisible group-[:is(:hover,.selected)]/pin:-top-0.5 group-[:is(:hover,.selected)]/pin:rounded-sm group-[:is(:hover,.selected)]/pin:border group-[:is(:hover,.selected)]/pin:border-input group-[:is(:hover,.selected)]/pin:bg-glass-thick group-[:is(:hover,.selected)]/pin:px-1.5 group-[:is(:hover,.selected)]/pin:text-shadow-none [.lowzoom_&]:hidden [.lowzoom_.poi-pin:hover_&]:inline`;
+/** Stop markers carry the same badge as the stop numbers in the Plan tab's list, larger and with a keyline for the ground. */
+const STOP_MARKER = `stop-marker ${STOP_BADGE} size-[22px] cursor-grab text-[11px] coarse:size-[30px] coarse:text-base`;
+const STOP_NUMBER = `${STOP_MARKER} ${STOP_BADGE_NUMBER} shadow-[0_0_0_1px_rgba(0,0,0,0.6)]`;
+const STOP_START = `${STOP_MARKER} ${STOP_BADGE_START} shadow-[0_0_0_1px_rgba(255,255,255,0.8)]`;
+const RING_LABEL = `ring-label ${MAP_LABEL_BOX} pointer-events-none cursor-help`;
+
 function poiEl(p: Poi): HTMLElement {
   const el = document.createElement("div");
-  el.className = `poi-pin poi-${p.type}`;
-  el.innerHTML = `<span class="poi-dot"></span><span class="poi-label"><span class="pl-short"></span><span class="pl-full"></span></span>`;
+  el.className = POI_PIN;
+  el.innerHTML = `<span class="${POI_DOT} ${POI_FILL[p.type] ?? ""} ${p.type === "start" ? "rounded-[2px]" : ""}"></span><span class="${POI_LABEL}"><span class="pl-short group-[:is(:hover,.selected)]/pin:hidden"></span><span class="pl-full hidden group-[:is(:hover,.selected)]/pin:inline"></span></span>`;
   (el.querySelector(".pl-short") as HTMLElement).textContent = poiShortName(p);
   (el.querySelector(".pl-full") as HTMLElement).textContent = p.name;
   el.title = p.name;
+  // MapLibre would call every marker "Map marker"; a pin is named for its place.
+  el.setAttribute("aria-label", `${p.name}, ${p.type.replace("-", " ")}`);
+  el.addEventListener("keydown", (ev) => {
+    if (ev.key !== "Enter" && ev.key !== " ") return;
+    ev.preventDefault();
+    el.click();
+  });
   return el;
 }
 
@@ -370,7 +420,7 @@ function placePoiLabels(map: MLMap, pins: { el: HTMLElement; ll: LonLat; rank: n
   const cr = container.getBoundingClientRect();
   const rel = (r: DOMRect): Box => ({ l: r.left - cr.left, t: r.top - cr.top, r: r.right - cr.left, b: r.bottom - cr.top });
   const obstacles: Box[] = [];
-  container.parentElement?.querySelectorAll(`${LABEL_OBSTACLES}, .stop-marker, .pnr-chip, .ring-label`).forEach((n) => {
+  obstacleRoot(container)?.querySelectorAll(`${LABEL_OBSTACLES}, .stop-marker, .pnr-chip, .ring-label`).forEach((n) => {
     const r = (n as HTMLElement).getBoundingClientRect();
     if (r.width && r.height && (n as HTMLElement).style.visibility !== "hidden") obstacles.push(rel(r));
   });
@@ -395,7 +445,8 @@ function placePoiLabels(map: MLMap, pins: { el: HTMLElement; ll: LonLat; rank: n
         { flip: false, box: { l: cx + off, t: cy - h / 2, r: cx + off + w, b: cy + h / 2 } },
         { flip: true, box: { l: cx - off - w, t: cy - h / 2, r: cx - off, b: cy + h / 2 } },
       ];
-      const own = (o: Box) => o.l <= cx && o.r >= cx && o.t <= cy && o.b >= cy;
+      // A plan marker sitting on the pin is its own, not an obstacle. A panel over the pin still is: the label hides with it.
+      const own = (o: Box) => o.r - o.l <= 40 && o.l <= cx && o.r >= cx && o.t <= cy && o.b >= cy;
       const ok = sides.find(({ box }) => {
         if (box.l < M || box.t < M || box.r > W - M || box.b > H - M) return false;
         if (obstacles.some((o) => !own(o) && boxesHit(box, o)) || placed.some((o) => boxesHit(box, o))) return false;
@@ -458,9 +509,13 @@ export function MapView() {
     mapInstance = map;
     const detachGestures = attachGestures(map);
     keepCameraAboveGround(map);
-    // Bottom-right corner, scale under the zoom buttons (controls added later stack above earlier ones).
+    // Top-right corner, stacking downward: zoom buttons, then the compass dial.
+    map.addControl(new maplibregl.NavigationControl({ showCompass: false }), "top-right");
+    map.addControl(new CompassControl(), "top-right");
+    // MapLibre draws the scale bar; the app shows it beside the view controls (see mountScaleBar).
     map.addControl(new maplibregl.ScaleControl({ unit: "metric" }), "bottom-right");
-    map.addControl(new maplibregl.NavigationControl({ visualizePitch: true }), "bottom-right");
+    scaleEl = map.getContainer().querySelector<HTMLElement>(".maplibregl-ctrl-scale");
+    placeScaleBar();
     (window as unknown as { __map: MLMap }).__map = map;
 
     map.on("load", () => {
@@ -503,6 +558,14 @@ export function MapView() {
         map.addLayer({ id: `sci-${l.id}`, type: "raster", source: `sci-${l.id}`, layout: { visibility: "none" }, paint: { "raster-fade-duration": 0, "raster-resampling": "nearest" } });
       }
       // Outline of the planning window (the square of full-resolution ground routing runs on).
+      // Contour lines: heavy every 250 m; the 50 m and then the 10 m lines join in as the map zooms in.
+      map.addSource("contours", { type: "geojson", data: EMPTY_FC, tolerance: 0.2 });
+      const contourLayer = (id: string, tier: number, minzoom: number, width: maplibregl.ExpressionSpecification | number) =>
+        map.addLayer({ id, type: "line", source: "contours", minzoom, filter: ["==", ["get", "tier"], tier], layout: { visibility: "none", "line-join": "round" }, paint: { "line-color": CONTOUR_COLOR, "line-width": width } });
+      contourLayer("contours-fine", 1, CONTOUR_FINE_ZOOM, 0.6);
+      // Among the 10 m lines the 50 m ones are the heavy ones too.
+      contourLayer("contours-mid", 2, CONTOUR_MID_ZOOM, ["step", ["zoom"], 0.6, CONTOUR_FINE_ZOOM, 1.3]);
+      contourLayer("contours-index", 3, 0, 1.3);
       map.addSource("window", { type: "geojson", data: EMPTY_FC });
       map.addLayer({ id: "window", type: "line", source: "window", paint: { "line-color": "#ffffff", "line-opacity": 0.55, "line-width": 1.2, "line-dasharray": [4, 3] } });
       map.addSource("rings", { type: "geojson", data: EMPTY_FC });
@@ -698,6 +761,10 @@ export function MapView() {
     }
     map.setLayoutProperty("hillshade", "visibility", overlays.hillshade.on ? "visible" : "none");
     map.setPaintProperty("hillshade", "hillshade-exaggeration", overlays.hillshade.opacity);
+    for (const [l, k] of [["contours-fine", 0.75], ["contours-mid", 1], ["contours-index", 1]] as const) {
+      map.setLayoutProperty(l, "visibility", overlays.contours.on ? "visible" : "none");
+      map.setPaintProperty(l, "line-opacity", overlays.contours.opacity * k);
+    }
     map.setLayoutProperty("rings-line", "visibility", overlays.rings.on ? "visible" : "none");
     map.setPaintProperty("rings-line", "line-opacity", overlays.rings.opacity);
     map.setLayoutProperty("rings-limit", "visibility", overlays.rings.on ? "visible" : "none");
@@ -711,6 +778,25 @@ export function MapView() {
     map.setPaintProperty("waypoints", "circle-opacity", overlays.track.opacity * fade);
     map.setPaintProperty("waypoints", "circle-stroke-opacity", fade);
   }, [ready, overlays, reach, area, tab, detail]);
+
+  // ---------- contour lines (traced the first time they are switched on, and again when the window moves) ----------
+  const contoursOn = overlays.contours.on;
+  const contoursFor = useRef<DisplayLayers | null | undefined>(undefined);
+  useEffect(() => {
+    const map = mapInstance;
+    const ov = area.overview;
+    if (!ready || !map || !contoursOn || !ov.elevation || contoursFor.current === detail) return;
+    // After this frame, so the switch moves before the tracing starts.
+    const timer = setTimeout(() => {
+      const whole = { grid: ov.grid, elev: ov.elevation! };
+      const win = area.tiles && detail?.elevation ? { grid: detail.grid, elev: detail.elevation } : null;
+      // An untiled area is full-resolution ground throughout.
+      const data = area.tiles ? contourFeatures(whole, win) : contourFeatures(null, whole);
+      (map.getSource("contours") as GeoJSONSource | undefined)?.setData(data);
+      contoursFor.current = detail;
+    }, 0);
+    return () => clearTimeout(timer);
+  }, [ready, contoursOn, detail, area]);
 
   // ---------- science overlays (data fetched the first time each is switched on) ----------
   const sci = useStore((s) => s.sci);
@@ -757,14 +843,16 @@ export function MapView() {
       const outline = r.coordinates.filter((poly) => poly[0] && ringAreaM2(poly[0]) >= MIN_RING_PART_M2).flatMap((poly) => poly[0]!);
       if (!outline.length) continue;
       const el = document.createElement("div");
-      el.className = "ring-label";
+      el.className = RING_LABEL;
       const isLimit = r.kind ? r.kind === "limit" : r.budgetS === Math.max(...rings.map((x) => x.budgetS));
       el.textContent = isLimit ? `Limit${r.limitedBy ? ` · ${r.limitedBy}` : ""}` : fmtDur(r.budgetS);
       el.title = isLimit
         ? `Walk limit: the farthest you can go, work one stop and still get home with the reserve intact on time, energy and oxygen${r.limitedBy ? `. Here ${r.limitedBy} runs out first` : ""}`
         : `Reachable and back to the start in ${fmtDur(r.budgetS)} of walking (round trip)`;
-      if (isLimit) el.classList.add("limit");
+      el.className += ` ${isLimit ? MAP_LABEL_TONE.warn : MAP_LABEL_TONE.neutral}`;
+      el.setAttribute("aria-label", el.title);
       ringMarkers.current.push(new maplibregl.Marker({ element: el, anchor: "bottom" }).setLngLat(outline[0] as [number, number]).addTo(map));
+      el.tabIndex = -1;
       labels.push({ el, outline });
     }
     const place = () => placeRingLabels(map, ringMarkers.current, labels);
@@ -839,9 +927,10 @@ export function MapView() {
     const ms: maplibregl.Marker[] = [];
     if (start) {
       const el = document.createElement("div");
-      el.className = "stop-marker start-marker";
+      el.className = STOP_START;
       el.textContent = "S";
       el.title = `Start: ${start.name.replace(/^start:\s*/i, "")} (drag to move)`;
+      el.setAttribute("aria-label", `Start: ${start.name.replace(/^start:\s*/i, "")}`);
       const m = new maplibregl.Marker({ element: el, draggable: true }).setLngLat(start.lonLat).addTo(map);
       m.on("dragend", () => {
         const ll = m.getLngLat();
@@ -851,9 +940,10 @@ export function MapView() {
     }
     stops.forEach((s, i) => {
       const el = document.createElement("div");
-      el.className = "stop-marker";
+      el.className = STOP_NUMBER;
       el.textContent = String(i + 1);
       el.title = `${i + 1}. ${s.name} (drag to move)`;
+      el.setAttribute("aria-label", `Stop ${i + 1}: ${s.name}`);
       const m = new maplibregl.Marker({ element: el, draggable: true }).setLngLat(s.lonLat).addTo(map);
       m.on("dragend", () => {
         const ll = m.getLngLat();
@@ -980,7 +1070,7 @@ export function MapView() {
 
   return (
     <>
-      <div ref={containerRef} className="map" />
+      <div ref={containerRef} className="absolute inset-0 touch-none" />
       {popupEl && mapClick && createPortal(<ClickMenu lonLat={mapClick} />, popupEl)}
     </>
   );

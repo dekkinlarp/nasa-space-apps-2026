@@ -2,11 +2,13 @@ import { useEffect, useState, type ReactNode } from "react";
 import { selectedResult, useStore } from "../store";
 import { fmtDur } from "../format";
 import { getMap, isTrackFaded, profileColor, RELAYOUT_LABELS, RING_COLOR, RING_LIMIT_COLOR } from "../map/MapView";
+import { CONTOUR_COLOR, CONTOUR_FINE_M, CONTOUR_INDEX_M, CONTOUR_MID_M } from "../map/contours";
 import { ROUTE_SLOPE_COLORS, slopeBands } from "../map/routeSlope";
 import { ChevronDownIcon } from "lucide-react";
 import { Panel } from "@/components/ui/panel";
 import { POI_DOT } from "./Cards";
 import { cn } from "@/lib/utils";
+import { STOP_BADGE, STOP_BADGE_NUMBER, STOP_BADGE_START } from "../map/mapLabel";
 
 /** v2: the key now starts collapsed; an "open" choice saved by older builds is ignored. */
 const LS_KEY = "marsmap.legendOpen.v2";
@@ -33,14 +35,15 @@ const POI_KEY: [string, string, string][] = [
 function Section({ title, tip, children }: { title?: string; tip?: string; children: ReactNode }) {
   return (
     <div className="border-t pt-1.5 pb-0.5 first:border-t-0 first:pt-0" title={tip}>
-      {title && <div className="caps mb-1 text-[10px] text-muted-foreground">{title}</div>}
+      {title && <div className="mb-1 text-xs text-muted-foreground">{title}</div>}
       {children}
     </div>
   );
 }
 
-const dot = "inline-block size-[9px] rounded-full border-[1.5px] border-[#1a1210] shadow-[0_0_0_1px_rgba(255,255,255,.15)]";
-const marker = "grid size-4 place-items-center border-[1.5px] border-white text-[9px] font-extrabold text-white shadow-[0_1px_4px_rgba(0,0,0,.6)]";
+const dot = "inline-block size-[9px] rounded-full border-[1.5px] border-well shadow-[0_0_0_1px_rgba(255,255,255,.15)]";
+/** The start and stop markers in miniature: the same badge as on the map and in the Plan tab. */
+const marker = cn(STOP_BADGE, "size-4 rounded-sm text-[9px]");
 
 function Row({ sw, children, tip }: { sw: ReactNode; children: ReactNode; tip?: string }) {
   return (
@@ -85,7 +88,7 @@ export function MapLegend() {
   useEffect(() => {
     const id = requestAnimationFrame(() => getMap()?.fire(RELAYOUT_LABELS));
     return () => cancelAnimationFrame(id);
-  }, [open, tab, !!sel, !!rings?.length, overlays.rings.on, overlays.track.on, overlays.pois.on, !!start, stops.length > 0]);
+  }, [open, tab, !!sel, !!rings?.length, overlays.rings.on, overlays.contours.on, overlays.track.on, overlays.pois.on, !!start, stops.length > 0]);
   const b = slopeBands(params);
   const C = ROUTE_SLOPE_COLORS;
   const alts = (results ?? []).map((r, i) => ({ id: r.profile.id, color: profileColor(r.profile.id, i) })).filter((r) => r.id !== sel?.profile.id);
@@ -97,27 +100,29 @@ export function MapLegend() {
   const trackFaded = isTrackFaded(tab, overlays.track);
 
   return (
-    <Panel className={cn("map-legend text-sm", open && "open")}>
+    <div className="relative flex-none">
+      {/* Lives in the status bar; the key itself opens upward from it, over the map. */}
       <button
-        className="caps flex h-9 w-full cursor-pointer items-center justify-between gap-2 px-3 text-foreground hover:text-foreground"
+        className="-mx-1 flex h-7 cursor-pointer items-center gap-1 rounded-sm px-1 text-xs font-medium text-foreground coarse:px-2"
         onClick={toggle}
         aria-expanded={open}
         title={open ? "Hide map key" : "Show what the lines and markers mean"}
       >
         <span>Key</span>
-        <ChevronDownIcon className={cn("size-3 text-muted-foreground transition-transform", !open && "-rotate-90")} aria-hidden />
+        <ChevronDownIcon className={cn("size-3 text-muted-foreground transition-transform", !open && "rotate-180")} aria-hidden />
       </button>
+      {/* The key is solid, not glass: it opens over the readout and the map, and a blur cannot reach through the bar it hangs from. */}
       {open && (
-        <div className="px-3 pb-2">
+        <Panel className="map-legend scrollbar-thin absolute bottom-full -left-2.5 z-4 mb-2.5 max-h-[min(60dvh,440px)] w-[164px] overflow-y-auto bg-popover! px-3 py-2 text-sm text-foreground sheet:max-h-[34dvh]">
           {sel && (
             <Section title="Route slope" tip={`Route coloured by slope underfoot. Hazard from ${b.caution}°, no entry over ${b.max}°.`}>
-              <div className="m-0.5 flex h-1.5 overflow-hidden rounded-[3px] shadow-[0_0_0_2px_#120c0a]">
+              <div className="m-0.5 flex h-1.5 overflow-hidden rounded-[3px] shadow-[0_0_0_2px_var(--well)]">
                 <span className="flex-1" style={{ background: C.easy }} />
                 <span className="flex-1" style={{ background: C.moderate }} />
                 <span className="flex-1" style={{ background: C.caution }} />
                 <span className="flex-1" style={{ background: C.limit }} />
               </div>
-              <div className="relative mx-0.5 mb-1 h-3.5 text-[10px] text-muted-foreground *:absolute *:-translate-x-1/2">
+              <div className="relative mx-0.5 mb-1 h-3.5 text-xs text-muted-foreground *:absolute *:-translate-x-1/2">
                 <span style={{ left: "25%" }}>{b.easyBelow}°</span>
                 <span style={{ left: "50%" }}>{b.caution}°</span>
                 <span style={{ left: "75%" }}>{b.max}°</span>
@@ -147,12 +152,12 @@ export function MapLegend() {
           {(start || stops.length > 0) && (
             <Section>
               {start && (
-                <Row sw={<span className={cn(marker, "rounded-sm bg-[#1f8a4c]")}>S</span>} tip="Start point. Drag it on the map to move it.">
+                <Row sw={<span className={cn(marker, STOP_BADGE_START)}>S</span>} tip="Start point. Drag it on the map to move it.">
                   Start
                 </Row>
               )}
               {stops.length > 0 && (
-                <Row sw={<span className={cn(marker, "rounded-full bg-mars-deep")}>1</span>} tip="Stops, numbered in walking order. Drag to move.">
+                <Row sw={<span className={cn(marker, STOP_BADGE_NUMBER)}>1</span>} tip="Stops, numbered in walking order. Drag to move.">
                   Stops
                 </Row>
               )}
@@ -202,6 +207,21 @@ export function MapLegend() {
             </Section>
           )}
 
+          {overlays.contours.on && !!area.overview.elevation && (
+            <Section>
+              <Row
+                sw={<LineSwatch color={CONTOUR_COLOR} width={1.3} opacity={overlays.contours.opacity} />}
+                tip={
+                  area.tiles
+                    ? `Lines of equal elevation: every ${CONTOUR_MID_M} m, heavier every ${CONTOUR_INDEX_M} m. Zoomed in on the planning window: every ${CONTOUR_FINE_M} m, heavier every ${CONTOUR_MID_M} m.`
+                    : `Lines of equal elevation: every ${CONTOUR_FINE_M} m, heavier every ${CONTOUR_MID_M} m.`
+                }
+              >
+                Contours
+              </Row>
+            </Section>
+          )}
+
           {(showTrack || overlays.pois.on) && (
             <Section>
               {showTrack && (
@@ -225,8 +245,8 @@ export function MapLegend() {
                 ))}
             </Section>
           )}
-        </div>
+        </Panel>
       )}
-    </Panel>
+    </div>
   );
 }

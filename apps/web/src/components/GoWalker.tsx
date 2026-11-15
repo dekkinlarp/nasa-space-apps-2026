@@ -2,7 +2,7 @@
  * The Go walker: an animated astronaut that walks the selected route (simulated walk) or follows the
  * user's mapped GPS position. Draws, on the map:
  *  - an upright, screen-facing astronaut marker whose stride follows the walking speed and slope, that
- *    faces the direction of travel, kneels and works at stops (stop name + countdown), and idles at the end;
+ *    faces the direction of travel, kneels and works at stops (with a countdown of the work left), and idles at the end;
  *  - a flat direction ring under it, rotated to the heading;
  *  - fading boot prints behind it and a progress line over the walked part of the route;
  * and gently keeps the camera on the walker unless the user turns "Follow" off (or drags the map).
@@ -18,6 +18,8 @@ import { bearingDeg, marsDistanceM, MARS_RADIUS_M, offsetLonLat } from "../geo";
 import { getMap } from "../map/MapView";
 import { GROUND_SVG, WALKER_SVG, bootPrintImage } from "./walkerArt";
 import { cycleSeconds, headingAlong, lerpAngle, meanSpeed, routePrints, trackPrints, walkedLine, walkerFrame, type Print, type WalkerState } from "./walkerMath";
+import { LocateFixedIcon, LocateIcon } from "lucide-react";
+import { MAP_LABEL_BOX, MAP_LABEL_TONE } from "../map/mapLabel";
 import { Button } from "@/components/ui/button";
 import { cn } from "@/lib/utils";
 
@@ -76,7 +78,9 @@ const mmss = (s: number) => {
 };
 
 const RING_R = 8, RING_C = 2 * Math.PI * RING_R;
-const LABEL_HTML = `<svg class="w-ring" width="20" height="20" viewBox="0 0 20 20"><circle cx="10" cy="10" r="${RING_R}" fill="none" stroke="rgba(54,209,196,.25)" stroke-width="3"/><circle cx="10" cy="10" r="${RING_R}" fill="none" stroke="#36d1c4" stroke-width="3" stroke-linecap="round" stroke-dasharray="${RING_C}" stroke-dashoffset="${RING_C}" transform="rotate(-90 10 10)"/></svg><div><span class="w-l1"></span><small class="w-l2"></small></div>`;
+/** The walker's label is a map label like the others, in the simulated-position colour. It holds only what belongs
+    at the walker: the work time left at a stop. What the crew is doing and where is in the walk panel. */
+const LABEL_HTML = `<svg class="w-ring" width="12" height="12" viewBox="0 0 20 20" fill="none" stroke="currentColor" stroke-width="3" aria-hidden="true"><circle cx="10" cy="10" r="${RING_R}" opacity=".3"/><circle cx="10" cy="10" r="${RING_R}" stroke-linecap="round" stroke-dasharray="${RING_C}" stroke-dashoffset="${RING_C}" transform="rotate(-90 10 10)"/></svg><span class="w-l1"></span>`;
 
 export function GoWalker() {
   const mode = useStore((s) => s.go.mode);
@@ -93,7 +97,6 @@ export function GoWalker() {
   useEffect(() => {
     const map = getMap();
     if (!map || mode === "off" || !tl || !r) return;
-    const names = namesKey.split("\u0001");
     ensureLayers(map);
     const doneSrc = map.getSource("go-done") as GeoJSONSource;
     const trailSrc = map.getSource("go-trail") as GeoJSONSource;
@@ -101,10 +104,9 @@ export function GoWalker() {
     // ----- DOM -----
     const el = document.createElement("div");
     el.className = "walker idle";
-    el.innerHTML = `<div class="w-label">${LABEL_HTML}</div><div class="w-shadow"></div><div class="w-flip"><div class="w-lean">${WALKER_SVG}</div></div>`;
+    el.innerHTML = `<div class="w-label ${MAP_LABEL_BOX} ${MAP_LABEL_TONE.sim}">${LABEL_HTML}</div><div class="w-shadow"></div><div class="w-flip"><div class="w-lean">${WALKER_SVG}</div></div>`;
     const lean = el.querySelector(".w-lean") as HTMLElement;
     const l1 = el.querySelector(".w-l1") as HTMLElement;
-    const l2 = el.querySelector(".w-l2") as HTMLElement;
     const ringArc = el.querySelector(".w-ring circle:last-child") as SVGCircleElement;
     const groundEl = document.createElement("div");
     groundEl.className = "walker-ground";
@@ -146,7 +148,8 @@ export function GoWalker() {
       let target: number | null = null;
       let cyc = cycleSeconds(1, 0, 1);
       let grade = 0;
-      let label: [string, string, number] | null = null;
+      // While working at a stop: [time left, fraction of the work done].
+      let label: [string, number] | null = null;
       const mpp = metersPerPixel(map, (g.position ?? first)[1]);
 
       if (g.mode === "sim") {
@@ -160,9 +163,7 @@ export function GoWalker() {
           cyc = cycleSeconds(f.speedRatio, f.slopeDeg, g.speed);
           grade = f.grade;
         } else if (state === "working") {
-          label = [`Working at ${names[pos.seg + 1] ?? "stop"}`, `${mmss(f.dwellLeftS)} left`, f.dwellF];
-        } else {
-          label = ["Walk complete", names[names.length - 1] ? `at ${names[names.length - 1]}` : "", 1];
+          label = [`${mmss(f.dwellLeftS)} left`, f.dwellF];
         }
       } else {
         here = g.position;
@@ -194,20 +195,15 @@ export function GoWalker() {
       else if (dx > 0.5) faceLeft = false;
 
       const paused = g.mode === "sim" && !g.playing && state !== "idle";
-      const nextCls = `walker ${state}${faceLeft ? " face-left" : ""}${paused ? " paused" : ""}${label && state === "idle" ? " done" : ""}`;
+      const nextCls = `walker ${state}${faceLeft ? " face-left" : ""}${paused ? " paused" : ""}`;
       if (nextCls !== cls) el.className = cls = nextCls;
       const q = Math.round(cyc * 20) / 20;
       if (q !== cycle) el.style.setProperty("--cycle", `${(cycle = q)}s`);
       const ln = state === "walking" ? Math.max(-12, Math.min(12, grade * 45)) : 0;
       if (Math.abs(ln - leanDeg) > 0.5 || Number.isNaN(leanDeg)) lean.style.transform = `rotate(${(leanDeg = ln)}deg)`;
       if (label) {
-        const key = `${label[0]}|${label[1]}`;
-        if (key !== labelKey) {
-          labelKey = key;
-          l1.textContent = label[0];
-          l2.textContent = label[1];
-        }
-        ringArc.style.strokeDashoffset = String(RING_C * (1 - label[2]));
+        if (label[0] !== labelKey) l1.textContent = labelKey = label[0];
+        ringArc.style.strokeDashoffset = String(RING_C * (1 - label[1]));
       }
 
       figure.setLngLat(here);
@@ -256,7 +252,7 @@ export function GoWalker() {
   return null;
 }
 
-/** "Follow" toggle for the Go panel. */
+/** "Follow" toggle for the Go panel: an ordinary pressed-state toggle. It carries no status colour of its own. */
 export function FollowToggle() {
   const follow = useWalkerUi((s) => s.follow);
   const setFollow = useWalkerUi((s) => s.setFollow);
@@ -264,12 +260,13 @@ export function FollowToggle() {
     <Button
       variant="secondary"
       size="xs"
-      className={cn("mr-1.5 ml-auto px-[9px]", follow && "border-sim/70 text-sim")}
+      className={cn("flex-none coarse:h-9 coarse:px-3", follow ? "border-seam-strong bg-white/16 text-foreground" : "text-ink-2")}
       aria-pressed={follow}
       onClick={() => setFollow(!follow)}
-      title={follow ? "Camera follows the walker. Click (or drag the map) to pan freely." : "Camera stays put. Click to follow the walker."}
+      title={follow ? "The camera follows the walker" : "The camera stays put"}
     >
-      {follow ? "◎ Following" : "◎ Follow"}
+      {follow ? <LocateFixedIcon aria-hidden /> : <LocateIcon aria-hidden />}
+      Follow
     </Button>
   );
 }

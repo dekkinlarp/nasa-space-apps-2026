@@ -74,5 +74,5 @@ export function Starfield() {
     draw();
     return () => ro.disconnect();
   }, []);
-  return <canvas ref={ref} className="stars" aria-hidden />;
+  return <canvas ref={ref} className="pointer-events-none absolute inset-0 size-full" aria-hidden />;
 }

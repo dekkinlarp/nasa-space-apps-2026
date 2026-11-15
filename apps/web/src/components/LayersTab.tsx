@@ -3,9 +3,11 @@ import { useStore, type OverlayId } from "../store";
 import type { LayerEntry } from "@marsmap/core";
 import { scienceLayers, scienceRamp } from "../map/MapView";
 import { pictureGroup, tintable } from "../map/imageryTiles";
+import { CONTOUR_FINE_M, CONTOUR_INDEX_M, CONTOUR_MID_M } from "../map/contours";
 import { CONFIDENCE_CLEAR, CONFIDENCE_LOW, COST_RAMP, cssGradient, ELEV_RAMP, SLOPE_STOPS } from "../map/rasters";
 import type { AreaData } from "../types";
 import { Badge } from "@/components/ui/badge";
+import { InfoTip } from "@/components/ui/info-tip";
 import { RadioGroup, RadioGroupItem } from "@/components/ui/radio-group";
 import { SectionHeading } from "@/components/ui/section-heading";
 import { Slider } from "@/components/ui/slider";
@@ -68,7 +70,7 @@ function LegendBar({ background }: { background: string }) {
 }
 
 function LegendTicks({ children, className }: { children: ReactNode; className?: string }) {
-  return <div className={cn("mt-[3px] flex justify-between text-2xs text-muted-foreground", className)}>{children}</div>;
+  return <div className={cn("mt-[3px] flex justify-between text-xs text-muted-foreground", className)}>{children}</div>;
 }
 
 function Row({ id, title, children, disabled, note }: { id: OverlayId; title: string; children?: ReactNode; disabled?: string; note?: ReactNode }) {
@@ -225,7 +227,7 @@ export function LayersTab() {
         <span className="text-sm whitespace-nowrap text-muted-foreground">Imagery opacity</span>
         <Slider aria-label="Imagery opacity" min={0} max={1} step={0.05} value={[baseOpacity]} onValueChange={(v) => set({ baseOpacity: Array.isArray(v) ? v[0]! : v })} />
       </div>
-      <LayerRow title="Mars colour tint" note={<Badge variant="estimate">cosmetic</Badge>} on={marsTint} onOnChange={(on) => set({ marsTint: on })} disabled={!canTint}>
+      <LayerRow title="Mars colour tint" note={<span className="text-xs text-muted-foreground">cosmetic</span>} on={marsTint} onOnChange={(on) => set({ marsTint: on })} disabled={!canTint}>
         <Hint>
           {base && !tintable(base)
             ? "Thermal imagery shows temperature, so it is left as captured."
@@ -236,7 +238,7 @@ export function LayersTab() {
       {scienceLayers(area).length > 0 && (
         <>
           <SectionHeading>
-            Minerals from orbit <Badge variant="sim">science</Badge>
+            Minerals from orbit
           </SectionHeading>
           {scienceLayers(area).map((l) => (
             <ScienceRow key={l.id} area={area} layer={l} />
@@ -249,14 +251,14 @@ export function LayersTab() {
         </>
       )}
 
-      <SectionHeading>Overlays</SectionHeading>
+      <SectionHeading>Terrain</SectionHeading>
       <Row id="surface" title="Surface conditions" note={est("surface")} disabled={L.surface ? undefined : "No surface layer in this dataset"}>
         <div className="mt-2 flex flex-wrap gap-x-3 gap-y-1 text-sm text-ink-2">
           {area.config.surfaceClasses.map((c) => (
             <span key={c.id}>
               <Swatch color={c.color} />
               {c.name}
-              {c.hazard && <span className="ml-1.5 text-2xs text-warn">hazard</span>}
+              {c.hazard && <span className="ml-1.5 text-xs text-warn">hazard</span>}
             </span>
           ))}
         </div>
@@ -290,10 +292,18 @@ export function LayersTab() {
         </LegendTicks>
         <Source text={layer("elevation")?.source} />
       </Row>
+      <Row id="contours" title="Contour lines" disabled={L.elevation ? undefined : "No elevation layer"}>
+        <Hint>
+          {area.tiles
+            ? `A line every ${CONTOUR_MID_M} m of elevation, heavier every ${CONTOUR_INDEX_M} m. Zoom in on the planning window for ${CONTOUR_FINE_M} m lines.`
+            : `A line every ${CONTOUR_FINE_M} m of elevation, heavier every ${CONTOUR_MID_M} m. Zoom in to see them all.`}
+        </Hint>
+      </Row>
       <Row id="hillshade" title="Hillshade (from DEM)" disabled={L.elevation ? undefined : "No elevation layer"}>
         <Hint>Opacity slider sets shading strength.</Hint>
       </Row>
-      <Row id="cost" title="Walk cost from start" disabled={!start ? "Set a start to see walk cost" : undefined} note={<Badge variant="sim">model</Badge>}>
+      <SectionHeading>Walk model</SectionHeading>
+      <Row id="cost" title="Walk cost from start" disabled={!start ? "Set a start to see walk cost" : undefined}>
         {reach ? (
           <>
             <LegendBar background={cssGradient(COST_RAMP)} />
@@ -311,10 +321,12 @@ export function LayersTab() {
         )}
       </Row>
       <Row id="rings" title="Walk-limit rings" disabled={!start ? "Set a start to see walk-limit rings" : undefined}>
-        <Hint title="Dashed rings: 15 min, 30 min and 1 h of round-trip walking from the start. Solid ring: the walk limit, the farthest you can go, work one stop and still get home with the reserve intact on time, energy and oxygen. Its label names the one that runs out first.">
-          Round trip: 15 min · 30 min · 1h · walk limit
+        <Hint className="flex items-center gap-0.5">
+          Round trip: 15 min, 30 min, 1 h and the walk limit
+          <InfoTip label="About the walk-limit rings">Dashed rings: 15 min, 30 min and 1 h of round-trip walking from the start. Solid ring: the walk limit, the farthest you can go, work one stop and still get home with the reserve intact on time, energy and oxygen. Its label names the one that runs out first.</InfoTip>
         </Hint>
       </Row>
+      <SectionHeading>Places</SectionHeading>
       <Row id="track" title="Curiosity traverse + waypoints" disabled={area.rover.traverse ? undefined : "No rover traverse in this dataset"}>
         <div className="mt-1 text-xs text-muted-foreground">NASA/JPL-Caltech MSL localized traverse</div>
       </Row>
@@ -323,11 +335,11 @@ export function LayersTab() {
       <DataChecks area={area} />
 
       <SectionHeading>Data</SectionHeading>
-      <div
-        className="cursor-help text-sm text-muted-foreground"
-        title={`Manifest generated ${new Date(m.generatedAt).toLocaleString()}.\nMap uses Mars lon/lat on a Web Mercator canvas (≈0.35% scale distortion at 4.8°S). All distances and times come from the routing core.`}
-      >
-        Area <span className="font-mono">{area.areaId}</span> · generated {new Date(m.generatedAt).toLocaleDateString()} <span className="opacity-70">ⓘ</span>
+      <div className="flex items-center gap-0.5 text-sm text-muted-foreground">
+        <span>
+          Area <span className="font-mono">{area.areaId}</span>, generated {new Date(m.generatedAt).toLocaleDateString()}
+        </span>
+        <InfoTip label="About this data">{`Manifest generated ${new Date(m.generatedAt).toLocaleString()}.\nMap uses Mars lon/lat on a Web Mercator canvas (≈0.35% scale distortion at 4.8°S). All distances and times come from the routing core.`}</InfoTip>
       </div>
     </>
   );

@@ -4,7 +4,8 @@ import { cva, type VariantProps } from "class-variance-authority";
 import { cn } from "@/lib/utils";
 
 /** A surface that floats over the map, on the shared glass material. */
-const panelVariants = cva("text-foreground", {
+/** The stage that lays panels out ignores the pointer so the map stays draggable; each panel takes it back. */
+const panelVariants = cva("pointer-events-auto text-foreground", {
   variants: {
     size: {
       /** Small chrome: bars, readouts, the map key. */

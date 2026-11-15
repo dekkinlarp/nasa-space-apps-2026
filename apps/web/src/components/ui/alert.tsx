@@ -3,15 +3,15 @@ import { cva, type VariantProps } from "class-variance-authority"
 import { cn } from "@/lib/utils"
 
 const alertVariants = cva(
-  "group/alert relative my-3 grid w-full gap-0.5 rounded-sm border border-l-2 bg-white/5 px-2.5 py-2 text-left text-sm has-data-[slot=alert-action]:relative has-data-[slot=alert-action]:pr-18 has-[>svg]:grid-cols-[auto_1fr] has-[>svg]:gap-x-2 *:[svg]:row-span-2 *:[svg]:translate-y-0.5 *:[svg]:text-current *:[svg:not([class*='size-'])]:size-4",
+  "group/alert relative my-3 grid w-full gap-0.5 rounded-md border bg-white/5 px-2.5 py-2 text-left text-sm has-data-[slot=alert-action]:relative has-data-[slot=alert-action]:pr-18 has-[>svg]:grid-cols-[auto_1fr] has-[>svg]:gap-x-2 *:[svg]:row-span-2 *:[svg]:translate-y-0.5 *:[svg]:text-current *:[svg:not([class*='size-'])]:size-4",
   {
     variants: {
       variant: {
-        /** A status line: the left rule says which kind. */
-        default: "border-l-muted-foreground text-ink-2",
-        destructive: "border-l-bad text-foreground",
-        warning: "border-l-warn text-foreground",
-        success: "border-l-ok text-ink-2",
+        /** A status line: the border colour says which kind. */
+        default: "border-input text-ink-2",
+        destructive: "border-bad/60 bg-bad/8 text-foreground",
+        warning: "border-warn/55 bg-warn/7 text-foreground",
+        success: "border-ok/40 text-ink-2",
       },
     },
     defaultVariants: {

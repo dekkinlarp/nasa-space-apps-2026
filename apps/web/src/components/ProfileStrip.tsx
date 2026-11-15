@@ -1,4 +1,5 @@
 import { useEffect, useMemo, useRef, useState } from "react";
+import { create } from "zustand";
 import { useShallow } from "zustand/react/shallow";
 import type { LonLat, RouteResult } from "@marsmap/core";
 import { selectedResult, useStore } from "../store";
@@ -7,16 +8,32 @@ import { fmtDist, fmtNum } from "../format";
 import { nearestPhoto, pointNames, surfaceById } from "../lib";
 import { cssGradient, SLOPE_STOPS } from "../map/rasters";
 import { PhotoThumb } from "./Cards";
-import { profileColor, resizeMapDuring } from "../map/MapView";
-import { BottomPaneIcon } from "./icons";
-import { PANEL_MS } from "../App";
-import { Button } from "@/components/ui/button";
+import { profileColor } from "../map/MapView";
 import { Panel } from "@/components/ui/panel";
 import { Swatch } from "@/components/ui/swatch";
 import { cn } from "@/lib/utils";
 
+/** Whether the elevation profile is showing. Its toggle lives in the status bar, so the state is shared. */
+export const useProfileUi = create<{ open: boolean; setOpen: (open: boolean) => void }>((set) => ({
+  // Starts folded: the map keeps its height until the profile is asked for.
+  open: false,
+  setOpen: (open) => set({ open }),
+}));
+
+/** Highest minus lowest ground along a route, m. */
+export function routeReliefM(r: RouteResult): number {
+  let min = Infinity, max = -Infinity;
+  for (const s of r.segments)
+    for (const p of s.profile)
+      if (Number.isFinite(p.elevationM)) {
+        min = Math.min(min, p.elevationM);
+        max = Math.max(max, p.elevationM);
+      }
+  return max > min ? max - min : 0;
+}
+
 /** Chart text: axis numbers and stop names. */
-const axis = "fill-muted-foreground text-[10px]";
+const axis = "fill-muted-foreground text-xs";
 
 interface Flat {
   d: Float64Array;
@@ -81,7 +98,7 @@ export function ProfileStrip() {
   const ref = useRef<HTMLDivElement>(null);
   const [w, setW] = useState(800);
   const [hoverD, setHoverD] = useState<number | null>(null);
-  const [open, setOpen] = useState(true);
+  const open = useProfileUi((u) => u.open);
   const flat = useMemo(() => (r ? flatten(r) : null), [r]);
   const names = pointNames(st.start, st.stops, st.returnToStart);
 
@@ -159,29 +176,17 @@ export function ProfileStrip() {
   };
 
   return (
-    <Panel size="lg" className={cn("profile overflow-hidden", !open && "collapsed")}>
-      <div className="caps flex h-10 flex-none items-center gap-1.5 pr-2 pl-4 text-ink-2">
-        <span>Elevation</span>
-        <span className="font-normal tracking-normal text-muted-foreground normal-case">
-          {r.profile.name} route · {fmtDist(flat.total)} · {Math.round(flat.max - flat.min)} m relief
-        </span>
-        <Button
-          variant="ghost"
-          size="icon-xs"
-          className="ml-auto text-ink-2"
-          aria-label={open ? "Hide elevation profile" : "Show elevation profile"}
-          title={open ? "Hide elevation profile" : "Show elevation profile"}
-          aria-expanded={open}
-          onClick={() => {
-            setOpen(!open);
-            onLeave();
-            resizeMapDuring(PANEL_MS);
-          }}
-        >
-          <BottomPaneIcon on={open} />
-        </Button>
-      </div>
-      <div className="profile-body flex min-h-0 flex-1">
+    <Panel
+      size="lg"
+      // Folded, it is not on screen at all: its toggle and one-line summary are in the status bar.
+      inert={!open}
+      className={cn(
+        // Phones give its room to the open sheet.
+        "profile flex flex-none flex-col overflow-hidden transition-[height,margin,opacity] duration-(--panel-ms) ease-spring phone:in-[.sheet-open]:hidden squat:in-[.sheet-open]:hidden",
+        open ? "mb-2 h-[152px] sheet:mb-0" : "collapsed pointer-events-none h-0 border-0! opacity-0 shadow-none!",
+      )}
+    >
+      <div className={cn("flex min-h-0 flex-1", !open && "invisible [transition:visibility_0s_linear_var(--panel-ms)]")}>
         <div className="relative min-w-0 flex-1" ref={ref}>
           <svg className="block cursor-crosshair" width={w} height={H} onMouseMove={onMove} onMouseLeave={onLeave}>
             {geom.ticks.map((t) => (
@@ -205,11 +210,11 @@ export function ProfileStrip() {
                 </g>
               ),
             )}
-            <text x={PL - 6} y={PT + ih + 10} className={cn(axis, "cursor-help text-[9.5px]")} textAnchor="end">
+            <text x={PL - 6} y={PT + ih + 10} className={cn(axis, "cursor-help")} textAnchor="end">
               <title>Slope underfoot along the route (green gentle, red steep)</title>
               slope
             </text>
-            <text x={PL - 6} y={PT + ih + 19} className={cn(axis, "cursor-help text-[9.5px]")} textAnchor="end">
+            <text x={PL - 6} y={PT + ih + 19} className={cn(axis, "cursor-help")} textAnchor="end">
               <title>Mapped surface class along the route</title>
               surface
             </text>
@@ -233,6 +238,8 @@ export function ProfileStrip() {
               </g>
             )}
           </svg>
+          {/* Where the status bar is too narrow to carry the relief beside the toggle, it is said here. */}
+          <span className="pointer-events-none absolute top-1 right-3 hidden text-xs text-muted-foreground compact:block">{Math.round(flat.max - flat.min)} m relief</span>
           {hi != null && (
             <Panel className="pointer-events-none absolute top-2.5 w-40 px-2 py-1.5 text-xs" style={{ left: X(flat.d[hi]!) + 150 > w ? X(flat.d[hi]!) - 142 : X(flat.d[hi]!) + 10 }}>
               <div>

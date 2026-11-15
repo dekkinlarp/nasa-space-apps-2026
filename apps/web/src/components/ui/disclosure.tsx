@@ -13,7 +13,7 @@ function Disclosure({
 }: Omit<React.ComponentProps<typeof Collapsible>, "title"> & { title: React.ReactNode; note?: React.ReactNode }) {
   return (
     <Collapsible data-slot="disclosure" className={cn("mt-3.5 border-t", className)} {...props}>
-      <CollapsibleTrigger className="group/disclosure caps flex w-full cursor-pointer items-center gap-2 pt-2.5 pb-0.5 text-muted-foreground outline-none select-none hover:text-foreground focus-visible:text-foreground data-panel-open:mb-2">
+      <CollapsibleTrigger className="group/disclosure caps flex w-full cursor-pointer items-center gap-2 pt-2.5 pb-0.5 text-muted-foreground coarse:pt-3.5 coarse:pb-2.5 select-none hover:text-foreground focus-visible:text-foreground data-panel-open:mb-2">
         <ChevronRightIcon className="size-3 transition-transform group-data-panel-open/disclosure:rotate-90" />
         {title}
         {note != null && <span className="ml-auto text-xs font-medium tracking-normal whitespace-nowrap normal-case">{note}</span>}
