@@ -14,11 +14,11 @@
     "photos": "vite-node --script src/photos.ts",
     "conditions": "vite-node --script src/conditions.ts",
     "manifest": "vite-node --script src/manifest.ts",
-    "tint": "vite-node --script src/tint.ts",
     "preview": "vite-node --script src/preview.ts",
     "verify": "vite-node --script src/verify.ts",
     "import-layer": "vite-node --script src/import-layer.ts",
-    "typecheck": "tsc -p tsconfig.json"
+    "typecheck": "tsc -p tsconfig.json",
+    "prefetch": "vite-node --script src/prefetch.ts"
   },
   "dependencies": {
     "@marsmap/core": "workspace:*",

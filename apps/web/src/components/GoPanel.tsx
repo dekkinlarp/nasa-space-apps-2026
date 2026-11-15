@@ -129,7 +129,7 @@ export function GoPanel() {
     energyUsed += s.energyKJ * f;
   }
   const energyLeft = params.energyBudgetKJ * (1 - params.reserveFraction) - energyUsed;
-  const cell = cellIndex(area.layers.grid, here);
+  const cell = reach ? cellIndex(reach.grid, here) : null;
   const homeS = reach && cell != null ? reach.backTimeS[cell] : undefined;
   const homeE = reach && cell != null ? reach.backEnergyKJ[cell] : undefined;
   const o2On = (params.o2BudgetKg ?? 0) > 0 && (params.o2KgPerKJ ?? 0) > 0;

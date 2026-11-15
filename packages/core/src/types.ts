@@ -57,6 +57,45 @@ export interface LayerEntry {
   parts?: number;
   /** (optional) Value range for colouring a float layer; values at or below `min` are not drawn. */
   display?: { min: number; max: number };
+  /**
+   * (optional) How the bytes are stored. Absent = raw little-endian `dtype` values. With a codec the
+   * file (or each tile) is zlib-compressed (`deflate`) values of `codec.kind`; see decodeRaster.
+   */
+  codec?: LayerCodec;
+  /**
+   * (optional) The layer is split into square tiles on the manifest grid. `file` is then the path
+   * template, e.g. "tiles/elevation/{r}_{c}.bin" (r = tile row from the north, c = tile column from the west).
+   */
+  tiles?: TileSet;
+  /** (optional) The layer sits on its own grid (same bounds, coarser cells) instead of the manifest grid. */
+  grid?: GridSpec;
+  /** (optional) A coarse copy of the whole layer for region-wide display. */
+  overview?: { file: string; grid: GridSpec; codec?: LayerCodec; method?: string };
+}
+
+/**
+ * Compressed storage of a layer. Values are `kind` (int16 or uint8), optionally stored as differences
+ * along each row (`delta`, wrapping int16 arithmetic; exact), then zlib-deflated. An int16 value q
+ * means q * scale + offset; `nodata` (int16 -32768 by default) decodes to NaN.
+ */
+export interface LayerCodec {
+  kind: "int16" | "uint8";
+  scale?: number;
+  offset?: number;
+  delta?: boolean;
+  deflate: boolean;
+}
+
+/** Tiles of `size` x `size` cells; the grid's width and height are whole multiples of `size`. */
+export interface TileSet {
+  size: number;
+  cols: number;
+  rows: number;
+  /**
+   * One character per tile, row-major from the north-west: "1" = file present, "0" = no data
+   * (outside the source coverage; every cell is nodata).
+   */
+  present: string;
 }
 
 /** A georeferenced picture (orbital photo, thermal map) for display only. */
@@ -76,6 +115,12 @@ export interface ImageryEntry {
   metersPerPixel?: number;
   /** Mars-coloured copy of a grayscale picture (cosmetic tint), relative to the area's data folder. */
   tintFile?: string;
+  /** (optional) Base-imagery choice this picture belongs to (default: the id without a _r_c tile suffix). */
+  group?: string;
+  /** (optional) Pyramid level: 0 = full resolution, each level up is 4x coarser. Pictures of one level tile the group. */
+  level?: number;
+  /** (optional) True for single-band (grayscale) visible imagery that the app may tint Mars-coloured itself. */
+  gray?: boolean;
 }
 
 /** data/<areaId>/layers.json */

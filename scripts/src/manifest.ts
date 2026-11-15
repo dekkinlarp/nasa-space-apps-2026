@@ -5,53 +5,69 @@ import type { ImageryEntry, LayerEntry, LayerManifest } from "../../packages/cor
 import { areaDir, cacheDir, gridFromArea, isMain, loadArea, log } from "./lib/area";
 import { DEM_LABEL_URL, DEM_NAME, DEM_URL } from "./lib/demgrid";
 import { writeAtomic, writeJson } from "./lib/net";
-import { SURFACE_METHOD } from "./derive";
+import { DERIVE_DONE, SURFACE_METHOD, type DeriveResult } from "./derive";
+import { tileTemplate, U8_CODEC } from "./lib/tiles";
 
-const VERSION = "1";
+const VERSION = "2";
 
-export function builtInLayers(g: { cellSizeM: number } = { cellSizeM: 2 }): LayerEntry[] {
+export function builtInLayers(d: DeriveResult): LayerEntry[] {
   const dem = `${DEM_NAME}, ${DEM_URL} (label: ${DEM_LABEL_URL})`;
+  const g = d.grid;
+  const og = d.overviewGrid;
+  const tiles = { size: d.tileSize, cols: g.width / d.tileSize, rows: g.height / d.tileSize, present: d.present };
+  const F = Math.round(og.cellSizeM / g.cellSizeM);
   return [
     {
       id: "elevation",
-      file: "elevation.f32",
+      file: tileTemplate("elevation"),
+      tiles,
+      codec: d.codecs.elevation,
       dtype: "float32",
       units: "m (relative to the Mars areoid, 3396190 m sphere)",
       source: dem,
       method:
-        `HTTP range-read of only the TIFF strips covering the area (LZW-decoded in Node). Projection read from the GeoTIFF GeoKeys: equirectangular, centre lon 0, standard parallel 0, R = 3396190 m, PixelIsPoint tiepoint. Area-weighted box average of the 1 m pixels onto each ${g.cellSizeM} m cell; nodata (-32767) excluded, residual holes filled by neighbour averaging.`,
+        `HTTP range-read of only the TIFF strips covering the region (LZW-decoded in Node). Projection read from the GeoTIFF GeoKeys: equirectangular, centre lon 0, standard parallel 0, R = 3396190 m, PixelIsPoint tiepoint. Area-weighted box average of the 1 m pixels onto each ${g.cellSizeM} m cell; nodata (-32767) excluded; holes up to ${2 * g.cellSizeM * 8} m across filled by neighbour averaging, larger gaps left as nodata (impassable). Stored in ${d.tileSize} x ${d.tileSize}-cell tiles as int16 steps of ${d.codecs.elevation.scale} m.`,
       version: VERSION,
       estimated: false,
+      overview: { file: "overview/elevation.bin", grid: og, codec: d.codecs.elevation, method: `Mean of the ${F} x ${F} cells of each overview cell.` },
     },
     {
       id: "slope",
-      file: "slope.f32",
+      file: "overview/slope.bin",
+      grid: og,
+      codec: d.codecs.overviewSlope,
       dtype: "float32",
       units: "degrees",
-      source: "Derived from elevation.f32",
-      method: `Horn (1981) 3x3 finite differences on the ${g.cellSizeM} m elevation grid; edge cells use clamped neighbours.`,
+      source: "Derived from the elevation tiles",
+      method: `Horn (1981) 3x3 finite differences on the ${g.cellSizeM} m elevation. Only the ${og.cellSizeM} m overview (mean slope of each overview cell, so steep spots read gentler) is stored; at full resolution the app computes slope from the elevation tiles the same way.`,
       version: VERSION,
       estimated: false,
     },
     {
       id: "surface",
-      file: "surface.u8",
+      file: tileTemplate("surface"),
+      tiles,
+      codec: U8_CODEC,
       dtype: "uint8",
       units: "class id (config/surface-classes.json; 0 = unknown)",
       source: `Derived from the 1 m DEM (${DEM_URL}) and the HiRISE mosaic tiles (NASA Mars Trek curiosity_hirise_mosaic)`,
       method: SURFACE_METHOD,
       version: VERSION,
       estimated: true,
+      overview: { file: "overview/surface.bin", grid: og, codec: U8_CODEC, method: "Most common class among the cells with elevation in each overview cell." },
     },
     {
       id: "surface_confidence",
-      file: "surface_confidence.u8",
+      file: tileTemplate("surface_confidence"),
+      tiles,
+      codec: U8_CODEC,
       dtype: "uint8",
       units: "0-255 (heuristic agreement score, not a probability)",
-      source: "Derived alongside surface.u8",
-      method: "40 + 160 * min(1, (best score - second-best score) / 0.25); cells changed by the majority filter capped at 60. Max 200.",
+      source: "Derived alongside the surface estimate",
+      method: "40 + 160 * min(1, (best score - second-best score) / 0.25), rounded to steps of 10; cells changed by the majority filter capped at 60. Max 200. 0 where there is no elevation.",
       version: VERSION,
       estimated: true,
+      overview: { file: "overview/surface_confidence.bin", grid: og, codec: U8_CODEC, method: "Mean of each overview cell." },
     },
   ];
 }
@@ -65,6 +81,7 @@ export const PART_BYTES = 24 * 1024 * 1024;
 
 function splitLargeLayers(dir: string, layers: LayerEntry[]): LayerEntry[] {
   return layers.map((l) => {
+    if (l.tiles || l.codec) return l;
     const file = join(dir, l.file);
     const size = statSync(file).size;
     // Clear parts left by an earlier run (the file may have shrunk or grown).
@@ -93,7 +110,11 @@ export function runManifest(): LayerManifest {
   // Mineral indicator layers are described by the minerals step (their display range depends on the data).
   const mineralFile = join(cacheDir(a.id), "mineral-layers.json");
   const minerals = existsSync(mineralFile) ? (JSON.parse(readFileSync(mineralFile, "utf8")) as LayerEntry[]) : [];
-  const layers = splitLargeLayers(dir, [...[...builtInLayers(g), ...minerals].filter((l) => !overridden.has(l.id) && existsSync(join(dir, l.file))), ...imported]);
+  const doneFile = join(cacheDir(a.id), DERIVE_DONE);
+  if (!existsSync(doneFile)) throw new Error("derive step has not run (data/cache/<id>/derive.json missing)");
+  const derive = JSON.parse(readFileSync(doneFile, "utf8")) as DeriveResult;
+  const builtIn = builtInLayers(derive).filter((l) => (l.tiles ? existsSync(join(dir, "tiles", l.id)) : existsSync(join(dir, l.file))));
+  const layers = splitLargeLayers(dir, [...[...builtIn, ...minerals.filter((l) => existsSync(join(dir, l.file)))].filter((l) => !overridden.has(l.id)), ...imported]);
   const imgIndex = join(cacheDir(a.id), "imagery-entries.json");
   const imagery: ImageryEntry[] = existsSync(imgIndex)
     ? (JSON.parse(readFileSync(imgIndex, "utf8")) as ImageryEntry[]).filter((e) => existsSync(join(dir, e.file)))
@@ -101,7 +122,7 @@ export function runManifest(): LayerManifest {
   const manifest: LayerManifest = { grid: g, layers, imagery, generatedAt: new Date().toISOString() };
   writeJson(join(dir, "grid.json"), g);
   writeJson(layersFile, manifest);
-  log("manifest", `layers.json: ${layers.map((l) => l.id).join(", ")}; imagery: ${imagery.map((i) => i.id).join(", ")}`);
+  log("manifest", `layers.json: ${layers.map((l) => l.id).join(", ")}; imagery: ${Object.entries(imagery.reduce<Record<string, number>>((m, i) => ((m[i.group ?? i.id] = (m[i.group ?? i.id] ?? 0) + 1), m), {})).map(([g, n]) => `${g} (${n} pictures)`).join(", ")}`);
   return manifest;
 }
 

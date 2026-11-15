@@ -1,8 +1,8 @@
 import type { ComponentProps, ReactNode } from "react";
 import { useStore, type OverlayId } from "../store";
 import type { LayerEntry } from "@marsmap/core";
-import { imageryGroup, scienceLayers, scienceRamp } from "../map/MapView";
-import { tintable } from "../map/imageryTiles";
+import { scienceLayers, scienceRamp } from "../map/MapView";
+import { pictureGroup, tintable } from "../map/imageryTiles";
 import { CONFIDENCE_CLEAR, CONFIDENCE_LOW, COST_RAMP, cssGradient, ELEV_RAMP, SLOPE_STOPS } from "../map/rasters";
 import type { AreaData } from "../types";
 import { Badge } from "@/components/ui/badge";
@@ -196,11 +196,11 @@ export function LayersTab() {
   const layer = (id: string) => m.layers.find((l) => l.id === id);
   const groups = new Map<string, (typeof m.imagery)[number][]>();
   for (const im of m.imagery) {
-    const g = imageryGroup(im.id);
+    const g = pictureGroup(im);
     groups.set(g, [...(groups.get(g) ?? []), im]);
   }
   const est = (id: string) => (layer(id)?.estimated ? <Badge variant="estimate">estimated</Badge> : null);
-  const L = area.layers;
+  const L = area.overview;
   const canTint = !!base && tintable(base);
   return (
     <>

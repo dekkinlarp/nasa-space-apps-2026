@@ -12,11 +12,12 @@ import { runRover } from "./rover";
 import { runPhotos } from "./photos";
 import { runConditions } from "./conditions";
 import { runManifest } from "./manifest";
-import { runTint } from "./tint";
 import { runPreview } from "./preview";
 import { runVerify } from "./verify";
 
 const t0 = Date.now();
+// Order matters: derive needs elevation (elev2m/rough2m) and the HiRISE grid copy from imagery;
+// minerals needs the HiRISE overview copy; manifest needs derive (and minerals, imagery).
 const a = loadArea();
 log("all", `area ${a.id}: ${a.width}x${a.height} cells @ ${a.cellSizeM} m, lon ${a.west}..${a.east}, lat ${a.south}..${a.north}`);
 const step = async (name: string, fn: () => unknown, optional = false) => {
@@ -35,7 +36,6 @@ await step("rover", runRover);
 await step("photos", runPhotos, true);
 await step("conditions", runConditions, true);
 await step("manifest", runManifest);
-await step("tint", runTint);
 await step("preview", runPreview, true);
 const ok = await runVerify();
 log("all", `done in ${((Date.now() - t0) / 1000).toFixed(1)} s; downloaded this run: ${(downloadedBytes() / 1e6).toFixed(1)} MB`);

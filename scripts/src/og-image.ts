@@ -1,5 +1,5 @@
 /**
- * Builds the 1200x630 link-preview image (apps/web/public/og.jpg) from the HiRISE mosaic,
+ * Builds the 1200x630 link-preview image (apps/web/public/og.jpg) from the HiRISE picture pyramid,
  * Curiosity's track and the drill sites. Run: pnpm --filter @marsmap/scripts exec vite-node src/og-image.ts
  */
 import { readFileSync } from "node:fs";
@@ -11,21 +11,41 @@ const ROOT = resolve(dirname(fileURLToPath(import.meta.url)), "../..");
 const area = JSON.parse(readFileSync(join(ROOT, "config/area.json"), "utf8"));
 const dir = join(ROOT, "data", area.id);
 const manifest = JSON.parse(readFileSync(join(dir, "layers.json"), "utf8"));
-const img = manifest.imagery.find((i: { id: string }) => i.id === "hirise");
-const W = 1200, H = 630, SRC_W = 2400, SRC_H = 1260;
-
-const px = (lon: number, lat: number): [number, number] => [
-  ((lon - img.west) / (img.east - img.west)) * img.widthPx,
-  ((img.north - lat) / (img.north - img.south)) * img.heightPx,
-];
-// Centre the crop on the boxwork, shifted so the title has room on the left.
-const [cx, cy] = px(area.centerLon, area.centerLat);
-const left = Math.round(Math.min(Math.max(cx - SRC_W * 0.62, 0), img.widthPx - SRC_W));
-const top = Math.round(Math.min(Math.max(cy - SRC_H / 2, 0), img.heightPx - SRC_H));
+type Pic = { id: string; group?: string; level?: number; file: string; west: number; east: number; north: number; south: number; widthPx: number; heightPx: number; metersPerPixel?: number };
+const W = 1200, H = 630;
+// HiRISE pyramid level closest to 2 m/px (about 4.7 x 2.5 km in the picture).
+const pics = (manifest.imagery as Pic[]).filter((i) => (i.group ?? i.id) === "hirise");
+const levelOf = (i: Pic) => i.level ?? 0;
+const levels = [...new Set(pics.map(levelOf))];
+const level = levels.reduce((best, l) => {
+  const mpp = (x: number) => pics.find((p) => levelOf(p) === x)?.metersPerPixel ?? 1;
+  return Math.abs(Math.log(mpp(l) / 2)) < Math.abs(Math.log(mpp(best) / 2)) ? l : best;
+}, levels[0]!);
+const lv = pics.filter((p) => levelOf(p) === level);
+const degPx = (lv[0]!.east - lv[0]!.west) / lv[0]!.widthPx;
+const west0 = Math.min(...lv.map((p) => p.west)), north0 = Math.max(...lv.map((p) => p.north));
+const SRC_W = Math.round((4700 / (lv[0]!.metersPerPixel ?? 2)) | 0), SRC_H = Math.round((SRC_W * H) / W);
+const px = (lon: number, lat: number): [number, number] => [(lon - west0) / degPx, (north0 - lat) / degPx];
+// Centre the crop on the boxwork drill sites, shifted so the title has room on the left.
+const boxwork = JSON.parse(readFileSync(join(dir, "rover/drill-sites.json"), "utf8")).sites as { lon: number; lat: number }[];
+const [cx, cy] = px(boxwork.reduce((p, q) => p + q.lon, 0) / boxwork.length, boxwork.reduce((p, q) => p + q.lat, 0) / boxwork.length);
+const left = Math.round(cx - SRC_W * 0.62);
+const top = Math.round(cy - SRC_H / 2);
 const toOut = (lon: number, lat: number) => {
   const [x, y] = px(lon, lat);
   return [((x - left) / SRC_W) * W, ((y - top) / SRC_H) * H] as const;
 };
+// Stitch the crop from the pieces it overlaps.
+const parts: sharp.OverlayOptions[] = [];
+for (const p of lv) {
+  const [x0, y0] = px(p.west, p.north);
+  const l = Math.max(left, Math.round(x0)), t = Math.max(top, Math.round(y0));
+  const r = Math.min(left + SRC_W, Math.round(x0) + p.widthPx), b = Math.min(top + SRC_H, Math.round(y0) + p.heightPx);
+  if (r <= l || b <= t) continue;
+  const input = await sharp(join(dir, p.file)).extract({ left: l - Math.round(x0), top: t - Math.round(y0), width: r - l, height: b - t }).toBuffer();
+  parts.push({ input, left: l - left, top: t - top });
+}
+const crop = await sharp({ create: { width: SRC_W, height: SRC_H, channels: 3, background: { r: 0, g: 0, b: 0 } } }).composite(parts).png().toBuffer();
 
 const traverse = JSON.parse(readFileSync(join(dir, "rover/traverse.area.json"), "utf8"));
 const lines: string[] = [];
@@ -59,8 +79,7 @@ const svg = `<svg xmlns="http://www.w3.org/2000/svg" width="${W}" height="${H}">
 </svg>`;
 
 const out = join(ROOT, "apps/web/public/og.jpg");
-await sharp(join(dir, img.file))
-  .extract({ left, top, width: SRC_W, height: SRC_H })
+await sharp(crop)
   .resize(W, H)
   .modulate({ brightness: 1.05 })
   .composite([{ input: Buffer.from(svg) }])

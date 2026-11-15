@@ -13,7 +13,6 @@ export function usePnr(): PnrResult | null {
   const returnToStart = useStore((s) => s.returnToStart);
   const params = useStore((s) => s.params);
   const reach = useStore((s) => s.reach);
-  const grid = useStore((s) => s.area?.layers.grid);
   const r = selectedResult({ results, selectedProfile });
   const dwellKey = stops.map((s) => s.dwellS).join(",");
   return useMemo(() => {
@@ -22,6 +21,7 @@ export function usePnr(): PnrResult | null {
     if (!rp) return null;
     // Only trust the reach field if it was flooded from the current start.
     const sameStart = reach && reach.start[0] === start.lonLat[0] && reach.start[1] === start.lonLat[1];
+    const grid = reach?.grid;
     const lookup: ReturnLookup | null =
       sameStart && grid
         ? {
@@ -37,7 +37,7 @@ export function usePnr(): PnrResult | null {
         : null;
     return computePnr({ result: r, dwellS: rp.dwellS, params, loopsHome: returnToStart, reach: lookup });
     // eslint-disable-next-line react-hooks/exhaustive-deps
-  }, [r, params, start, dwellKey, returnToStart, reach, grid]);
+  }, [r, params, start, dwellKey, returnToStart, reach]);
 }
 
 export const PNR_METHOD_NOTE =

@@ -1,6 +1,6 @@
 import { create } from "zustand";
-import type { LonLat, ReachRing, RouteProfile, RouteResult, WalkParams } from "@marsmap/core";
-import type { AreaData, Poi, StartPoint, Stop, Waypoint } from "./types";
+import type { GridSpec, LonLat, ReachRing, RouteProfile, RouteResult, TileWindow, WalkParams } from "@marsmap/core";
+import type { AreaData, DisplayLayers, GridData, Poi, StartPoint, Stop, Waypoint } from "./types";
 
 export type Tab = "explore" | "plan" | "layers";
 export type Status = "idle" | "calculating" | "ready" | "error";
@@ -11,6 +11,10 @@ export interface LayerState {
 }
 
 export interface ReachData {
+  /** The planning window the fields are on. */
+  grid: GridSpec;
+  /** The walk limit reaches the edge of the planning window, so the rings are cut there. */
+  clipped: boolean;
   outTimeS: Float32Array;
   backTimeS: Float32Array;
   backEnergyKJ: Float32Array;
@@ -45,6 +49,12 @@ export type OverlayId = (typeof OVERLAY_IDS)[number];
 interface State {
   area: AreaData | null;
   loadError: string | null;
+  /** Window of full-resolution tiles that planning runs on (null for an untiled area). */
+  win: TileWindow | null;
+  /** False when the start and stops are spread wider than one planning window. */
+  winFits: boolean;
+  /** Full-resolution rasters of the planning window (the whole area when it is not tiled). */
+  detail: DisplayLayers | null;
   tab: Tab;
 
   baseImagery: string | null;
@@ -55,7 +65,7 @@ interface State {
   /** Science layers from the manifest (group "science"), keyed by layer id. */
   sci: Record<string, LayerState>;
   /** Their data, loaded the first time each is switched on. */
-  sciData: Record<string, Float32Array>;
+  sciData: Record<string, GridData>;
   view3d: boolean;
   exaggeration: number;
   /** 3D only: side of the square of ground drawn around the point the camera looks at, km. */
@@ -106,6 +116,9 @@ let stopSeq = 0;
 export const useStore = create<State>((set, get) => ({
   area: null,
   loadError: null,
+  win: null,
+  winFits: true,
+  detail: null,
   tab: "explore",
 
   baseImagery: null,

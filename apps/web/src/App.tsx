@@ -2,7 +2,8 @@ import { useEffect, useRef, useState } from "react";
 import { useStore, type Tab } from "./store";
 import { loadArea, pickArea } from "./data";
 import { startEngine } from "./engine";
-import { MapView, imageryGroup, setMapInsets } from "./map/MapView";
+import { MapView, setMapInsets } from "./map/MapView";
+import { pictureGroup } from "./map/imageryTiles";
 import { ChevronLeftIcon } from "lucide-react";
 import { SidebarIcon } from "./components/icons";
 import { Button } from "@/components/ui/button";
@@ -91,7 +92,7 @@ function ViewControls() {
   const ex = useStore((s) => s.exaggeration);
   const renderKm = useStore((s) => s.renderDistanceKm);
   const set = useStore((s) => s.set);
-  const hasElev = useStore((s) => !!s.area?.layers.elevation);
+  const hasElev = useStore((s) => !!s.area?.overview.elevation);
   return (
     <div className="flex items-center gap-2">
       {view3d && (
@@ -185,7 +186,7 @@ export function App() {
       try {
         const { id, synthetic } = await pickArea();
         const a = await loadArea(id, synthetic);
-        const groups = a.manifest.imagery.map((i) => imageryGroup(i.id));
+        const groups = a.manifest.imagery.map(pictureGroup);
         const base = groups.find((g) => /hirise/i.test(g)) ?? groups[0] ?? null;
         const start = a.config.pois.find((p) => p.type === "start");
         set({
@@ -227,7 +228,7 @@ export function App() {
         <Starfield />
         <MapView />
         <GoWalker />
-        <div className="map-credit">{area.manifest.imagery.find((i) => imageryGroup(i.id) === baseImagery)?.source ?? ""}</div>
+        <div className="map-credit">{area.manifest.imagery.find((i) => pictureGroup(i) === baseImagery)?.source ?? ""}</div>
       </div>
 
       <Tabs

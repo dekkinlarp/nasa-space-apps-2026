@@ -1,34 +1,5 @@
 import type { GridSpec, LayerEntry, LayerManifest, Layers, SurfaceClass } from "./types";
-
-const LITTLE_ENDIAN = new Uint8Array(new Uint16Array([1]).buffer)[0] === 1;
-
-function readFloat32(buf: ArrayBuffer, n: number, entry: LayerEntry): Float32Array {
-  if (buf.byteLength !== n * 4) {
-    throw new Error(`layer ${entry.id}: expected ${n * 4} bytes, got ${buf.byteLength}`);
-  }
-  let out: Float32Array;
-  if (LITTLE_ENDIAN) {
-    out = new Float32Array(buf.slice(0));
-  } else {
-    out = new Float32Array(n);
-    const dv = new DataView(buf);
-    for (let i = 0; i < n; i++) out[i] = dv.getFloat32(i * 4, true);
-  }
-  if (entry.nodata !== undefined && !Number.isNaN(entry.nodata)) {
-    const nd = Math.fround(entry.nodata);
-    for (let i = 0; i < n; i++) if (out[i] === nd) out[i] = NaN;
-  }
-  return out;
-}
-
-function readUint8(buf: ArrayBuffer, n: number, entry: LayerEntry): Uint8Array {
-  if (buf.byteLength !== n) throw new Error(`layer ${entry.id}: expected ${n} bytes, got ${buf.byteLength}`);
-  const out = new Uint8Array(buf.slice(0));
-  if (entry.nodata !== undefined && entry.nodata !== 0) {
-    for (let i = 0; i < n; i++) if (out[i] === entry.nodata) out[i] = 0; // 0 = Unknown
-  }
-  return out;
-}
+import { loadWindowLayers } from "./tiles";
 
 /**
  * The bytes of one layer: the single file, or its numbered parts fetched together and joined.
@@ -72,32 +43,15 @@ export function computeSlope(grid: GridSpec, elevation: Float32Array): Float32Ar
 }
 
 /**
- * Load the routing rasters named in a layers.json manifest. `fetchBinary` receives the
- * manifest's relative `file` and returns its bytes (fetch() in a browser, fs.readFile in Node).
+ * Load the routing rasters named in a layers.json manifest, over the whole grid. `fetchBinary` receives
+ * the manifest's relative `file` and returns its bytes (fetch() in a browser, fs.readFile in Node).
  * Elevation is required; slope is computed from elevation if missing; surface defaults to 0 (Unknown).
+ * For a tiled region use loadWindowLayers with a window instead: the whole region does not fit in memory.
  */
 export async function loadLayers(
   manifest: LayerManifest,
   fetchBinary: (file: string) => Promise<ArrayBuffer>,
   surfaceClasses: SurfaceClass[],
 ): Promise<Layers> {
-  const grid = manifest.grid;
-  const n = grid.width * grid.height;
-  const byId = (id: string) => manifest.layers.find((l) => l.id === id);
-
-  const elevEntry = byId("elevation");
-  if (!elevEntry) throw new Error("layers.json has no 'elevation' layer");
-  const slopeEntry = byId("slope");
-  const surfEntry = byId("surface");
-
-  const [elevBuf, slopeBuf, surfBuf] = await Promise.all([
-    fetchLayerBytes(elevEntry, fetchBinary),
-    slopeEntry ? fetchLayerBytes(slopeEntry, fetchBinary) : Promise.resolve(null),
-    surfEntry ? fetchLayerBytes(surfEntry, fetchBinary) : Promise.resolve(null),
-  ]);
-
-  const elevation = readFloat32(elevBuf, n, elevEntry);
-  const slope = slopeBuf && slopeEntry ? readFloat32(slopeBuf, n, slopeEntry) : computeSlope(grid, elevation);
-  const surface = surfBuf && surfEntry ? readUint8(surfBuf, n, surfEntry) : new Uint8Array(n);
-  return { grid, elevation, slope, surface, surfaceClasses };
+  return loadWindowLayers(manifest, null, fetchBinary, surfaceClasses);
 }

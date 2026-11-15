@@ -2,8 +2,9 @@
 import { existsSync, readFileSync } from "node:fs";
 import { join } from "node:path";
 import sharp from "sharp";
-import { areaDir, gridFromArea, isMain, loadArea, loadSurfaceClasses, log } from "./lib/area";
-import { readF32 } from "./lib/demgrid";
+import { readOverview } from "../../packages/core/src/tiles";
+import type { LayerManifest } from "../../packages/core/src/types";
+import { areaDir, isMain, loadArea, loadSurfaceClasses, log } from "./lib/area";
 import { hillshade } from "./lib/raster";
 import { cellSizes } from "./derive";
 
@@ -32,27 +33,36 @@ function ramp(t: number): [number, number, number] {
 
 export async function runPreview(): Promise<void> {
   const a = loadArea();
-  const g = gridFromArea(a);
   const dir = areaDir(a);
   const out = areaDir(a, "preview");
+  const manifest = JSON.parse(readFileSync(join(dir, "layers.json"), "utf8")) as LayerManifest;
+  const fetchBinary = async (f: string) => {
+    const b = readFileSync(join(dir, f));
+    return b.buffer.slice(b.byteOffset, b.byteOffset + b.byteLength) as ArrayBuffer;
+  };
+  const ov = async (id: string) => {
+    const e = manifest.layers.find((l) => l.id === id);
+    return e ? readOverview(e, manifest.grid, fetchBinary) : null;
+  };
+  // Quick-looks are drawn from the overviews (the whole region at full resolution would be 330 Mpx).
+  const e = await ov("elevation");
+  if (!e) throw new Error("no elevation overview");
+  const g = e.grid;
   const W = g.width;
   const H = g.height;
   const N = W * H;
-  const elev = readF32(join(dir, "elevation.f32"));
-  const slope = readF32(join(dir, "slope.f32"));
+  const elev = e.data as Float32Array;
+  const slope = ((await ov("slope"))?.data as Float32Array | undefined) ?? new Float32Array(N);
   const { dx, dy } = cellSizes(g);
-  const hs = hillshade(elev, W, H, dx, dy, 315, 35, 2);
+  const hs = hillshade(Float32Array.from(elev, (v) => (Number.isNaN(v) ? 0 : v)), W, H, dx, dy, 315, 35, 2);
   await sharp(Buffer.from(hs), { raw: { width: W, height: H, channels: 1 } }).png().toFile(join(out, "hillshade.png"));
 
-  // colour-relief elevation blended with hillshade
   let mn = Infinity;
   let mx = -Infinity;
-  for (const v of elev) {
-    mn = Math.min(mn, v);
-    mx = Math.max(mx, v);
-  }
+  for (const v of elev) if (!Number.isNaN(v)) (mn = Math.min(mn, v)), (mx = Math.max(mx, v));
   const er = Buffer.alloc(N * 3);
   for (let i = 0; i < N; i++) {
+    if (Number.isNaN(elev[i]!)) continue;
     const c = ramp((elev[i]! - mn) / (mx - mn));
     const s = 0.35 + 0.65 * (hs[i]! / 255);
     for (let j = 0; j < 3; j++) er[i * 3 + j] = Math.round(c[j]! * s);
@@ -61,14 +71,14 @@ export async function runPreview(): Promise<void> {
 
   const sr = Buffer.alloc(N * 3);
   for (let i = 0; i < N; i++) {
+    if (Number.isNaN(slope[i]!)) continue;
     const c = ramp(slope[i]! / 40);
     for (let j = 0; j < 3; j++) sr[i * 3 + j] = c[j]!;
   }
   await sharp(sr, { raw: { width: W, height: H, channels: 3 } }).png().toFile(join(out, "slope.png"));
 
-  const surfFile = join(dir, "surface.u8");
-  if (existsSync(surfFile)) {
-    const surf = readFileSync(surfFile);
+  const surf = (await ov("surface"))?.data as Uint8Array | undefined;
+  if (surf) {
     const colors = new Map(loadSurfaceClasses().map((c) => [c.id, hex(c.color)]));
     const cr = Buffer.alloc(N * 3);
     for (let i = 0; i < N; i++) {
@@ -77,14 +87,16 @@ export async function runPreview(): Promise<void> {
       for (let j = 0; j < 3; j++) cr[i * 3 + j] = Math.round(c[j]! * s);
     }
     await sharp(cr, { raw: { width: W, height: H, channels: 3 } }).png().toFile(join(out, "surface.png"));
-    const conf = readFileSync(join(dir, "surface_confidence.u8"));
-    await sharp(conf, { raw: { width: W, height: H, channels: 1 } }).png().toFile(join(out, "surface_confidence.png"));
+    const conf = (await ov("surface_confidence"))?.data as Uint8Array | undefined;
+    if (conf) await sharp(Buffer.from(conf), { raw: { width: W, height: H, channels: 1 } }).png().toFile(join(out, "surface_confidence.png"));
   }
 
-  // Alignment check: HiRISE (left) | hillshade (right), plus a red/cyan blend.
-  const hiriseFile = join(dir, "imagery", "hirise.jpg");
-  if (existsSync(hiriseFile)) {
-    const photo = await sharp(hiriseFile).resize(W, H, { fit: "fill" }).greyscale().toColourspace("b-w").raw().toBuffer();
+  // Alignment check: the coarsest HiRISE picture (red) over the hillshade (cyan).
+  const pics = manifest.imagery.filter((i) => (i.group ?? i.id) === "hirise");
+  const topLevel = Math.max(...pics.map((i) => i.level ?? 0));
+  const top = pics.filter((i) => (i.level ?? 0) === topLevel);
+  if (top.length === 1 && existsSync(join(dir, top[0]!.file))) {
+    const photo = await sharp(join(dir, top[0]!.file)).resize(W, H, { fit: "fill" }).greyscale().toColourspace("b-w").raw().toBuffer();
     const blend = Buffer.alloc(N * 3);
     for (let i = 0; i < N; i++) {
       blend[i * 3] = photo[i]!;
@@ -92,19 +104,6 @@ export async function runPreview(): Promise<void> {
       blend[i * 3 + 2] = hs[i]!;
     }
     await sharp(blend, { raw: { width: W, height: H, channels: 3 } }).png().toFile(join(out, "align_photo_red_hillshade_cyan.png"));
-    // zoomed (up to) 400x400-cell crops around the centre, side by side
-    const S = Math.min(400, W, H);
-    const cx = Math.floor((W - S) / 2);
-    const cy = Math.floor((H - S) / 2);
-    const ph = await sharp(photo, { raw: { width: W, height: H, channels: 1 } }).extract({ left: cx, top: cy, width: S, height: S }).png().toBuffer();
-    const hh = await sharp(Buffer.from(hs), { raw: { width: W, height: H, channels: 1 } }).extract({ left: cx, top: cy, width: S, height: S }).png().toBuffer();
-    await sharp({ create: { width: 2 * S + 10, height: S, channels: 3, background: { r: 255, g: 255, b: 255 } } })
-      .composite([
-        { input: ph, left: 0, top: 0 },
-        { input: hh, left: S + 10, top: 0 },
-      ])
-      .png()
-      .toFile(join(out, "align_centre_photo_vs_hillshade.png"));
   }
   log("preview", `wrote quick-looks to ${out}`);
 }

@@ -1,7 +1,7 @@
 import type { LonLat } from "@marsmap/core";
 import { useStore } from "../store";
 import { fmtLonLat, fmtNum } from "../format";
-import { sampleAt, surfaceById } from "../lib";
+import { sampleBest, surfaceById } from "../lib";
 import { inGrid } from "../geo";
 import { Button } from "@/components/ui/button";
 import { Swatch } from "@/components/ui/swatch";
@@ -12,9 +12,10 @@ export function ClickMenu({ lonLat }: { lonLat: LonLat }) {
   const setStart = useStore((s) => s.setStart);
   const addStop = useStore((s) => s.addStop);
   const stops = useStore((s) => s.stops);
-  const smp = sampleAt(area.layers, lonLat);
+  const detail = useStore((s) => s.detail);
+  const smp = sampleBest(area, detail, lonLat);
   const surf = surfaceById(area.config.surfaceClasses, smp?.surfaceId);
-  const inside = inGrid(area.layers.grid, lonLat);
+  const inside = inGrid(area.manifest.grid, lonLat);
   return (
     <div>
       {smp && (

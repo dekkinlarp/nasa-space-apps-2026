@@ -1,8 +1,8 @@
 {
   "repo": "dekkinlarp/nasa-space-apps-2026",
-  "tag": "data-v3",
-  "asset": "marsmap-gale-boxwork-data-v3.tar.gz",
-  "area": "gale-boxwork",
-  "sha256": "02adb66bbde42ee51f25ef0de3ae4e2ac49a9f0fbc22c44cb57d85d3021cff60",
-  "bytes": 228746544
+  "tag": "data-v4",
+  "asset": "marsmap-gale-data-v4.tar.gz",
+  "area": "gale",
+  "sha256": "3018d89bed9caff652ee7eb03885264580d21934d74f6666c3a27c08187a430f",
+  "bytes": 549025395
 }

@@ -1,6 +1,6 @@
 import { useStore } from "../store";
 import { fmtDist, fmtLonLat, fmtNum } from "../format";
-import { surfaceById } from "../lib";
+import { sampleBest, surfaceById } from "../lib";
 import { cellIndex, marsDistanceM } from "../geo";
 import { scienceLayers, scienceRamp } from "../map/MapView";
 import { Panel } from "@/components/ui/panel";
@@ -20,9 +20,9 @@ export function HoverReadout() {
   const sci = useStore((s) => s.sci);
   const sciData = useStore((s) => s.sciData);
   const confOn = useStore((s) => s.overlays.confidence.on);
-  const cell = hover ? cellIndex(area.layers.grid, hover.lonLat) : null;
+  const detail = useStore((s) => s.detail);
   const sciOn = scienceLayers(area).filter((l) => sci[l.id]?.on && sciData[l.id]);
-  const conf = confOn && cell != null ? area.layers.confidence?.[cell] : undefined;
+  const conf = confOn && hover ? (sampleBest(area, detail, hover.lonLat)?.confidence ?? undefined) : undefined;
   return (
     <Panel
       className={cn(
@@ -59,7 +59,9 @@ export function HoverReadout() {
           {(sciOn.length > 0 || conf != null) && (
             <div className={cn(row, "flex-wrap")}>
               {sciOn.map((l) => {
-                const v = cell != null ? sciData[l.id]![cell] : undefined;
+                const gd = sciData[l.id]!;
+                const cell = hover ? cellIndex(gd.grid, hover.lonLat) : null;
+                const v = cell != null ? gd.data[cell] : undefined;
                 return (
                   <span key={l.id}>
                     <Swatch color={scienceRamp(area, l.id)[1]![1]} />
