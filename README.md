@@ -1,6 +1,13 @@
 # EVAres — EVA planner for the Gale Crater boxwork
 
+[![Live demo](https://img.shields.io/badge/live_demo-marsmap.wtarit.workers.dev-c1440e?style=flat-square)](https://marsmap.wtarit.workers.dev) [![NASA Space Apps 2026](https://img.shields.io/badge/NASA_Space_Apps-2026-0b3d91?style=flat-square&logo=nasa&logoColor=white)](https://www.spaceappschallenge.org/) [![Last commit](https://img.shields.io/github/last-commit/dekkinlarp/nasa-space-apps-2026?style=flat-square)](https://github.com/dekkinlarp/nasa-space-apps-2026/commits/main)
+
+![TypeScript](https://img.shields.io/badge/TypeScript-5-3178c6?style=flat-square&logo=typescript&logoColor=white) ![React](https://img.shields.io/badge/React-19-20232a?style=flat-square&logo=react) ![MapLibre GL](https://img.shields.io/badge/MapLibre_GL-5-396cb2?style=flat-square&logo=maplibre&logoColor=white) ![Vite](https://img.shields.io/badge/Vite-8-646cff?style=flat-square&logo=vite&logoColor=white) ![Tailwind CSS](https://img.shields.io/badge/Tailwind_CSS-4-06b6d4?style=flat-square&logo=tailwindcss&logoColor=white) ![Cloudflare Workers](https://img.shields.io/badge/Cloudflare-Workers-f38020?style=flat-square&logo=cloudflare&logoColor=white) ![pnpm](https://img.shields.io/badge/pnpm-workspace-f69220?style=flat-square&logo=pnpm&logoColor=white) ![Data: NASA and USGS](https://img.shields.io/badge/data-NASA_%2F_USGS-555555?style=flat-square)
+
 NASA Space Apps 2026, challenge "Interplanetary Survival Guide: Martian Map".
+Try it: **https://marsmap.wtarit.workers.dev**
+
+![The Plan tab: a three-stop walk at the boxwork, with the verdict, the budgets and three routes](docs/screenshots/plan.jpg)
 
 A Google-Maps-style tool for planning an astronaut walk (EVA) on Mars, built entirely on NASA and USGS
 orbital and rover data. The map covers a 33 x 40 km region of Gale Crater: all of Curiosity's drive,
@@ -36,6 +43,28 @@ walk" in the app loads one such plan: camp → hollow → ridge junction → san
 
 The Explore tab opens with typical conditions at Curiosity (air temperature range, daylight hours,
 radiation dose) from its REMS and RAD instruments.
+
+## A look around
+
+Screenshots of the live deployment on 15 November 2026, with the built-in boxwork walk loaded.
+
+| | |
+|---|---|
+| ![A simulated astronaut working at the first stop, with the walk panel open](docs/screenshots/walk.jpg) | ![The same plan in 3D, with place labels standing on posts above the terrain](docs/screenshots/terrain-3d.jpg) |
+| **Go.** A simulated astronaut walks the route. The panel shows the clock, what the crew is doing at the stop, and what is left of time, energy and oxygen. The label over the walker counts down the work left there. | **3D.** The same plan on the terrain. Labels stand on posts above their places, and the suit panel stands in for the Plan tab while the side panel is hidden. |
+| ![The card for the Nevado Sajama drill site, with evidence tagged by source](docs/screenshots/explore.jpg) | ![The clay indicator from orbit drawn over the HiRISE photo](docs/screenshots/minerals.jpg) |
+| **Explore.** Each place says what question a stop there answers and what the answer rests on: evidence is tagged Rover or Orbit, and the card lists the orbital mineral readings at that spot. | **Layers.** Clay seen from orbit (CRISM D2300) over the HiRISE photo. Each block is one 18 m CRISM pixel, drawn as it is rather than smoothed. |
+
+<img src="docs/screenshots/phone.jpg" alt="The Plan tab as a bottom sheet on a phone" width="280" align="right">
+
+**Plan** (the picture at the top of this page). The verdict comes first: whether the walk fits, then time,
+energy and oxygen against their limits with the safety reserve hatched. Under it are the stops in walking
+order and the three routes to compare. On the map the chosen route turns amber where it crosses hazard
+slope and carries a bar every 100 m.
+
+**On a phone** the side panel becomes a bottom sheet, and a running walk folds to a single row above it.
+
+<br clear="right">
 
 ## Data sources
 
