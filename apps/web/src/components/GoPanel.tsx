@@ -5,7 +5,7 @@ import { routePoints } from "../engine";
 import { buildTimeline, pointNames, positionAt } from "../lib";
 import { bearingDeg, cellIndex, marsDistanceM, nearestOnLine, offsetLonLat } from "../geo";
 import { fmtClock, fmtDist, fmtDur, fmtEnergy } from "../format";
-import { getMap } from "../map/MapView";
+import { FollowToggle } from "./GoWalker";
 
 const SPEEDS = [30, 120, 600, 1800];
 const OFF_ROUTE_M = 25;
@@ -77,13 +77,7 @@ export function GoPanel() {
     return () => navigator.geolocation.clearWatch(id);
   }, [go.mode, start, tl, setGo]);
 
-  // Keep the walker in view.
-  useEffect(() => {
-    const map = getMap();
-    if (!map || !go.position || go.mode === "off") return;
-    const b = map.getBounds();
-    if (!b.contains(go.position)) map.easeTo({ center: go.position, duration: 400 });
-  }, [go.position, go.mode]);
+  // Camera follow (and the walker itself) live in GoWalker.
 
   if (go.mode === "off") return null;
   if (!r || !tl || !rp) {
@@ -128,6 +122,7 @@ export function GoPanel() {
     <div className="go-panel">
       <div className="go-head">
         <span className="badge sim">{go.mode === "sim" ? "SIMULATED POSITION" : "YOUR LOCATION, MAPPED ONTO MARS"}</span>
+        <FollowToggle />
         <button className="icon-btn" onClick={() => setGo({ mode: "off", playing: false, position: null })} title="Stop">
           ×
         </button>

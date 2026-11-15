@@ -3,13 +3,14 @@ import { createPortal } from "react-dom";
 import maplibregl, { type GeoJSONSource, type ImageSource, type Map as MLMap } from "maplibre-gl";
 import "maplibre-gl/dist/maplibre-gl.css";
 import type { LonLat, ReachRing, RouteResult } from "@marsmap/core";
-import { selectedResult, useStore, type OverlayId } from "../store";
+import { selectedResult, useStore, type LayerState, type OverlayId } from "../store";
 import type { AreaData, Poi } from "../types";
 import { cellIndex, M_PER_DEG_LAT } from "../geo";
 import { costUrl, elevationUrl, slopeUrl, surfaceUrl } from "./rasters";
 import { demMaxZoom, DEM_TILE_SIZE, registerDemProtocol, setDemSource } from "./dem";
 import { fmtDur } from "../format";
 import { ClickMenu } from "../components/ClickMenu";
+import { routeSlopeFeatures } from "./routeSlope";
 
 let mapInstance: MLMap | null = null;
 export const getMap = () => mapInstance;
@@ -30,6 +31,14 @@ export const profileColor = (id: string, i = 0) => PROFILE_COLORS[id] ?? ["#ff8a
 export const imageryGroup = (id: string) => id.replace(/[_-]r?\d+[_-]c?\d+$/, "");
 
 const TILE_SWITCH_ZOOM = 17;
+/** Round-trip time rings are teal; the outermost (walk-limit) ring is amber. Shared with the map key. */
+export const RING_COLOR = "#36d1c4";
+export const RING_LIMIT_COLOR = "#ffb347";
+/** Opacity multiplier for Curiosity's traverse while the Plan tab is open. */
+const TRACK_PLAN_FADE = 0.28;
+const DEFAULT_TRACK_STATE = useStore.getState().overlays.track;
+/** True when the traverse should recede: Plan tab open and the user has not set the track layer themselves. */
+export const isTrackFaded = (tab: string, track: LayerState) => tab === "plan" && track === DEFAULT_TRACK_STATE;
 const RASTER_OVERLAYS = ["elevation", "slope", "surface", "cost"] as const;
 
 function gridCoords(a: AreaData): [[number, number], [number, number], [number, number], [number, number]] {
@@ -79,19 +88,117 @@ function ringFeatures(rings: ReachRing[] | null): GeoJSON.FeatureCollection {
         type: "MultiPolygon",
         coordinates: r.coordinates
           .filter((poly) => poly[0] && ringAreaM2(poly[0]) >= MIN_RING_PART_M2)
-          .map((poly) => [poly[0]!, ...poly.slice(1).filter((h) => ringAreaM2(h) >= MIN_RING_PART_M2)]),
+          // Holes (no-go ground inside a ring) are drawn once, on the walk-limit ring, not repeated on every ring.
+          .map((poly) => [poly[0]!, ...(i === n - 1 ? poly.slice(1).filter((h) => ringAreaM2(h) >= MIN_RING_PART_M2) : [])]),
       },
     })),
   };
 }
 
+/** Fire on the map when map furniture (e.g. the map key) changes size, so ring labels re-place. */
+export const RELAYOUT_LABELS = "marsmap:relayout-labels";
+type Box = { l: number; t: number; r: number; b: number };
+const boxesHit = (a: Box, b: Box) => a.l < b.r && a.r > b.l && a.t < b.b && a.b > b.t;
+/** Map furniture a ring label must not sit under (relative to the map container). */
+const LABEL_OBSTACLES = ".view-ctl, .maplibregl-ctrl-top-right, .map-legend, .readout, .card-slot > *, .go-panel, .maplibregl-ctrl-bottom-right";
+
+/**
+ * Put each ring label on the topmost point of its ring that keeps the whole label inside the
+ * visible map, clear of the map controls and of the other ring labels; hide it if there is none.
+ */
+function placeRingLabels(map: MLMap, markers: maplibregl.Marker[], labels: { el: HTMLElement; outline: number[][] }[]) {
+  const container = map.getContainer();
+  const W = container.clientWidth, H = container.clientHeight;
+  const cr = container.getBoundingClientRect();
+  const obstacles: Box[] = [];
+  container.parentElement?.querySelectorAll(LABEL_OBSTACLES).forEach((n) => {
+    const r = (n as HTMLElement).getBoundingClientRect();
+    if (r.width && r.height) obstacles.push({ l: r.left - cr.left - 4, t: r.top - cr.top - 4, r: r.right - cr.left + 4, b: r.bottom - cr.top + 4 });
+  });
+  const M = 6;
+  labels.forEach(({ el, outline }, i) => {
+    el.style.visibility = "hidden";
+    const w = el.offsetWidth || 120, h = el.offsetHeight || 18;
+    let best: { ll: number[]; y: number } | null = null;
+    for (const ll of outline) {
+      const p = map.project(ll as [number, number]);
+      const box = { l: p.x - w / 2, t: p.y - h - 1, r: p.x + w / 2, b: p.y };
+      if (box.l < M || box.t < M || box.r > W - M || box.b > H - M) continue;
+      if (best && p.y >= best.y) continue;
+      if (obstacles.some((o) => boxesHit(box, o))) continue;
+      best = { ll, y: p.y };
+    }
+    if (!best) return;
+    markers[i]?.setLngLat(best.ll as [number, number]);
+    const p = map.project(best.ll as [number, number]);
+    obstacles.push({ l: p.x - w / 2 - 4, t: p.y - h - 5, r: p.x + w / 2 + 4, b: p.y + 4 });
+    el.style.visibility = "";
+  });
+}
+
+/** Short on-map name: config `short`, else the name without "Start:", a trailing "(...)" or a ": subtitle". */
+export function poiShortName(p: Poi): string {
+  if (p.short) return p.short;
+  let s = p.name.replace(/^start:\s*/i, "").replace(/\s*\([^)]*\)\s*$/, "").split(":")[0]!.trim();
+  if (s.length > 22) s = `${s.slice(0, 21).replace(/\s+\S*$/, "")}…`;
+  return s.charAt(0).toUpperCase() + s.slice(1);
+}
+
 function poiEl(p: Poi): HTMLElement {
   const el = document.createElement("div");
   el.className = `poi-pin poi-${p.type}`;
-  el.innerHTML = `<span class="poi-dot"></span><span class="poi-label"></span>`;
-  (el.querySelector(".poi-label") as HTMLElement).textContent = p.name;
+  el.innerHTML = `<span class="poi-dot"></span><span class="poi-label"><span class="pl-short"></span><span class="pl-full"></span></span>`;
+  (el.querySelector(".pl-short") as HTMLElement).textContent = poiShortName(p);
+  (el.querySelector(".pl-full") as HTMLElement).textContent = p.name;
   el.title = p.name;
   return el;
+}
+
+/**
+ * Show each POI label on whichever side of its pin keeps it inside the map and clear of the
+ * map furniture, the plan markers and the labels already placed; hide it (hover still shows it) if neither does.
+ */
+function placePoiLabels(map: MLMap, pins: { el: HTMLElement; ll: LonLat; rank: number }[]) {
+  const container = map.getContainer();
+  const W = container.clientWidth, H = container.clientHeight;
+  const cr = container.getBoundingClientRect();
+  const rel = (r: DOMRect): Box => ({ l: r.left - cr.left, t: r.top - cr.top, r: r.right - cr.left, b: r.bottom - cr.top });
+  const obstacles: Box[] = [];
+  container.parentElement?.querySelectorAll(`${LABEL_OBSTACLES}, .stop-marker, .pnr-chip, .ring-label`).forEach((n) => {
+    const r = (n as HTMLElement).getBoundingClientRect();
+    if (r.width && r.height && (n as HTMLElement).style.visibility !== "hidden") obstacles.push(rel(r));
+  });
+  // Every pin's dot is an obstacle for every label.
+  const dots = pins.map(({ ll }) => {
+    const p = map.project(ll as [number, number]);
+    return { l: p.x - 8, t: p.y - 8, r: p.x + 8, b: p.y + 8 };
+  });
+  const placed: Box[] = [];
+  const M = 6;
+  [...pins]
+    .map((pin, i) => ({ ...pin, i }))
+    .sort((a, b) => a.rank - b.rank)
+    .forEach(({ el, i }) => {
+      const label = el.querySelector(el.classList.contains("selected") ? ".pl-full" : ".pl-short") as HTMLElement | null;
+      const w = (label?.offsetWidth || 80) + 14, h = 16;
+      const d = dots[i]!;
+      const cx = (d.l + d.r) / 2, cy = (d.t + d.b) / 2;
+      // Gap between pin centre and label: wider when a plan marker (S / 1, 2, ...) sits on the pin.
+      const off = el.classList.contains("in-plan") ? 14 : 10;
+      const sides = [
+        { flip: false, box: { l: cx + off, t: cy - h / 2, r: cx + off + w, b: cy + h / 2 } },
+        { flip: true, box: { l: cx - off - w, t: cy - h / 2, r: cx - off, b: cy + h / 2 } },
+      ];
+      const own = (o: Box) => o.l <= cx && o.r >= cx && o.t <= cy && o.b >= cy;
+      const ok = sides.find(({ box }) => {
+        if (box.l < M || box.t < M || box.r > W - M || box.b > H - M) return false;
+        if (obstacles.some((o) => !own(o) && boxesHit(box, o)) || placed.some((o) => boxesHit(box, o))) return false;
+        return !dots.some((o, j) => j !== i && boxesHit(box, o));
+      });
+      el.classList.toggle("flip", ok ? ok.flip : d.r + w > W - M);
+      el.classList.toggle("lbl-off", !ok);
+      if (ok) placed.push(ok.box);
+    });
 }
 
 /** Open on the points of interest (the boxwork), not the whole 3 km square. */
@@ -164,7 +271,9 @@ export function MapView() {
         map.addLayer({ id: `ov-${id}`, type: "raster", source: `ov-${id}`, layout: { visibility: "none" }, paint: { "raster-fade-duration": 0, "raster-resampling": id === "surface" ? "nearest" : "linear" } });
       }
       map.addSource("rings", { type: "geojson", data: EMPTY_FC });
-      map.addLayer({ id: "rings-line", type: "line", source: "rings", paint: { "line-color": ["interpolate", ["linear"], ["get", "t"], 0, "#36d1c4", 1, "#ffb347"], "line-width": ["interpolate", ["linear"], ["get", "t"], 0, 1.2, 1, 2.2], "line-dasharray": [3, 2] } });
+      map.addLayer({ id: "rings-line", type: "line", source: "rings", filter: ["<", ["get", "t"], 1], paint: { "line-color": RING_COLOR, "line-width": ["interpolate", ["linear"], ["get", "t"], 0, 1.2, 1, 2.2], "line-dasharray": [3, 2] } });
+      // Walk-limit ring (and the no-go loops inside it): solid amber, drawn over the time rings where they coincide.
+      map.addLayer({ id: "rings-limit", type: "line", source: "rings", filter: [">=", ["get", "t"], 1], layout: { "line-join": "round" }, paint: { "line-color": RING_LIMIT_COLOR, "line-width": 1.6 } });
 
       map.addSource("track", { type: "geojson", data: area.rover.traverse ?? EMPTY_FC });
       map.addLayer({ id: "track-casing", type: "line", source: "track", paint: { "line-color": "#000", "line-width": 4, "line-opacity": 0.5 } });
@@ -177,8 +286,10 @@ export function MapView() {
 
       map.addSource("routes", { type: "geojson", data: EMPTY_FC });
       map.addLayer({ id: "routes-alt", type: "line", source: "routes", layout: { "line-join": "round", "line-cap": "round" }, paint: { "line-color": ["get", "color"], "line-width": 3, "line-opacity": 0.35 } });
-      map.addLayer({ id: "route-casing", type: "line", source: "routes", layout: { "line-join": "round", "line-cap": "round" }, paint: { "line-color": "#120c0a", "line-width": 8, "line-opacity": 0.85 } });
-      map.addLayer({ id: "route-sel", type: "line", source: "routes", layout: { "line-join": "round", "line-cap": "round" }, paint: { "line-color": ["case", ["==", ["get", "over"], 1], "#ff3b3b", ["get", "color"]], "line-width": 4.5 } });
+      map.addLayer({ id: "route-casing", type: "line", source: "routes", layout: { "line-join": "round", "line-cap": "round" }, paint: { "line-color": ["case", ["==", ["get", "over"], 1], "#4a0d0b", "#120c0a"], "line-width": 8.5, "line-opacity": 0.9 } });
+      // Selected route, coloured along its length by slope (pieces built from the segment profiles).
+      map.addSource("route-slope", { type: "geojson", data: EMPTY_FC });
+      map.addLayer({ id: "route-sel", type: "line", source: "route-slope", layout: { "line-join": "round", "line-cap": "round" }, paint: { "line-color": ["get", "color"], "line-width": 4.5 } });
       map.addLayer({ id: "route-over", type: "line", source: "routes", layout: { "line-join": "round" }, paint: { "line-color": "#ffd2d2", "line-width": 1.5, "line-dasharray": [1, 2] } });
 
       map.addSource("cursor", { type: "geojson", data: EMPTY_FC });
@@ -255,6 +366,7 @@ export function MapView() {
 
   // ---------- raster overlays ----------
   const overlays = useStore((s) => s.overlays);
+  const tab = useStore((s) => s.tab);
   const reach = useStore((s) => s.reach);
   const gens = useRef<Partial<Record<OverlayId, number>>>({});
   // Walk-cost heat is invalidated whenever the reach field changes (declared first so it runs first).
@@ -293,10 +405,17 @@ export function MapView() {
     map.setPaintProperty("hillshade", "hillshade-exaggeration", overlays.hillshade.opacity);
     map.setLayoutProperty("rings-line", "visibility", overlays.rings.on ? "visible" : "none");
     map.setPaintProperty("rings-line", "line-opacity", overlays.rings.opacity);
+    map.setLayoutProperty("rings-limit", "visibility", overlays.rings.on ? "visible" : "none");
+    map.setPaintProperty("rings-limit", "line-opacity", overlays.rings.opacity * 0.85);
     for (const l of ["track", "track-casing", "waypoints"]) map.setLayoutProperty(l, "visibility", overlays.track.on ? "visible" : "none");
-    map.setPaintProperty("track", "line-opacity", overlays.track.opacity);
-    map.setPaintProperty("waypoints", "circle-opacity", overlays.track.opacity);
-  }, [ready, overlays, reach, area]);
+    // While planning, Curiosity's track recedes so the planned route stands out — unless the user
+    // has set the track layer themselves in the Layers tab (its state object then differs from the default).
+    const fade = isTrackFaded(tab, overlays.track) ? TRACK_PLAN_FADE : 1;
+    map.setPaintProperty("track", "line-opacity", overlays.track.opacity * fade);
+    map.setPaintProperty("track-casing", "line-opacity", 0.5 * fade);
+    map.setPaintProperty("waypoints", "circle-opacity", overlays.track.opacity * fade);
+    map.setPaintProperty("waypoints", "circle-stroke-opacity", fade);
+  }, [ready, overlays, reach, area, tab]);
 
   // ---------- rings ----------
   const rings = useStore((s) => s.rings);
@@ -309,17 +428,32 @@ export function MapView() {
     ringMarkers.current = [];
     if (!rings || !overlays.rings.on) return;
     const usable = reach?.usableS ?? 0;
+    const labels: { el: HTMLElement; outline: number[][] }[] = [];
     for (const r of rings) {
-      // Label at the northernmost vertex of the ring.
-      let best: number[] | null = null;
-      for (const poly of r.coordinates) for (const p of poly[0] ?? []) if (!best || p[1]! > best[1]!) best = p;
-      if (!best) continue;
+      // Candidate label spots: every vertex of the ring's (non-trivial) outer boundaries.
+      const outline = r.coordinates.filter((poly) => poly[0] && ringAreaM2(poly[0]) >= MIN_RING_PART_M2).flatMap((poly) => poly[0]!);
+      if (!outline.length) continue;
       const el = document.createElement("div");
       el.className = "ring-label";
       const isLimit = r.budgetS === Math.max(...rings.map((x) => x.budgetS));
-      el.textContent = isLimit ? `Walk limit · ${fmtDur(r.budgetS)} round trip + one stop` : `${fmtDur(r.budgetS)} round trip`;
-      ringMarkers.current.push(new maplibregl.Marker({ element: el, anchor: "bottom" }).setLngLat(best as [number, number]).addTo(map));
+      el.textContent = isLimit ? `Limit ${fmtDur(r.budgetS)}` : fmtDur(r.budgetS);
+      el.title = isLimit
+        ? `Walk limit: ground you can reach and get back from in ${fmtDur(r.budgetS)} of walking, leaving time for one stop`
+        : `Reachable and back to the start in ${fmtDur(r.budgetS)} of walking (round trip)`;
+      if (isLimit) el.classList.add("limit");
+      ringMarkers.current.push(new maplibregl.Marker({ element: el, anchor: "bottom" }).setLngLat(outline[0] as [number, number]).addTo(map));
+      labels.push({ el, outline });
     }
+    const place = () => placeRingLabels(map, ringMarkers.current, labels);
+    place();
+    map.on("moveend", place);
+    map.on("resize", place);
+    map.on(RELAYOUT_LABELS, place);
+    return () => {
+      map.off("moveend", place);
+      map.off("resize", place);
+      map.off(RELAYOUT_LABELS, place);
+    };
   }, [ready, rings, overlays.rings.on, reach]);
 
   // ---------- routes ----------
@@ -336,20 +470,35 @@ export function MapView() {
     map.setFilter("route-over", ["all", ["==", ["get", "profile"], sel], ["==", ["get", "over"], 1]]);
   }, [ready, results, selectedProfile]);
 
+  // ---------- selected route coloured by slope ----------
+  const walkParams = useStore((s) => s.params);
+  useEffect(() => {
+    const map = mapInstance;
+    if (!ready || !map) return;
+    (map.getSource("route-slope") as GeoJSONSource | undefined)?.setData(routeSlopeFeatures(selectedResult({ results, selectedProfile }), walkParams));
+  }, [ready, results, selectedProfile, walkParams]);
+
   // ---------- POI markers ----------
   const poisOn = useStore((s) => s.overlays.pois.on);
+  const selectedPoi = useStore((s) => s.selectedPoi);
+  const poiPins = useRef<{ el: HTMLElement; poi: Poi }[]>([]);
   useEffect(() => {
     const map = mapInstance;
     if (!ready || !map || !poisOn) return;
+    poiPins.current = [];
     const markers = area.config.pois.map((p) => {
       const el = poiEl(p);
       el.addEventListener("click", (ev) => {
         ev.stopPropagation();
         useStore.getState().set({ selectedPoi: p, selectedWaypoint: null, mapClick: null, tab: useStore.getState().tab });
       });
-      return new maplibregl.Marker({ element: el, anchor: "left", offset: [-7, 0] }).setLngLat([p.lon, p.lat]).addTo(map);
+      poiPins.current.push({ el, poi: p });
+      return new maplibregl.Marker({ element: el, anchor: "center" }).setLngLat([p.lon, p.lat]).addTo(map);
     });
-    return () => markers.forEach((m) => m.remove());
+    return () => {
+      markers.forEach((m) => m.remove());
+      poiPins.current = [];
+    };
   }, [ready, poisOn, area]);
 
   // ---------- start + stop markers ----------
@@ -363,7 +512,7 @@ export function MapView() {
       const el = document.createElement("div");
       el.className = "stop-marker start-marker";
       el.textContent = "S";
-      el.title = `Start: ${start.name}`;
+      el.title = `Start: ${start.name.replace(/^start:\s*/i, "")} (drag to move)`;
       const m = new maplibregl.Marker({ element: el, draggable: true }).setLngLat(start.lonLat).addTo(map);
       m.on("dragend", () => {
         const ll = m.getLngLat();
@@ -375,7 +524,7 @@ export function MapView() {
       const el = document.createElement("div");
       el.className = "stop-marker";
       el.textContent = String(i + 1);
-      el.title = s.name;
+      el.title = `${i + 1}. ${s.name} (drag to move)`;
       const m = new maplibregl.Marker({ element: el, draggable: true }).setLngLat(s.lonLat).addTo(map);
       m.on("dragend", () => {
         const ll = m.getLngLat();
@@ -387,18 +536,42 @@ export function MapView() {
     return () => ms.forEach((m) => m.remove());
   }, [ready, start, stops]);
 
-  // ---------- cursor (profile scrub + go position) ----------
+  // ---------- POI label placement (after the plan markers, which are obstacles) ----------
+  useEffect(() => {
+    const map = mapInstance;
+    if (!ready || !map || !poisOn) return;
+    const inPlan = new Set([start?.poiId, ...stops.map((s) => s.poiId)].filter(Boolean));
+    const pins = poiPins.current.map(({ el, poi }, i) => {
+      const sel = selectedPoi?.id === poi.id;
+      el.classList.toggle("selected", sel);
+      el.classList.toggle("in-plan", inPlan.has(poi.id));
+      return { el, ll: [poi.lon, poi.lat] as LonLat, rank: (sel ? 0 : inPlan.has(poi.id) ? 100 : 200) + i };
+    });
+    const place = () => placePoiLabels(map, pins);
+    const raf = requestAnimationFrame(place);
+    // Again once cards / chips that mount in the same update have laid out.
+    const late = window.setTimeout(place, 300);
+    map.on("move", place);
+    map.on("resize", place);
+    map.on(RELAYOUT_LABELS, place);
+    return () => {
+      cancelAnimationFrame(raf);
+      window.clearTimeout(late);
+      map.off("move", place);
+      map.off("resize", place);
+      map.off(RELAYOUT_LABELS, place);
+    };
+  }, [ready, poisOn, area, selectedPoi, start, stops, rings, results, tab]);
+
+  // ---------- cursor (profile scrub; the Go position is the animated walker in GoWalker) ----------
   const cursor = useStore((s) => s.profileCursor);
-  const goPos = useStore((s) => s.go.position);
-  const goMode = useStore((s) => s.go.mode);
   useEffect(() => {
     const map = mapInstance;
     if (!ready || !map) return;
     const f: GeoJSON.Feature[] = [];
     if (cursor) f.push({ type: "Feature", properties: { kind: "profile" }, geometry: { type: "Point", coordinates: cursor } });
-    if (goPos && goMode !== "off") f.push({ type: "Feature", properties: { kind: "go" }, geometry: { type: "Point", coordinates: goPos } });
     (map.getSource("cursor") as GeoJSONSource).setData({ type: "FeatureCollection", features: f });
-  }, [ready, cursor, goPos, goMode]);
+  }, [ready, cursor]);
 
   // ---------- 3D ----------
   const view3d = useStore((s) => s.view3d);

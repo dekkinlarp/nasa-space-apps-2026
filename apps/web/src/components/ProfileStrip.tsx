@@ -151,11 +151,9 @@ export function ProfileStrip() {
   return (
     <div className="profile">
       <div className="profile-title">
-        <span>Elevation profile</span>
-        <span className="dim">· {r.profile.name}</span>
-        <span className="legend-inline">
-          <i style={{ background: "linear-gradient(90deg,#1f7a4d,#f0d14a,#d6262b)" }} /> slope
-          <i style={{ background: "linear-gradient(90deg,#c9a27a,#e8c860,#6b4a3a)" }} /> surface
+        <span>Elevation</span>
+        <span className="dim">
+          {r.profile.name} route · {fmtDist(flat.total)} · {Math.round(flat.max - flat.min)} m relief
         </span>
       </div>
       <div className="profile-body">
@@ -171,7 +169,7 @@ export function ProfileStrip() {
               <g key={t}>
                 <line x1={PL} x2={PL + iw} y1={Y(t)} y2={Y(t)} className="grid-line" />
                 <text x={PL - 6} y={Y(t) + 4} className="axis" textAnchor="end">
-                  {Math.round(t)}
+                  {String(Math.round(t)).replace("-", "−")}
                 </text>
               </g>
             ))}
@@ -188,14 +186,22 @@ export function ProfileStrip() {
                 </g>
               ),
             )}
+            <text x={PL - 6} y={PT + ih + 10} className="axis band-lbl" textAnchor="end">
+              <title>Slope underfoot along the route (green gentle, red steep)</title>
+              slope
+            </text>
+            <text x={PL - 6} y={PT + ih + 19} className="axis band-lbl" textAnchor="end">
+              <title>Mapped surface class along the route</title>
+              surface
+            </text>
             {geom.bands.map((b, i) => (
-              <rect key={`s${i}`} x={b.x} y={PT + ih + 4} width={b.w} height={5} fill={b.slope} />
+              <rect key={`s${i}`} x={b.x} y={PT + ih + 4} width={b.w} height={6} fill={b.slope} />
             ))}
             {geom.bands.map((b, i) => (
-              <rect key={`u${i}`} x={b.x} y={PT + ih + 11} width={b.w} height={5} fill={surfaceById(area.config.surfaceClasses, b.surf)?.color ?? "#555"} />
+              <rect key={`u${i}`} x={b.x} y={PT + ih + 13} width={b.w} height={6} fill={surfaceById(area.config.surfaceClasses, b.surf)?.color ?? "#555"} />
             ))}
             <text x={PL} y={H - 4} className="axis">
-              0
+              0 m
             </text>
             <text x={PL + iw} y={H - 4} className="axis" textAnchor="end">
               {fmtDist(flat.total)}
@@ -203,24 +209,23 @@ export function ProfileStrip() {
             {goD != null && <line x1={X(Math.min(goD, flat.total))} x2={X(Math.min(goD, flat.total))} y1={PT} y2={PT + ih} stroke="#36d1c4" strokeWidth={2} />}
             {hi != null && (
               <g>
-                <line x1={X(flat.d[hi]!)} x2={X(flat.d[hi]!)} y1={PT} y2={PT + ih + 16} stroke="#fff" strokeOpacity={0.6} />
+                <line x1={X(flat.d[hi]!)} x2={X(flat.d[hi]!)} y1={PT} y2={PT + ih + 19} stroke="#fff" strokeOpacity={0.6} />
                 <circle cx={X(flat.d[hi]!)} cy={Y(flat.e[hi]!)} r={4} fill="#fff" />
               </g>
             )}
           </svg>
           {hi != null && (
-            <div className="profile-tip" style={{ left: Math.min(w - 170, Math.max(0, X(flat.d[hi]!) + 10)) }}>
+            <div className="profile-tip" style={{ left: X(flat.d[hi]!) + 150 > w ? X(flat.d[hi]!) - 142 : X(flat.d[hi]!) + 10 }}>
               <div>
-                <b>{fmtDist(flat.d[hi]!)}</b> along
+                <b>{fmtNum(flat.e[hi], 0, " m")}</b> · {fmtNum(flat.s[hi], 1, "°")} <span className="dim">slope</span>
               </div>
-              <div>{fmtNum(flat.e[hi], 1, " m")}</div>
-              <div>{fmtNum(flat.s[hi], 1, "° slope")}</div>
               {surf && (
                 <div>
                   <i className="swatch" style={{ background: surf.color }} />
                   {surf.name}
                 </div>
               )}
+              <div className="dim">{fmtDist(flat.d[hi]!)} along</div>
             </div>
           )}
         </div>
@@ -228,7 +233,7 @@ export function ProfileStrip() {
           {photo && photo.distM < 400 ? (
             <PhotoThumb photo={photo.photo} distM={photo.distM} />
           ) : (
-            <div className="small dim">{cursor ? "No rover photo within 400 m" : "Scrub the profile to see the spot on the map and the nearest rover photo"}</div>
+            <div className="small dim">{cursor ? "No rover photo within 400 m" : "Hover the profile to find the spot on the map and the nearest rover photo"}</div>
           )}
         </div>
       </div>

@@ -11,6 +11,9 @@ import { HoverReadout } from "./components/HoverReadout";
 import { PoiCard, WaypointCard } from "./components/Cards";
 import { ProfileStrip } from "./components/ProfileStrip";
 import { GoPanel } from "./components/GoPanel";
+import { GoWalker } from "./components/GoWalker";
+import { MapLegend } from "./components/MapLegend";
+import { MapSafety } from "./components/MapSafety";
 
 let loadStarted = false;
 
@@ -117,9 +120,12 @@ export function App() {
           <div className="map-area">
             <MapView />
             <ViewControls />
+            <MapLegend />
             <HoverReadout />
             <div className="card-slot">{poi ? <PoiCard poi={poi} /> : wp ? <WaypointCard /> : null}</div>
             <GoPanel />
+            <GoWalker />
+            <MapSafety />
             <div className="map-credit">
               {area.manifest.imagery.find((i) => imageryGroup(i.id) === baseImagery)?.source ?? ""}
             </div>

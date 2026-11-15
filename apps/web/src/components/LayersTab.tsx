@@ -32,9 +32,19 @@ function Row({ id, title, children, disabled, note }: { id: OverlayId; title: st
   );
 }
 
+/** "THEMIS night-time IR (thermal inertia proxy, ~100 m)" → "THEMIS night-time IR"; the full name stays in the tooltip. */
+const shortName = (name: string) => name.replace(/\s*\(?tile.*$/i, "").replace(/\s*\([^)]*\)\s*$/, "") || name;
+/** Instrument credit from a source string, e.g. "… (MRO HiRISE, NASA/JPL/UArizona), z16" → "MRO HiRISE". */
+const credit = (src: string) => /\(([^,)]+)/.exec(src)?.[1]?.trim() ?? src;
+const fmtRes = (v: number) => (v >= 10 ? String(Math.round(v)) : v >= 1 ? v.toFixed(1) : v.toFixed(2));
+
 function Source({ text }: { text?: string }) {
   if (!text) return null;
-  return <div className="layer-src">{text}</div>;
+  return (
+    <div className="layer-src one-line" title={text}>
+      {text}
+    </div>
+  );
 }
 
 export function LayersTab() {
@@ -60,16 +70,12 @@ export function LayersTab() {
         {[...groups.entries()].map(([g, ims]) => {
           const im = ims[0]!;
           return (
-            <label key={g} className={`base-opt ${base === g ? "active" : ""}`}>
+            <label key={g} className={`base-opt ${base === g ? "active" : ""}`} title={`${im.name}\n${im.source}`}>
               <input type="radio" name="base" checked={base === g} onChange={() => set({ baseImagery: g })} />
               <div>
-                <div className="layer-title">
-                  {im.name.replace(/\s*\(?tile.*$/i, "")}
-                  {ims.length > 1 && <span className="dim small"> · {ims.length} tiles</span>}
-                </div>
-                <div className="layer-src">
-                  {im.source}
-                  {im.metersPerPixel ? ` · ${im.metersPerPixel} m/px` : ""}
+                <div className="layer-title">{shortName(im.name)}</div>
+                <div className="layer-src one-line">
+                  {[credit(im.source), im.metersPerPixel ? `${fmtRes(im.metersPerPixel)} m/px` : "", ims.length > 1 ? `${ims.length} tiles` : ""].filter(Boolean).join(" · ")}
                 </div>
               </div>
             </label>
@@ -131,14 +137,16 @@ export function LayersTab() {
                 </span>
               ))}
             </div>
-            <div className="small dim">Round-trip walking time as a share of usable EVA time. Dark = beyond the budget.</div>
+            <div className="small dim">Round trip as % of usable EVA time · dark = beyond budget</div>
           </>
         ) : (
           <div className="small dim">Calculating…</div>
         )}
       </Row>
       <Row id="rings" title="Walk-limit rings" disabled={!start ? "Set a start to see walk-limit rings" : undefined}>
-        <div className="small dim">Round-trip walking time from the start: 15 min, 30 min, 1 h, and the walk limit (usable EVA time minus one stop of work).</div>
+        <div className="small dim" title="Round-trip walking time from the start: 15 min, 30 min, 1 h, and the walk limit (usable EVA time minus one stop of work).">
+          Round trip: 15 min · 30 min · 1h · walk limit
+        </div>
       </Row>
       <Row id="track" title="Curiosity traverse + waypoints" disabled={area.rover.traverse ? undefined : "No rover traverse in this dataset"}>
         <div className="layer-src">NASA/JPL-Caltech MSL localized traverse</div>
@@ -146,10 +154,11 @@ export function LayersTab() {
       <Row id="pois" title="Points of interest" />
 
       <h4 className="section-h">Data</h4>
-      <div className="small dim">
-        Area <span className="mono">{area.areaId}</span> · manifest generated {new Date(m.generatedAt).toLocaleString()}
-        <br />
-        Map uses Mars lon/lat on a Web Mercator canvas (≈0.35% scale distortion at 4.8°S). All distances and times come from the routing core.
+      <div
+        className="small dim data-note"
+        title={`Manifest generated ${new Date(m.generatedAt).toLocaleString()}.\nMap uses Mars lon/lat on a Web Mercator canvas (≈0.35% scale distortion at 4.8°S). All distances and times come from the routing core.`}
+      >
+        Area <span className="mono">{area.areaId}</span> · generated {new Date(m.generatedAt).toLocaleDateString()} <span className="info">ⓘ</span>
       </div>
     </div>
   );
