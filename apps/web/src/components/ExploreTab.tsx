@@ -166,7 +166,7 @@ export function ExploreTab() {
         <div className="mt-3 mb-3">
           <DemoSteps />
         </div>
-        <Button className="h-9 w-full gap-2 rounded-lg bg-mars-deep text-white hover:bg-[#d4521a]" onClick={demoReady ? () => (ownPlan ? setConfirming(true) : runDemo()) : undefined} disabled={!demoReady}>
+        <Button className="h-9 w-full gap-2 bg-mars-deep text-white hover:bg-[#d4521a]" onClick={demoReady ? () => (ownPlan ? setConfirming(true) : runDemo()) : undefined} disabled={!demoReady}>
           <PlayIcon className="size-3.5 flex-none fill-current" aria-hidden />
           Try the boxwork walk
         </Button>

@@ -113,7 +113,19 @@
 
   --shadow-float: var(--float);
   --shadow-float-sm: var(--float-sm);
-  --shadow-thumb: 0 1px 3px rgba(0, 0, 0, 0.35), inset 0 0.5px 0 rgba(255, 255, 255, 0.18);
+  /* Raised controls. A button is a small solid thing lit from above: a dark keyline, a bright top lip, a
+     faint inner edge and a short drop shadow. The strong form, for a filled (primary or coloured) button,
+     adds a faint highlight across the top and shade along the bottom: enough to round the fill, not a visible gradient. */
+  --shadow-raised: 0 2px 4px rgba(0, 0, 0, 0.32), 0 0 0 1px rgba(0, 0, 0, 0.55), inset 0 1px 0 rgba(255, 255, 255, 0.1), inset 0 0 0 1px rgba(255, 255, 255, 0.07);
+  --shadow-raised-strong:
+    0 2px 4px rgba(0, 0, 0, 0.32), 0 0 0 1px rgba(0, 0, 0, 0.55), inset 0 2px 3px rgba(255, 255, 255, 0.1), inset 0 0 0 1px rgba(255, 255, 255, 0.1),
+    inset 0 -4px 8px rgba(0, 0, 0, 0.07);
+  /* Pushed in: the drop shadow goes and the top edge darkens. */
+  --shadow-pressed: 0 0 0 1px rgba(0, 0, 0, 0.55), inset 0 2px 4px rgba(0, 0, 0, 0.4);
+  /* The thumb of a switch, slider, tab bar or segmented control: the same raised recipe at a smaller scale. */
+  --shadow-thumb: 0 1px 2px rgba(0, 0, 0, 0.35), 0 0 0 1px rgba(0, 0, 0, 0.4), inset 0 1px 0 rgba(255, 255, 255, 0.1), inset 0 0 0 1px rgba(255, 255, 255, 0.06);
+  /* The track a thumb runs in, and a field to type in, are sunk: shaded under their top edge. */
+  --inset-shadow-sunk: inset 0 1px 2px rgba(0, 0, 0, 0.45);
 
   --ease-spring: var(--spring);
   --ease-out-quint: var(--ease);

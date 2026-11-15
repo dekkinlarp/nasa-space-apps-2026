@@ -91,7 +91,7 @@ components:
     textColor: "{colors.ink}"
     rounded: "{rounded.lg}"
     height: "32px"
-    padding: "0 10px"
+    padding: "0 12px"
   button-demo:
     backgroundColor: "{colors.mars-deep}"
     textColor: "#ffffff"
@@ -255,20 +255,30 @@ The map layer is its own stacking context: a raised marker stacks among the mark
 
 ## Shapes
 
-Rounded rectangles on a short scale: 4px for badges and map labels, 8px for controls, 12px for small
-floating panels, 18px for large ones. Borders are 1px hairlines. Point-of-interest pins are 12px
+Rounded rectangles on a short scale: 4px for badges and map labels, 8px for controls, fields and tiles, 12px for small
+floating panels, 18px for large ones. Nothing is a pill except the switch and the slider thumb. Borders are 1px hairlines. Point-of-interest pins are 12px
 circles with a dark keyline and a light ring; a start is a rounded square. Stop markers are 22px
 rounded squares carrying their number.
 
 ## Components
 
 ### Buttons
-- **Shape:** 8px radius, 32px tall, 12.5px medium text.
-- **Primary:** Ink fill with Well text. One per group ("Simulate walk", "Add as stop").
-- **Secondary:** an 8% white fill with a hairline; the everyday button.
-- **Ghost and link:** icon buttons and inline "show" links.
-- **Glass:** a control that floats on the map.
-- **Demo:** the one coloured button, Mars Rust, flat, no gradient or glow.
+Buttons are skeuomorphic: small solid things lit from above, not flat fills.
+- **Shape:** a rounded rectangle, 8px radius (6px for the small sizes), 32px tall, 12.5px medium text. Not a pill.
+- **Raised** (`shadow-raised`): a dark 1px keyline, a bright top lip, a faint inner edge and a short drop
+  shadow. No CSS border: the edge is in the shadow, flush with the fill.
+- **Primary:** Ink fill with Well text, on the strong form (`shadow-raised-strong`), which adds a soft
+  highlight across the top and shade along the bottom. Keep it faint: it should round the fill, not read as a gradient. One per group
+  ("Simulate walk", "Add as stop").
+- **Secondary:** an 8% white fill, raised; the everyday button. Select triggers are the same.
+- **Pressed** (`shadow-pressed`): the drop shadow goes and the top edge darkens, on press and on a
+  toggled-on button ("Pick on map" while picking).
+- **Ghost and link:** icon buttons and inline "show" links. They have no surface, so no relief.
+- **Glass:** a control that floats on the map, with a bright top lip.
+- **Demo:** the one coloured button, Mars Rust, on the strong raised form. Still no glow.
+- **Sunk** (`inset-shadow-sunk`): the opposite of raised, for what a thumb runs in or text is typed into:
+  the tab bar, segmented controls and input fields are shaded under their top edge.
+- The relief is drawn with shadows only, never a gradient fill, so a button's colour stays one token.
 - **Focus:** a 2px Ink outline, 2px offset, on everything.
 
 ### Badges
@@ -312,7 +322,7 @@ cards showing the same 4 km of ground; the chosen one has an Ink outline and a c
 ### Navigation
 - Three tabs (Explore, Plan, Layers) as a segmented control; the active tab is a lighter fill. On the
   bottom sheet, tapping the active tab folds the sheet.
-- **Segmented controls** are 8px with 2px of padding and a 6px thumb, so the corners are concentric. The
+- **Segmented controls** and the tab bar are sunk 8px tracks with 2px of padding and a raised 6px thumb, so the corners are concentric. The
   2D/3D switch floats on the map, so it sits in a 12px panel with 4px of padding and 8px segments.
 
 - **The thumb slides.** In a tab bar or segmented control the highlight is one element that moves and
@@ -380,6 +390,6 @@ a note never prints the manifest's `method` string.
 - **Don't** add a status dot, pill or badge for a state that is true almost all the time.
 - **Don't** use uppercase outside section headings, or set text under 11px.
 - **Don't** use unicode glyphs or emoji as icons; use lucide.
-- **Don't** put a coloured left or right edge on an alert, or a gradient or glow on a button.
+- **Don't** put a coloured left or right edge on an alert, or a gradient fill or glow on a button.
 - **Don't** hide an explanation in a `title` tooltip.
 - **Don't** let a panel cover the place the planner just selected.

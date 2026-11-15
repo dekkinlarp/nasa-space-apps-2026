@@ -256,7 +256,7 @@ function ViewControls() {
             { value: "2d", label: "2D" },
             { value: "3d", label: "3D", disabled: !hasElev },
           ]}
-          className="h-full border-0 bg-transparent p-0"
+          className="h-full rounded-lg border-0 bg-transparent p-0 inset-shadow-none"
           itemClassName="h-full rounded-lg px-4 text-base coarse:h-full"
         />
       </Panel>
@@ -413,7 +413,7 @@ export function App() {
           className="tabs flex flex-none gap-2 border-b px-4 pb-3 sheet:pt-2.5 sheet:pr-[max(var(--gutter),env(safe-area-inset-right))] sheet:pl-[max(var(--gutter),env(safe-area-inset-left))] sheet:in-[.sheet-closed]:border-b-0"
           aria-label="Sections"
         >
-          <TabsList className="relative flex-1 gap-0.5 rounded-lg bg-white/6 p-0.5 group-data-horizontal/tabs:h-auto">
+          <TabsList className="relative flex-1 gap-0.5 rounded-lg border border-input bg-black/25 p-0.5 inset-shadow-sunk group-data-horizontal/tabs:h-auto">
             <SlidingThumb className="bg-white/16" />
             {TABS.map((t) => (
               <TabsTrigger
