@@ -1,4 +1,4 @@
-# EVAres — EVA planner for the Gale Crater boxwork
+# EVAres: EVA planner for the Gale Crater boxwork
 
 [![Live demo](https://img.shields.io/badge/live_demo-marsmap.wtarit.workers.dev-c1440e?style=flat-square)](https://marsmap.wtarit.workers.dev) [![NASA Space Apps 2026](https://img.shields.io/badge/NASA_Space_Apps-2026-0b3d91?style=flat-square&logo=nasa&logoColor=white)](https://www.spaceappschallenge.org/) [![Last commit](https://img.shields.io/github/last-commit/dekkinlarp/nasa-space-apps-2026?style=flat-square)](https://github.com/dekkinlarp/nasa-space-apps-2026/commits/main)
 
@@ -55,16 +55,10 @@ Screenshots of the live deployment on 15 November 2026, with the built-in boxwor
 | ![The card for the Nevado Sajama drill site, with evidence tagged by source](docs/screenshots/explore.jpg) | ![The clay indicator from orbit drawn over the HiRISE photo](docs/screenshots/minerals.jpg) |
 | **Explore.** Each place says what question a stop there answers and what the answer rests on: evidence is tagged Rover or Orbit, and the card lists the orbital mineral readings at that spot. | **Layers.** Clay seen from orbit (CRISM D2300) over the HiRISE photo. Each block is one 18 m CRISM pixel, drawn as it is rather than smoothed. |
 
-<img src="docs/screenshots/phone.jpg" alt="The Plan tab as a bottom sheet on a phone" width="280" align="right">
-
 **Plan** (the picture at the top of this page). The verdict comes first: whether the walk fits, then time,
 energy and oxygen against their limits with the safety reserve hatched. Under it are the stops in walking
 order and the three routes to compare. On the map the chosen route turns amber where it crosses hazard
 slope and carries a bar every 100 m.
-
-**On a phone** the side panel becomes a bottom sheet, and a running walk folds to a single row above it.
-
-<br clear="right">
 
 ## Data sources
 
@@ -210,3 +204,13 @@ the window moves when the start or a stop comes within 2 km of its edge.
 - **Walk model:** edit `config/walk-params.json` or `config/surface-classes.json`.
 - **New cost factor** (shade, radiation shelter, no-go zones): add one factor function in
   `packages/core/src/costModel.ts`; the search and UI do not change.
+
+## License
+
+The code in this repository is released under the MIT License. In short: you may use, copy, modify, merge,
+publish, distribute, sublicense and sell it, in source or built form, provided the copyright notice and the
+licence text are kept with it. It comes "as is", with no warranty of any kind, and the authors are not
+liable for anything that follows from using it.
+
+The licence covers the code and the project's own text. It does not cover the map data, which come from NASA
+and USGS and keep the terms of their sources (see [Data sources](#data-sources)).
