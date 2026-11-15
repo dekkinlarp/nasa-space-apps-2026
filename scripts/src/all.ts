@@ -12,6 +12,7 @@ import { runRover } from "./rover";
 import { runPhotos } from "./photos";
 import { runConditions } from "./conditions";
 import { runManifest } from "./manifest";
+import { runTint } from "./tint";
 import { runPreview } from "./preview";
 import { runVerify } from "./verify";
 
@@ -34,6 +35,7 @@ await step("rover", runRover);
 await step("photos", runPhotos, true);
 await step("conditions", runConditions, true);
 await step("manifest", runManifest);
+await step("tint", runTint);
 await step("preview", runPreview, true);
 const ok = await runVerify();
 log("all", `done in ${((Date.now() - t0) / 1000).toFixed(1)} s; downloaded this run: ${(downloadedBytes() / 1e6).toFixed(1)} MB`);

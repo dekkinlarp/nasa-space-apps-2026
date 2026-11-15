@@ -11,8 +11,9 @@ pnpm --filter @marsmap/scripts run all -- --area /abs/path/other-area.json
 ```
 
 Single steps: `elevation`, `imagery`, `derive`, `minerals`, `rover`, `photos`, `conditions`, `manifest`,
-`preview`, `verify`, `import-layer`. Run order matters: `elevation` → `imagery` → `derive`
-(the surface estimate needs the 1 m DEM window and the HiRISE grid copy).
+`tint`, `preview`, `verify`, `import-layer`. Run order matters: `elevation` → `imagery` → `derive`
+(the surface estimate needs the 1 m DEM window and the HiRISE grid copy), and `tint` re-runs after every `manifest`
+(the manifest rebuilds `layers.json` without the tinted copies).
 
 Everything is driven by `config/area.json`. Every step skips outputs that exist; it rebuilds
 when `--force` is passed or when `data/<id>/grid.json` differs from the current config.
@@ -38,9 +39,10 @@ little-endian. See `packages/core/src/types.ts`.
 | `crism_clay.f32`, `crism_sulfate.f32`, `crism_hydration.f32` | CRISM mineral indicators (band depth), 18 m pixels resampled nearest-neighbour. Listed in `layers.json` with `group: "science"` |
 | `minerals.json` | CRISM observation details, per-layer stats, the alignment result and the reading at each POI |
 | `imagery/hirise.jpg` | HiRISE photo of the whole area, downscaled to 4096 px |
-| `imagery/hirise_{r}_{c}.jpg` | Full-res 0.64 m/px HiRISE in an n×n split with every piece at most 4096 px (4×4 for the 8 km area; r 0 = north, c 0 = west). Each piece is its own `ImageryEntry`; the app loads only the pieces in view when zoomed in |
+| `imagery/hirise_{r}_{c}.jpg` | Full-res 0.64 m/px HiRISE in an n×n split with every piece at most 4096 px (4×4 for the 8 km area; r 0 = north, c 0 = west). Each piece is its own `ImageryEntry`; the app cuts map tiles from the pieces in view when zoomed in |
 | `imagery/ctx.jpg` | CTX photo, about 10 m/px (about 790 px) |
 | `imagery/themis_night.jpg`, `themis_day.jpg` | THEMIS IR, about 81 m/px (100 px). Coarse context only |
+| `imagery/*.tint.jpg` | Mars-coloured copies of the visible (grayscale) pictures, written by the `tint` step after `manifest` and recorded as `tintFile` in `layers.json`. Per channel: multiply by `#ffb47c`, then screen with `#1c0d07`. Cosmetic; thermal imagery gets none. The app shows them while "Mars colour tint" is on |
 | `rover/MSL_waypoints.json`, `MSL_traverse.json` | Full MMGIS GeoJSON copies |
 | `rover/waypoints.area.json` | Waypoints in the bounds + 0.002° margin, with tidy properties and `insideArea` |
 | `rover/traverse.area.json` | Drive lines clipped to the bounds + margin, with the `sol` of the ending waypoint |

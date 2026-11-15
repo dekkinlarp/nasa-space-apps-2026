@@ -8,10 +8,11 @@ import { cellIndex, M_PER_DEG_LAT } from "../geo";
 import { confidenceUrl, costUrl, elevationUrl, SCIENCE_RAMPS, scienceUrl, slopeUrl, surfaceUrl } from "./rasters";
 import { loadFloatLayer } from "../data";
 import { demMaxZoom, DEM_TILE_SIZE, registerDemProtocol, setDemSource } from "./dem";
-import { registerTintProtocol, tintable, tintUrl } from "./tint";
+import { IMAGERY_TILE_SIZE, imageryGroups, imageryMaxZoom, imageryTilesUrl, registerImageryProtocol, setImageryArea } from "./imageryTiles";
 import { fmtDur } from "../format";
 import { ClickMenu } from "../components/ClickMenu";
 import { routeSlopeFeatures } from "./routeSlope";
+import { setRenderDistance, tuneTerrain } from "./terrainPerf";
 
 let mapInstance: MLMap | null = null;
 export const getMap = () => mapInstance;
@@ -28,10 +29,10 @@ export const PROFILE_COLORS: Record<string, string> = {
 };
 export const profileColor = (id: string, i = 0) => PROFILE_COLORS[id] ?? ["#f4f5f7", "#4fc3f7", "#7ee081"][i % 3]!;
 
-/** Strip a tile suffix like _0_1 / _r0_c1 so a 2x2 image set is one base-imagery choice. */
-export const imageryGroup = (id: string) => id.replace(/[_-]r?\d+[_-]c?\d+$/, "");
+export { imageryGroup } from "./imageryTiles";
 
-const TILE_SWITCH_ZOOM = 17;
+/** How often POI labels are re-placed while the map is moving. */
+const LABEL_MOVE_INTERVAL_MS = 120;
 /** Round-trip time rings are teal; the outermost (walk-limit) ring is amber. Shared with the map key. */
 export const RING_COLOR = "#36d1c4";
 export const RING_LIMIT_COLOR = "#ffb347";
@@ -71,11 +72,6 @@ export function resizeMapDuring(ms: number) {
   requestAnimationFrame(step);
 }
 
-/** Where an imagery entry's picture comes from, through the Mars tint when that is on and the image suits it. */
-const imageUrl = (a: AreaData, im: { id: string; file: string }, tint: boolean) => (tint && tintable(im.id) ? tintUrl(`${a.base}/${im.file}`) : `${a.base}/${im.file}`);
-
-/** True for a full-resolution piece of an imagery group that also has an overview image (e.g. hirise_0_1). */
-const isDetailTile = (a: AreaData, id: string) => id !== imageryGroup(id) && a.manifest.imagery.some((o) => o.id === imageryGroup(id));
 const RASTER_OVERLAYS = ["elevation", "slope", "surface", "confidence", "cost"] as const;
 
 /** Manifest layers the pipeline marked as science overlays (e.g. CRISM mineral indicators). */
@@ -283,6 +279,11 @@ function ringFeatures(rings: ReachRing[] | null): GeoJSON.FeatureCollection {
   };
 }
 
+/** Most outline points tried as a ring label spot. */
+const RING_LABEL_CANDIDATES = 300;
+/** Labels are re-placed once the map has been still this long (trackpad panning ends a move on every scroll event). */
+const LABEL_SETTLE_MS = 150;
+
 /** Fire on the map when map furniture (e.g. the map key) changes size, so ring labels re-place. */
 export const RELAYOUT_LABELS = "marsmap:relayout-labels";
 type Box = { l: number; t: number; r: number; b: number };
@@ -308,7 +309,10 @@ function placeRingLabels(map: MLMap, markers: maplibregl.Marker[], labels: { el:
     el.style.visibility = "hidden";
     const w = el.offsetWidth || 120, h = el.offsetHeight || 18;
     let best: { ll: number[]; y: number } | null = null;
-    for (const ll of outline) {
+    // Outlines have thousands of vertices and projecting one is costly in 3D; a few hundred candidates are plenty.
+    const stride = Math.max(1, Math.ceil(outline.length / RING_LABEL_CANDIDATES));
+    for (let k = 0; k < outline.length; k += stride) {
+      const ll = outline[k]!;
       const p = map.project(ll as [number, number]);
       const box = { l: p.x - w / 2, t: p.y - h - 1, r: p.x + w / 2, b: p.y };
       if (box.l < M || box.t < M || box.r > W - M || box.b > H - M) continue;
@@ -404,7 +408,7 @@ export function MapView() {
   const [ready, setReady] = useState(false);
   const [popupEl, setPopupEl] = useState<HTMLElement | null>(null);
   const urls = useRef<Partial<Record<OverlayId, string>>>({});
-  /** The picture each imagery source currently shows, so a tint switch only reloads what changed. */
+  /** The tile URL each imagery source currently uses, so a tint switch only reloads what changed. */
   const shownUrl = useRef(new Map<string, string>());
 
   // ---------- create map ----------
@@ -412,7 +416,8 @@ export function MapView() {
     const g = area.layers.grid;
     if (area.layers.elevation) setDemSource(g, area.layers.elevation, area.layers.elevRef);
     registerDemProtocol();
-    registerTintProtocol();
+    setImageryArea(area);
+    registerImageryProtocol();
     const padLon = (g.east - g.west) * 0.6, padLat = (g.north - g.south) * 0.6;
     const map = new maplibregl.Map({
       container: containerRef.current!,
@@ -451,18 +456,12 @@ export function MapView() {
       // The mapped square is solid ground: with imagery faded or off it stays dark instead of showing stars through it.
       map.addSource("ground", { type: "geojson", data: { type: "Feature", properties: {}, geometry: { type: "Polygon", coordinates: [[...coords, coords[0]]] } } });
       map.addLayer({ id: "ground", type: "fill", source: "ground", paint: { "fill-color": "#0a0b0d", "fill-antialias": false } });
-      // Base imagery: one image source per manifest entry.
-      // Full-resolution tiles of a group are added on demand (see syncTiles); everything else loads now.
-      for (const im of area.manifest.imagery) {
-        if (isDetailTile(area, im.id)) continue;
-        const url = imageUrl(area, im, useStore.getState().marsTint);
-        shownUrl.current.set(`img-${im.id}`, url);
-        map.addSource(`img-${im.id}`, {
-          type: "image",
-          url,
-          coordinates: [[im.west, im.north], [im.east, im.north], [im.east, im.south], [im.west, im.south]],
-        });
-        map.addLayer({ id: `img-${im.id}`, type: "raster", source: `img-${im.id}`, layout: { visibility: "none" }, paint: { "raster-fade-duration": 0, "raster-resampling": "linear" } });
+      // Base imagery: one tiled source per imagery group (overview and full-resolution pieces together).
+      for (const grp of imageryGroups()) {
+        const url = imageryTilesUrl(grp.id, useStore.getState().marsTint);
+        shownUrl.current.set(grp.id, url);
+        map.addSource(`img-${grp.id}`, { type: "raster", tiles: [url], tileSize: IMAGERY_TILE_SIZE, maxzoom: imageryMaxZoom(grp), bounds: grp.bounds });
+        map.addLayer({ id: `img-${grp.id}`, type: "raster", source: `img-${grp.id}`, layout: { visibility: "none" }, paint: { "raster-fade-duration": 0, "raster-resampling": "linear" } });
       }
       // DEM: one source for terrain, one for hillshade (MapLibre recommends separate sources).
       const demMax = demMaxZoom(g);
@@ -584,53 +583,17 @@ export function MapView() {
   useEffect(() => {
     const map = mapInstance;
     if (!ready || !map) return;
-    for (const im of area.manifest.imagery) {
-      if (!map.getLayer(`img-${im.id}`)) continue;
-      const on = imageryGroup(im.id) === baseImagery;
-      // Overview images stay loaded; swap their picture when the tint is switched.
-      if (!isDetailTile(area, im.id)) {
-        const url = imageUrl(area, im, marsTint);
-        if (shownUrl.current.get(`img-${im.id}`) !== url) {
-          shownUrl.current.set(`img-${im.id}`, url);
-          (map.getSource(`img-${im.id}`) as maplibregl.ImageSource | undefined)?.updateImage({ url });
-        }
+    for (const grp of imageryGroups()) {
+      const id = `img-${grp.id}`;
+      if (!map.getLayer(id)) continue;
+      const url = imageryTilesUrl(grp.id, marsTint);
+      if (shownUrl.current.get(grp.id) !== url) {
+        shownUrl.current.set(grp.id, url);
+        (map.getSource(id) as maplibregl.RasterTileSource | undefined)?.setTiles([url]);
       }
-      map.setLayoutProperty(`img-${im.id}`, "visibility", on ? "visible" : "none");
-      map.setPaintProperty(`img-${im.id}`, "raster-opacity", baseOpacity);
+      map.setLayoutProperty(id, "visibility", grp.id === baseImagery ? "visible" : "none");
+      map.setPaintProperty(id, "raster-opacity", baseOpacity);
     }
-    // Full-resolution tiles: only the ones in view while zoomed in, drawn over the overview image.
-    // An 8 km area has 16 of them (about 40 MB of texture each), far too much to hold at once.
-    const syncTiles = () => {
-      const zoomedIn = map.getZoom() >= TILE_SWITCH_ZOOM - 0.5;
-      const b = map.getBounds();
-      for (const im of area.manifest.imagery) {
-        if (!isDetailTile(area, im.id)) continue;
-        const id = `img-${im.id}`;
-        const want = zoomedIn && imageryGroup(im.id) === baseImagery && im.west < b.getEast() && im.east > b.getWest() && im.south < b.getNorth() && im.north > b.getSouth();
-        const url = imageUrl(area, im, marsTint);
-        let has = !!map.getSource(id);
-        if (has && want && shownUrl.current.get(id) !== url) {
-          map.removeLayer(id);
-          map.removeSource(id);
-          has = false;
-        }
-        if (want && !has) {
-          shownUrl.current.set(id, url);
-          map.addSource(id, { type: "image", url, coordinates: [[im.west, im.north], [im.east, im.north], [im.east, im.south], [im.west, im.south]] });
-          map.addLayer({ id, type: "raster", source: id, minzoom: TILE_SWITCH_ZOOM - 0.5, paint: { "raster-fade-duration": 0, "raster-resampling": "linear", "raster-opacity": baseOpacity } }, "hillshade");
-        } else if (want) {
-          map.setPaintProperty(id, "raster-opacity", baseOpacity);
-        } else if (has) {
-          map.removeLayer(id);
-          map.removeSource(id);
-        }
-      }
-    };
-    syncTiles();
-    map.on("moveend", syncTiles);
-    return () => {
-      map.off("moveend", syncTiles);
-    };
   }, [ready, baseImagery, baseOpacity, marsTint, area]);
 
   // ---------- raster overlays ----------
@@ -744,12 +707,18 @@ export function MapView() {
     }
     const place = () => placeRingLabels(map, ringMarkers.current, labels);
     place();
-    map.on("moveend", place);
-    map.on("resize", place);
+    let settle: number | undefined;
+    const placeWhenStill = () => {
+      window.clearTimeout(settle);
+      settle = window.setTimeout(place, LABEL_SETTLE_MS);
+    };
+    map.on("moveend", placeWhenStill);
+    map.on("resize", placeWhenStill);
     map.on(RELAYOUT_LABELS, place);
     return () => {
-      map.off("moveend", place);
-      map.off("resize", place);
+      window.clearTimeout(settle);
+      map.off("moveend", placeWhenStill);
+      map.off("resize", placeWhenStill);
       map.off(RELAYOUT_LABELS, place);
     };
   }, [ready, rings, overlays.rings.on, reach]);
@@ -849,13 +818,24 @@ export function MapView() {
     const raf = requestAnimationFrame(place);
     // Again once cards / chips that mount in the same update have laid out.
     const late = window.setTimeout(place, 300);
-    map.on("move", place);
+    // Placing reads the layout of every marker, so while the map moves it runs a few times a second, not every frame.
+    let last = 0, trailing: number | undefined;
+    const onMove = () => {
+      const now = performance.now();
+      window.clearTimeout(trailing);
+      if (now - last >= LABEL_MOVE_INTERVAL_MS) {
+        last = now;
+        place();
+      } else trailing = window.setTimeout(place, LABEL_MOVE_INTERVAL_MS);
+    };
+    map.on("move", onMove);
     map.on("resize", place);
     map.on(RELAYOUT_LABELS, place);
     return () => {
       cancelAnimationFrame(raf);
       window.clearTimeout(late);
-      map.off("move", place);
+      window.clearTimeout(trailing);
+      map.off("move", onMove);
       map.off("resize", place);
       map.off(RELAYOUT_LABELS, place);
     };
@@ -889,6 +869,7 @@ export function MapView() {
     else map.touchPitch.disable();
     if (view3d && area.layers.elevation) {
       map.setTerrain({ source: "dem", exaggeration });
+      tuneTerrain(map, area.layers.grid);
       // The camera keeps its altitude above the *centre* elevation; refresh it once DEM tiles are
       // in so the camera is not left inside a raised mesa.
       const lift = () => {
@@ -908,6 +889,9 @@ export function MapView() {
       }
     }
   }, [ready, view3d, exaggeration, area]);
+
+  const renderDistanceKm = useStore((s) => s.renderDistanceKm);
+  useEffect(() => setRenderDistance(mapInstance, renderDistanceKm), [ready, renderDistanceKm]);
 
   // ---------- click popup ----------
   const mapClick = useStore((s) => s.mapClick);

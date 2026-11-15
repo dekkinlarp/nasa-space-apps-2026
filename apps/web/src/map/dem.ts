@@ -13,12 +13,47 @@ import { sampleBilinear } from "../geo";
 export const EARTH_RADIUS_M = 6378137;
 export const DEM_TILE_SIZE = 256;
 
-let current: { grid: GridSpec; elev: Float32Array; min: number; vscale: number } | null = null;
+interface DemSource {
+  grid: GridSpec;
+  elev: Float32Array;
+  min: number;
+  vscale: number;
+  /** Lowest and highest terrain height as drawn (map metres, before exaggeration). */
+  lo: number;
+  hi: number;
+}
+let current: DemSource | null = null;
 let registered = false;
 
+/** Encoded tiles, shared by the terrain and hillshade sources (both ask for the same tiles). */
+const tileCache = new Map<string, ImageData>();
+const TILE_CACHE_MAX = 96;
+
 export function setDemSource(grid: GridSpec, elev: Float32Array, ref: number) {
-  current = { grid, elev, min: ref, vscale: EARTH_RADIUS_M / grid.marsRadiusM };
+  const vscale = EARTH_RADIUS_M / grid.marsRadiusM;
+  let lo = Infinity, hi = -Infinity;
+  for (let i = 0; i < elev.length; i++) {
+    const v = elev[i]!;
+    if (v < lo) lo = v;
+    if (v > hi) hi = v;
+  }
+  // Ground outside the area (no DEM tiles) is drawn at 0.
+  current = { grid, elev, min: ref, vscale, lo: Math.min(0, (lo - ref) * vscale), hi: Math.max(0, (hi - ref) * vscale) };
+  tileCache.clear();
 }
+
+/** Terrain height MapLibre draws at a point, in map metres before exaggeration (0 outside the area). */
+export function demHeight(lon: number, lat: number): number {
+  const c = current;
+  if (!c) return 0;
+  const g = c.grid;
+  if (lon < g.west || lon > g.east || lat < g.south || lat > g.north) return 0;
+  const e = sampleBilinear(g, c.elev, lon, lat);
+  return Number.isFinite(e) ? (e - c.min) * c.vscale : 0;
+}
+
+/** Lowest and highest drawn terrain height, map metres before exaggeration. */
+export const demRange = (): [number, number] => (current ? [current.lo, current.hi] : [0, 0]);
 
 function tileLon(x: number, z: number) {
   return (x / 2 ** z) * 360 - 180;
@@ -28,20 +63,22 @@ function tileLat(y: number, z: number) {
   return (Math.atan(Math.sinh(n)) * 180) / Math.PI;
 }
 
-async function renderTile(z: number, x: number, y: number): Promise<ArrayBuffer> {
+function renderTile(z: number, x: number, y: number): ImageData {
+  const key = `${z}/${x}/${y}`;
+  const hit = tileCache.get(key);
+  if (hit) return hit;
   const S = DEM_TILE_SIZE;
-  const canvas = new OffscreenCanvas(S, S);
-  const ctx = canvas.getContext("2d")!;
-  const img = ctx.createImageData(S, S);
+  const img = new ImageData(S, S);
   const d = img.data;
   const cur = current;
+  const lons = new Float64Array(S);
+  for (let px = 0; px < S; px++) lons[px] = tileLon(x + (px + 0.5) / S, z);
   for (let py = 0; py < S; py++) {
     const lat = tileLat(y + (py + 0.5) / S, z);
     for (let px = 0; px < S; px++) {
-      const lon = tileLon(x + (px + 0.5) / S, z);
       let h = 0;
       if (cur) {
-        const e = sampleBilinear(cur.grid, cur.elev, lon, lat);
+        const e = sampleBilinear(cur.grid, cur.elev, lons[px]!, lat);
         h = Number.isFinite(e) ? (e - cur.min) * cur.vscale : 0;
       }
       const v = h + 32768;
@@ -52,9 +89,9 @@ async function renderTile(z: number, x: number, y: number): Promise<ArrayBuffer>
       d[o + 3] = 255;
     }
   }
-  ctx.putImageData(img, 0, 0);
-  const blob = await canvas.convertToBlob({ type: "image/png" });
-  return blob.arrayBuffer();
+  tileCache.set(key, img);
+  if (tileCache.size > TILE_CACHE_MAX) tileCache.delete(tileCache.keys().next().value!);
+  return img;
 }
 
 export function registerDemProtocol() {
@@ -63,7 +100,8 @@ export function registerDemProtocol() {
   maplibregl.addProtocol("marsdem", async (params) => {
     const m = /marsdem:\/\/(\d+)\/(\d+)\/(\d+)/.exec(params.url);
     if (!m) throw new Error(`bad DEM url ${params.url}`);
-    const data = await renderTile(Number(m[1]), Number(m[2]), Number(m[3]));
+    // An ImageBitmap goes straight to MapLibre: no PNG encode here and no decode on its side.
+    const data = await createImageBitmap(renderTile(Number(m[1]), Number(m[2]), Number(m[3])));
     return { data };
   });
 }
