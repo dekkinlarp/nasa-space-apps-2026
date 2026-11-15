@@ -23,23 +23,6 @@ function Slider({ label, value, min, max, step, fmt, onChange, hint }: { label: 
   );
 }
 
-function Meter({ label, used, limit, fmt }: { label: string; used: number; limit: number; fmt: (v: number) => string }) {
-  const f = limit > 0 ? used / limit : 0;
-  return (
-    <div className="meter">
-      <div className="meter-head">
-        <span>{label}</span>
-        <span>
-          <b className={f > 1 ? "bad" : f > 0.85 ? "warnc" : ""}>{fmt(used)}</b> <span className="dim">/ {fmt(limit)}</span>
-        </span>
-      </div>
-      <div className="meter-bar">
-        <i style={{ width: `${Math.min(100, f * 100)}%` }} className={f > 1 ? "bad" : f > 0.85 ? "warnc" : ""} />
-      </div>
-    </div>
-  );
-}
-
 export function SurfaceMixBar({ mix, classes }: { mix: Record<number, number>; classes: SurfaceClass[] }) {
   const entries = Object.entries(mix)
     .map(([k, v]) => [Number(k), v] as const)
@@ -360,7 +343,6 @@ export function PlanTab() {
                 Dose <b>{sel.totals.radiationMSv.toFixed(3)} mSv</b>
               </span>
             </div>
-            {o2On && sel.totals.o2Kg != null && <Meter label="Oxygen (breathing + leakage, modelled)" used={sel.totals.o2Kg} limit={usableO} fmt={fmtO2} />}
           </div>
           <div className="go-buttons">
             <button className="btn primary" onClick={() => st.setGo({ mode: "sim", playing: true, elapsedS: 0, alongM: 0, position: start?.lonLat ?? null, gpsError: null })}>
