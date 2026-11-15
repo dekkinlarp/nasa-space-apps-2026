@@ -487,14 +487,11 @@ export function PlanFooter() {
   const setGo = useStore((s) => s.setGo);
   const hasRoute = useStore((s) => !!selectedResult(s));
   if (!hasRoute) return null;
-  const go = (mode: "sim" | "gps") => setGo({ mode, playing: true, elapsedS: 0, alongM: 0, position: start?.lonLat ?? null, gpsError: null });
+  const simulate = () => setGo({ mode: "sim", playing: true, elapsedS: 0, alongM: 0, position: start?.lonLat ?? null, gpsError: null });
   return (
     <div className="relative z-2 flex flex-none gap-2 border-t px-4 py-3 sheet:pr-[max(var(--gutter),env(safe-area-inset-right))] sheet:pl-[max(var(--gutter),env(safe-area-inset-left))]">
-      <Button className="flex-1" onClick={() => go("sim")}>
+      <Button className="flex-1" onClick={simulate}>
         Simulate walk
-      </Button>
-      <Button variant="secondary" className="flex-1" onClick={() => go("gps")}>
-        Use my location
       </Button>
     </div>
   );

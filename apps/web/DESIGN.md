@@ -222,8 +222,7 @@ pointer back, so the map stays draggable in every gap.
   description is on the place's card, not in the list.
 - **Plan tab:** top to bottom, the verdict and the three budgets as one block; the walk as one ordered
   list (start, stops, "Return to start" with a switch); the routes as a comparison table; then the Segment
-  details and Walk settings disclosures. "Simulate walk" and "Use my location" sit in a footer under the
-  scrolling body. With no start and no stops it opens with a card that names the three steps and offers
+  details and Walk settings disclosures. "Simulate walk" sits in a footer under the scrolling body. With no start and no stops it opens with a card that names the three steps and offers
   the demo walk.
 - **Top right:** zoom buttons and the compass dial stack in the corner. The top left holds only the button that brings back a hidden side panel.
 - **Middle:** the point-of-interest card on the right, 340px (300px under 1100px).
