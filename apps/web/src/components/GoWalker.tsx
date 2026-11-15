@@ -253,9 +253,17 @@ export function GoWalker() {
 }
 
 /** "Follow" toggle for the Go panel: an ordinary pressed-state toggle. It carries no status colour of its own. */
-export function FollowToggle() {
+/** `compact` is the icon alone, for the folded Go panel. */
+export function FollowToggle({ compact = false }: { compact?: boolean }) {
   const follow = useWalkerUi((s) => s.follow);
   const setFollow = useWalkerUi((s) => s.setFollow);
+  const title = follow ? "The camera follows the walker" : "The camera stays put";
+  if (compact)
+    return (
+      <Button variant="ghost" size="icon-xs" className={follow ? "text-foreground" : "text-muted-foreground"} aria-pressed={follow} aria-label="Follow the walker" onClick={() => setFollow(!follow)} title={title}>
+        {follow ? <LocateFixedIcon aria-hidden /> : <LocateIcon aria-hidden />}
+      </Button>
+    );
   return (
     <Button
       variant="secondary"

@@ -9,7 +9,7 @@ import { fmtMin as fmtDur } from "./SafetyBudget";
 import { getMap, RELAYOUT_LABELS } from "../map/MapView";
 import { PNR_METHOD_NOTE, usePnr } from "../usePnr";
 import { MAP_LABEL_BOX, MAP_LABEL_MARK, MAP_LABEL_TONE } from "../map/mapLabel";
-import { MiniBar } from "@/components/ui/mini-bar";
+import { MeterHeadline, MiniBar } from "@/components/ui/mini-bar";
 import { Panel } from "@/components/ui/panel";
 import { cn } from "@/lib/utils";
 
@@ -65,7 +65,7 @@ export function MapSafety({ planVisible }: { planVisible: boolean }) {
   const over = t.limitingFactor === "oxygen" ? "Over O₂" : t.limitingFactor === "energy" ? "Over energy" : "Over time";
   // The full meter: the Plan tab's stand-in on wide screens when that tab is out of sight.
   const full = (
-    <Panel className={cn("map-safety w-[190px] flex-none px-2.5 pt-1.5 pb-[7px] text-xs sheet:hidden", !ok && "border-bad/55")}>
+    <Panel className={cn("map-safety w-[200px] flex-none px-2.5 pt-1.5 pb-2 text-xs sheet:hidden", !ok && "border-bad/55")}>
       <div className="mb-1 flex items-center justify-between">
         <span className="text-sm font-semibold">Suit</span>
         <span
@@ -75,6 +75,8 @@ export function MapSafety({ planVisible }: { planVisible: boolean }) {
           {ok ? "Fits the limits" : over}
         </span>
       </div>
+      {/* The tightest budget as the one number to glance at, then a meter for each. */}
+      <MeterHeadline className="mt-1.5 mb-1.5" budgets={[{ name: "Time", f: ft }, { name: "Energy", f: fe }, ...(fo != null ? [{ name: "Oxygen", f: fo }] : [])]} />
       <MiniBar label="Time" f={ft} text={`${fmtDur(t.totalTimeS)} of ${fmtDur(usableT)} usable (limit ${fmtDur(params.evaLimitS)} minus ${Math.round(params.reserveFraction * 100)}% reserve)`} />
       <MiniBar label="Energy" f={fe} text={`${fmtEnergy(t.energyKJ)} of ${fmtEnergy(usableE)} usable metabolic energy`} />
       {fo != null && t.o2Kg != null && (

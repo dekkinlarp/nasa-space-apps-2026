@@ -360,7 +360,21 @@ muted; no colour is added. A route that does not fit says so in red under its na
 ### Walk panel
 The mode as plain text in the Sim colour, a Follow toggle and a close button; the clock; one line for what
 is happening and, while the crew works at a stop, their task under it. Then the distance and bearing to
-the next point, what is left of time, energy and oxygen on the suit meter's mini bars, and the walk home.
+the next point, what is left of time, energy and oxygen on segmented meters, and the walk home. Beside the
+clock is the headline: what is left of the tightest budget.
+
+### Segmented meter
+What is left of one budget, read like a battery (`SegMeter`, in `MiniBar`): a sunk track of 14 or 20
+segments that light from the left. Each segment is coloured for what being down to it means: red for the
+last tenth, amber for the last quarter, green above. So the last lit segment is the status, and the figure
+beside the meter takes the same colour. Used where one glance has to do: the suit panel on the map and the
+walk panel. Above the meters, the tightest budget is the headline: its percentage left in 26px, with its
+name (`MeterHeadline`). Not used on the Plan tab, whose budget bars show the split a meter cannot.
+
+### Slope bars
+In Segment details, each leg carries 18 small bars of its slope from start to end: a bar is the steepest
+ground in its stretch, as tall as that is against the no-go slope and in the colour the route line has
+there on the map.
 
 ### Budget bar (signature)
 One row per limit (EVA time, energy, oxygen), directly under the verdict: the name, the bar, and used /
