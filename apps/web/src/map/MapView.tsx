@@ -14,6 +14,7 @@ import { fmtDur } from "../format";
 import { ClickMenu } from "../components/ClickMenu";
 import { routeSlopeFeatures } from "./routeSlope";
 import { setRenderDistance, tuneTerrain } from "./terrainPerf";
+import { keepCameraAboveGround } from "./cameraClearance";
 
 let mapInstance: MLMap | null = null;
 export const getMap = () => mapInstance;
@@ -456,6 +457,7 @@ export function MapView() {
     });
     mapInstance = map;
     const detachGestures = attachGestures(map);
+    keepCameraAboveGround(map);
     // Bottom-right corner, scale under the zoom buttons (controls added later stack above earlier ones).
     map.addControl(new maplibregl.ScaleControl({ unit: "metric" }), "bottom-right");
     map.addControl(new maplibregl.NavigationControl({ visualizePitch: true }), "bottom-right");
