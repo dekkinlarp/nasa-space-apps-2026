@@ -1,4 +1,5 @@
 /** On-map safety overlay: compact time / energy meter and the point-of-no-return marker. */
+import { fmtMin } from "./SafetyBudget";
 import { CheckIcon, TriangleAlertIcon } from "lucide-react";
 import { useEffect } from "react";
 import maplibregl from "maplibre-gl";
@@ -57,8 +58,11 @@ export function MapSafety({ planVisible }: { planVisible: boolean }) {
       `<div class="h-2 w-0.5 ${isPnr ? "bg-warn" : "bg-ok"}"></div>` +
       (pnr.atStop ? "" : `<div class="-mb-[5px] size-2.5 rotate-45 border-2 border-[#120c0a] ${isPnr ? "bg-warn shadow-[0_0_0_1.5px_var(--warn),0_2px_6px_rgba(0,0,0,0.7)]" : "bg-ok shadow-[0_0_0_1.5px_var(--ok),0_2px_6px_rgba(0,0,0,0.7)]"}"></div>`);
     el.querySelector("b")!.textContent = label;
+    // A note on the map, not a control: named for screen readers, kept out of the tab order.
+    el.setAttribute("aria-label", `${label}. ${detail}`);
     el.title = `${detail}\n\n${PNR_METHOD_NOTE}`;
     const m = new maplibregl.Marker({ element: el, anchor: "bottom", offset: pnr.atStop ? [0, -12] : [0, 0] }).setLngLat(pnr.point).addTo(map);
+    el.tabIndex = -1;
     map.fire(RELAYOUT_LABELS);
     return () => {
       m.remove();
@@ -110,7 +114,7 @@ export function MapSafety({ planVisible }: { planVisible: boolean }) {
         {ok ? <CheckIcon className="size-4 flex-none text-ok" aria-hidden /> : <TriangleAlertIcon className="size-4 flex-none text-bad" aria-hidden />}
         <b className="font-semibold whitespace-nowrap">{ok ? "Fits the limits" : over}</b>
         <span className="truncate text-muted-foreground">
-          {fmtDur(t.totalTimeS)} of {fmtDur(usableT)}
+          {fmtMin(t.totalTimeS)} of {fmtMin(usableT)}
         </span>
       </Panel>
       {!planVisible && full}

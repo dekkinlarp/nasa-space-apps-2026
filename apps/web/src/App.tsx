@@ -346,7 +346,7 @@ export function App() {
         </div>
         {/* Cards sit at the right; on the bottom-sheet layout they move left, clear of the zoom buttons. */}
         <div className="flex min-h-0 flex-1 items-start justify-end sheet:relative sheet:justify-start">
-          <div className="card-slot relative z-5 flex max-h-[calc(100%-96px)] w-[340px] max-w-full flex-col compact:w-[300px] sheet:max-h-full phone:max-h-[62%] phone:w-full sheet:in-[.app:has(.go-panel)]:hidden">{poi ? <PoiCard poi={poi} /> : wp ? <WaypointCard /> : null}</div>
+          <div className="card-slot relative z-5 flex max-h-[calc(100%-144px)] w-[340px] max-w-full flex-col compact:w-[300px] sheet:max-h-full phone:max-h-[62%] phone:w-full sheet:in-[.app:has(.go-panel)]:hidden">{poi ? <PoiCard poi={poi} /> : wp ? <WaypointCard /> : null}</div>
         </div>
         <div className="flex min-w-0 flex-none flex-col gap-(--gap)">
           {/* The right padding leaves the corner to the zoom and compass buttons and the scale bar under them. */}

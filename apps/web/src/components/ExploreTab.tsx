@@ -109,7 +109,7 @@ export function ExploreTab() {
           <PlayIcon className="size-4 flex-none fill-current" aria-hidden />
           <span className="min-w-0">
             <b className="block text-base">Try the boxwork walk</b>
-            <span className="block truncate text-xs font-medium text-white/85">Camp → hollow → ridge junction → sand dig</span>
+            <span className="block truncate text-xs font-medium text-white">Camp → hollow → ridge junction → sand dig</span>
           </span>
         </Button>
         {confirming && ownPlan && (

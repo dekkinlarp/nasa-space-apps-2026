@@ -11,7 +11,18 @@ export function SiteHeader({ onCollapse }: { onCollapse: () => void }) {
   const area = useStore((s) => s.area);
   const engine = useStore((s) => s.engine);
   const g = area?.manifest.grid;
+  const name = area?.config.area?.name ?? "Gale Crater boxwork";
   return (
+    <>
+    {/* On the bottom sheet the header is one line: where this is, and whether the data is real. */}
+    <div className="hidden flex-none items-center gap-2 px-4 pt-3 text-sm sheet:flex sheet:in-[.sheet-closed]:hidden">
+      <span className="truncate font-medium">{name}</span>
+      {area?.synthetic && (
+        <Badge variant="warning" className="flex-none">
+          Synthetic test data
+        </Badge>
+      )}
+    </div>
     <header className="site-head flex-none px-4 pt-3 pb-3 sheet:hidden">
       <div className="flex min-h-7 items-center gap-2">
         <span className="text-sm font-medium text-ink-2">Martian Map</span>
@@ -26,7 +37,7 @@ export function SiteHeader({ onCollapse }: { onCollapse: () => void }) {
           <SidebarIcon on />
         </Button>
       </div>
-      <h1 className="mt-2 mb-1.5 text-2xl font-bold tracking-[-0.022em]">{area?.config.area?.name ?? "Gale Crater boxwork"}</h1>
+      <h1 className="mt-2 mb-1.5 text-2xl font-bold tracking-[-0.022em]">{name}</h1>
       {g && (
         <div className="text-sm text-muted-foreground">
           {fmtLonLat([(g.west + g.east) / 2, (g.south + g.north) / 2])} · {g.width === g.height ? `${((g.width * g.cellSizeM) / 1000).toFixed(0)} km square` : `${((g.width * g.cellSizeM) / 1000).toFixed(0)} × ${((g.height * g.cellSizeM) / 1000).toFixed(0)} km`}
@@ -39,6 +50,7 @@ export function SiteHeader({ onCollapse }: { onCollapse: () => void }) {
         </Badge>
       )}
     </header>
+    </>
   );
 }
 

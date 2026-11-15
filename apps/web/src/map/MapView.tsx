@@ -385,6 +385,13 @@ function poiEl(p: Poi): HTMLElement {
   (el.querySelector(".pl-short") as HTMLElement).textContent = poiShortName(p);
   (el.querySelector(".pl-full") as HTMLElement).textContent = p.name;
   el.title = p.name;
+  // MapLibre would call every marker "Map marker"; a pin is named for its place.
+  el.setAttribute("aria-label", `${p.name}, ${p.type.replace("-", " ")}`);
+  el.addEventListener("keydown", (ev) => {
+    if (ev.key !== "Enter" && ev.key !== " ") return;
+    ev.preventDefault();
+    el.click();
+  });
   return el;
 }
 
@@ -793,7 +800,9 @@ export function MapView() {
         ? `Walk limit: the farthest you can go, work one stop and still get home with the reserve intact on time, energy and oxygen${r.limitedBy ? `. Here ${r.limitedBy} runs out first` : ""}`
         : `Reachable and back to the start in ${fmtDur(r.budgetS)} of walking (round trip)`;
       el.className += isLimit ? " border-warn/55 text-warn" : " border-input text-ink-2";
+      el.setAttribute("aria-label", el.title);
       ringMarkers.current.push(new maplibregl.Marker({ element: el, anchor: "bottom" }).setLngLat(outline[0] as [number, number]).addTo(map));
+      el.tabIndex = -1;
       labels.push({ el, outline });
     }
     const place = () => placeRingLabels(map, ringMarkers.current, labels);
@@ -871,6 +880,7 @@ export function MapView() {
       el.className = STOP_START;
       el.textContent = "S";
       el.title = `Start: ${start.name.replace(/^start:\s*/i, "")} (drag to move)`;
+      el.setAttribute("aria-label", `Start: ${start.name.replace(/^start:\s*/i, "")}`);
       const m = new maplibregl.Marker({ element: el, draggable: true }).setLngLat(start.lonLat).addTo(map);
       m.on("dragend", () => {
         const ll = m.getLngLat();
@@ -883,6 +893,7 @@ export function MapView() {
       el.className = STOP_NUMBER;
       el.textContent = String(i + 1);
       el.title = `${i + 1}. ${s.name} (drag to move)`;
+      el.setAttribute("aria-label", `Stop ${i + 1}: ${s.name}`);
       const m = new maplibregl.Marker({ element: el, draggable: true }).setLngLat(s.lonLat).addTo(map);
       m.on("dragend", () => {
         const ll = m.getLngLat();

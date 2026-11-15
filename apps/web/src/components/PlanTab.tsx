@@ -93,7 +93,7 @@ function AltCard({
   const status = !r.reachable ? "Unreachable" : t.withinLimits ? "Fits the limits" : `Over ${t.limitingFactor ?? "limit"}`;
   const ok = r.reachable && t.withinLimits;
   const tip = [
-    `${r.profile.name}: ${fmtDur(t.totalTimeS)} total (walk + stops)`,
+    `${r.profile.name}: ${fmtMin(t.totalTimeS)} total (walk + stops)`,
     `${fmtDist(t.distanceM)} · ${fmtEnergy(t.energyKJ)} · ${Math.round(t.hazardM)} m on hazard ground`,
     isRef ? "Reference route for the comparison" : `vs Fastest: ${all.map((p) => p.text).join(" · ")}`,
     highlight ?? "",
@@ -117,11 +117,12 @@ function AltCard({
       <div className="flex items-center justify-between gap-1.5">
         <span className={cn("truncate text-sm font-medium text-ink-2", compact && "text-xs")}>{r.profile.name}</span>
       </div>
-      <div className={cn("mt-px mb-0.5 text-lg leading-[1.2] tracking-[-0.015em]", compact && "text-[16px]")}>{fmtDur(t.totalTimeS)}</div>
-      <div className="truncate text-xs text-muted-foreground">
+      <div className={cn("mt-px mb-0.5 text-lg leading-[1.2] tracking-[-0.015em]", compact && "text-[16px]")}>{fmtMin(t.totalTimeS)}</div>
+      {/* On the lighter selected card the small print steps up a shade to keep its contrast. */}
+      <div className={cn("truncate text-xs", selected ? "text-ink-2" : "text-muted-foreground")}>
         {fmtDist(t.distanceM)} · {fmtEnergy(t.energyKJ)}
       </div>
-      <div className="truncate text-xs text-muted-foreground">{Math.round(t.hazardM)} m hazard</div>
+      <div className={cn("truncate text-xs", selected ? "text-ink-2" : "text-muted-foreground")}>{Math.round(t.hazardM)} m hazard</div>
       <div className={cn("mt-[5px] flex min-h-[18px] items-center gap-x-[5px] overflow-hidden text-xs leading-[1.35] font-semibold whitespace-nowrap", compact && "flex-wrap gap-y-[3px]")}>
         {/* Fastest is what the others are measured against, so it carries no comparison of its own. */}
         {!isRef && <span className="font-normal text-muted-foreground">vs Fastest</span>}
@@ -163,13 +164,14 @@ function RouteAlternatives({ results, selectedId, onPick }: { results: RouteResu
         })}
       </div>
       {similar.size > 0 && (
-        <div className="mt-1.5 cursor-help text-sm text-muted-foreground" title="Routes whose line, time and hazard are within a few percent of Fastest are folded together.">
+        <div className="mt-1.5 text-sm text-muted-foreground">
           {hidden.length > 0 ? (
             <>
               {hidden.map((r) => r.profile.name).join(", ")} ≈ Fastest ·{" "}
-              <Button variant="link" size="inline" className="text-xs" onClick={() => setShowSimilar(true)}>
+              <Button variant="link" size="inline" className="text-xs coarse:py-2" onClick={() => setShowSimilar(true)}>
                 show
               </Button>
+              <InfoTip label="About folded routes">Routes whose line, time and hazard are within a few percent of Fastest are folded together.</InfoTip>
             </>
           ) : (
             <>

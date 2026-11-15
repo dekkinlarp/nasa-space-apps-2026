@@ -313,8 +313,9 @@ export function LayersTab() {
         )}
       </Row>
       <Row id="rings" title="Walk-limit rings" disabled={!start ? "Set a start to see walk-limit rings" : undefined}>
-        <Hint title="Dashed rings: 15 min, 30 min and 1 h of round-trip walking from the start. Solid ring: the walk limit, the farthest you can go, work one stop and still get home with the reserve intact on time, energy and oxygen. Its label names the one that runs out first.">
-          Round trip: 15 min · 30 min · 1h · walk limit
+        <Hint className="flex items-center gap-0.5">
+          Round trip: 15 min, 30 min, 1 h and the walk limit
+          <InfoTip label="About the walk-limit rings">Dashed rings: 15 min, 30 min and 1 h of round-trip walking from the start. Solid ring: the walk limit, the farthest you can go, work one stop and still get home with the reserve intact on time, energy and oxygen. Its label names the one that runs out first.</InfoTip>
         </Hint>
       </Row>
       <SectionHeading>Places</SectionHeading>

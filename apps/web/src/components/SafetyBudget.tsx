@@ -64,7 +64,7 @@ function BudgetBar({
       <div className="mb-[7px] flex items-center justify-between text-sm">
         <span className="flex items-center gap-0.5 font-semibold">
           {title}
-          <InfoTip label={`About ${title.toLowerCase()}`}>{`${hint}\n${limitLabel}.`}</InfoTip>
+          <InfoTip label={`About ${title}`}>{`${hint}\n${limitLabel}.`}</InfoTip>
         </span>
         <span>
           <b className={cn("font-bold", state === "bad" && "text-bad", state === "warn" && "text-warn")}>{fmt(used)}</b>
@@ -178,7 +178,7 @@ export function SafetyBudget({ r, params, pnr, names }: { r: RouteResult; params
   const [all, setAll] = useState(false);
   const leakKg = (t.totalTimeS / 3600) * (params.o2LeakKgPerH ?? 0);
   const usable = (limit: number) => limit * (1 - rf) || 1;
-  // Each budget with the share of its usable part this route spends. The tightest one is always shown.
+  // The three limits a walk is checked against, always in the same order.
   const bars = [
     {
       id: "time",
@@ -246,15 +246,11 @@ export function SafetyBudget({ r, params, pnr, names }: { r: RouteResult; params
           },
         ]
       : []),
-  ].sort((a, b) => b.f - a.f);
-  // Anything over its usable budget is never folded away.
-  const open = all || bars.slice(1).some((b) => b.f > 1);
-  const shown = open ? bars : bars.slice(0, 1);
-  const rest = bars.slice(1).map((b) => b.id);
+  ];
   return (
     <div>
-      {shown.map((b, i) => b.render(i === 0))}
-      {open && (
+      {bars.map((b, i) => b.render(i === 0))}
+      {all && (
         <div className="mb-2 flex gap-4 text-xs text-muted-foreground">
           <span>
             Climb{" "}
@@ -267,11 +263,9 @@ export function SafetyBudget({ r, params, pnr, names }: { r: RouteResult; params
           </span>
         </div>
       )}
-      {!bars.slice(1).some((b) => b.f > 1) && (
-        <Button variant="link" size="inline" className="mb-2 flex text-xs" aria-expanded={all} onClick={() => setAll(!all)}>
-          {all ? "Show the tightest budget only" : `Show ${rest.join(" and ")}, climb and dose`}
-        </Button>
-      )}
+      <Button variant="link" size="inline" className="mb-2 flex text-xs coarse:py-2" aria-expanded={all} onClick={() => setAll(!all)}>
+        {all ? "Hide climb and dose" : "Show climb and dose"}
+      </Button>
       {pnr && <PnrNote pnr={pnr} names={names} />}
     </div>
   );
