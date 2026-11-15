@@ -88,6 +88,43 @@ export function surfaceUrl(g: GridSpec, surface: Uint8Array, classes: SurfaceCla
   );
 }
 
+/** Where the surface estimate is weakest: low confidence is drawn, high confidence is left clear. */
+export function confidenceUrl(g: GridSpec, conf: Uint8Array) {
+  return toUrl(
+    paint(g, (i, px, o) => {
+      const k = Math.max(0, Math.min(1, (CONFIDENCE_CLEAR - conf[i]!) / (CONFIDENCE_CLEAR - CONFIDENCE_LOW)));
+      if (k <= 0) return;
+      px[o] = 232; px[o + 1] = 62; px[o + 2] = 140; px[o + 3] = 40 + k * 190;
+    }),
+  );
+}
+/** Confidence scores run 40-200 (see the pipeline); at or below LOW is drawn solid, at or above CLEAR not at all. */
+export const CONFIDENCE_LOW = 60;
+export const CONFIDENCE_CLEAR = 150;
+
+/** One hue per science layer, dark to bright. */
+export const SCIENCE_RAMPS: [number, string][][] = [
+  [[0, "#0d4a3a"], [0.5, "#22b089"], [1, "#b6ffd9"]],
+  [[0, "#5a3d00"], [0.5, "#e0a100"], [1, "#fff2a8"]],
+  [[0, "#10306b"], [0.5, "#3f8cff"], [1, "#c9e4ff"]],
+  [[0, "#4a1259"], [0.5, "#c04ee0"], [1, "#f6d0ff"]],
+];
+
+/** A float layer coloured between min and max; values at or below min (and NaN) stay clear. */
+export function scienceUrl(g: GridSpec, data: Float32Array, min: number, max: number, stops: [number, string][]) {
+  const r = ramp(stops);
+  const span = Math.max(1e-12, max - min);
+  return toUrl(
+    paint(g, (i, px, o) => {
+      const v = data[i]!;
+      if (!(v > min)) return;
+      const t = Math.min(1, (v - min) / span);
+      const [R, G, B] = r(t);
+      px[o] = R; px[o + 1] = G; px[o + 2] = B; px[o + 3] = 110 + t * 145;
+    }),
+  );
+}
+
 /** Round-trip walking time from the start, coloured as a fraction of the usable budget. */
 export function costUrl(g: GridSpec, out: Float32Array, back: Float32Array, usableS: number) {
   const r = ramp(COST_RAMP);

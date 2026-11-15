@@ -6,8 +6,10 @@ import type { LonLat, ReachRing, RouteResult } from "@marsmap/core";
 import { selectedResult, useStore, type LayerState, type OverlayId } from "../store";
 import type { AreaData, Poi } from "../types";
 import { cellIndex, M_PER_DEG_LAT } from "../geo";
-import { costUrl, elevationUrl, slopeUrl, surfaceUrl } from "./rasters";
+import { confidenceUrl, costUrl, elevationUrl, SCIENCE_RAMPS, scienceUrl, slopeUrl, surfaceUrl } from "./rasters";
+import { loadFloatLayer } from "../data";
 import { demMaxZoom, DEM_TILE_SIZE, registerDemProtocol, setDemSource } from "./dem";
+import { registerTintProtocol, tintable, tintUrl } from "./tint";
 import { fmtDur } from "../format";
 import { ClickMenu } from "../components/ClickMenu";
 import { routeSlopeFeatures } from "./routeSlope";
@@ -19,13 +21,13 @@ const BLANK = "data:image/png;base64,iVBORw0KGgoAAAANSUhEUgAAAAEAAAABCAQAAAC1HAw
 const EMPTY_FC: GeoJSON.FeatureCollection = { type: "FeatureCollection", features: [] };
 
 export const PROFILE_COLORS: Record<string, string> = {
-  fastest: "#ff8a3d",
+  fastest: "#f4f5f7",
   "least-effort": "#4fc3f7",
   leastEffort: "#4fc3f7",
   least_effort: "#4fc3f7",
   safest: "#7ee081",
 };
-export const profileColor = (id: string, i = 0) => PROFILE_COLORS[id] ?? ["#ff8a3d", "#4fc3f7", "#7ee081"][i % 3]!;
+export const profileColor = (id: string, i = 0) => PROFILE_COLORS[id] ?? ["#f4f5f7", "#4fc3f7", "#7ee081"][i % 3]!;
 
 /** Strip a tile suffix like _0_1 / _r0_c1 so a 2x2 image set is one base-imagery choice. */
 export const imageryGroup = (id: string) => id.replace(/[_-]r?\d+[_-]c?\d+$/, "");
@@ -39,7 +41,194 @@ const TRACK_PLAN_FADE = 0.28;
 const DEFAULT_TRACK_STATE = useStore.getState().overlays.track;
 /** True when the traverse should recede: Plan tab open and the user has not set the track layer themselves. */
 export const isTrackFaded = (tab: string, track: LayerState) => tab === "plan" && track === DEFAULT_TRACK_STATE;
-const RASTER_OVERLAYS = ["elevation", "slope", "surface", "cost"] as const;
+let mapReady = false;
+let pendingInsets: { top?: number; right?: number; bottom?: number; left?: number } | null = null;
+
+/**
+ * Tell the map how much of its canvas is covered by floating panels, so "centre" means the centre of
+ * the part the user can see. Eased, so the ground glides aside as a panel opens.
+ */
+export function setMapInsets(p: { top?: number; right?: number; bottom?: number; left?: number }, ms = 380) {
+  const map = mapInstance;
+  if (!map) return;
+  if (!mapReady) {
+    // Asked before the map's first frame: remembered, and applied without animation when it loads.
+    pendingInsets = p;
+    return;
+  }
+  const padding = { top: p.top ?? 0, right: p.right ?? 0, bottom: p.bottom ?? 0, left: p.left ?? 0 };
+  const cur = map.getPadding();
+  if (cur.top === padding.top && cur.right === padding.right && cur.bottom === padding.bottom && cur.left === padding.left) return;
+  map.easeTo({ padding, duration: ms, easing: (t) => 1 - Math.pow(1 - t, 3) });
+}
+
+/** Resize the map on every frame for a while, so it tracks a panel that is sliding open or shut. */
+export function resizeMapDuring(ms: number) {
+  const until = performance.now() + ms + 80;
+  const step = () => {
+    mapInstance?.resize();
+    if (performance.now() < until) requestAnimationFrame(step);
+  };
+  requestAnimationFrame(step);
+}
+
+/** Where an imagery entry's picture comes from, through the Mars tint when that is on and the image suits it. */
+const imageUrl = (a: AreaData, im: { id: string; file: string }, tint: boolean) => (tint && tintable(im.id) ? tintUrl(`${a.base}/${im.file}`) : `${a.base}/${im.file}`);
+
+/** True for a full-resolution piece of an imagery group that also has an overview image (e.g. hirise_0_1). */
+const isDetailTile = (a: AreaData, id: string) => id !== imageryGroup(id) && a.manifest.imagery.some((o) => o.id === imageryGroup(id));
+const RASTER_OVERLAYS = ["elevation", "slope", "surface", "confidence", "cost"] as const;
+
+/** Manifest layers the pipeline marked as science overlays (e.g. CRISM mineral indicators). */
+export const scienceLayers = (a: AreaData) => a.manifest.layers.filter((l) => l.group === "science" && l.dtype === "float32");
+export const scienceRamp = (a: AreaData, id: string) => SCIENCE_RAMPS[Math.max(0, scienceLayers(a).findIndex((l) => l.id === id)) % SCIENCE_RAMPS.length]!;
+
+/**
+ * Trackpad, mouse-wheel and Safari pinch handling. Replaces MapLibre's scrollZoom, which treats
+ * every scroll as a zoom, so a two-finger scroll can pan the map the way it does in native map apps.
+ *
+ *   two-finger scroll            pan
+ *   pinch (ctrl/cmd + scroll)    zoom about the pointer
+ *   shift + scroll               rotate
+ *   alt/option + scroll          tilt (3D only: 2D caps the pitch at 0)
+ *   mouse wheel                  zoom about the pointer
+ *
+ * Mouse wheel vs trackpad: a wheel reports whole lines (Firefox, deltaMode 1) or a legacy
+ * wheelDeltaY in steps of 120 that is NOT simply -3 x deltaY, which is what trackpads report.
+ * The verdict is held for events less than 120 ms apart so one gesture is never split.
+ * Touch screens are left to MapLibre's own handlers (drag, pinch, two-finger rotate and tilt).
+ */
+/** Touch-and-hold time and allowed finger drift before it stops counting as a hold. */
+const HOLD_MS = 500;
+const HOLD_SLOP_PX = 10;
+/** A single tap waits this long for a second tap (double-tap zoom) before it opens the point menu. */
+const TAP_DELAY_MS = 260;
+/** Tilting past ENTER switches the terrain on; levelling below LEAVE switches it off. */
+const TILT_ENTER_3D = 4;
+const TILT_LEAVE_3D = 1;
+/** Set when a hold has just opened the menu, so the tap that ends the hold does not reopen it elsewhere. */
+let suppressNextClick = 0;
+/** True while the 2D/3D state is being changed by a tilt gesture rather than the 2D/3D buttons. */
+let tiltDriven = false;
+/** True while the 2D button is levelling the camera, so that animation is not read as a tilt gesture. */
+let levelling = false;
+
+function attachGestures(map: MLMap): () => void {
+  const el = map.getCanvasContainer();
+  let lastT = 0, lastMouse = false, targetZoom = map.getZoom();
+  const isMouseWheel = (e: WheelEvent): boolean => {
+    if (e.deltaMode !== 0) return true;
+    const wd = (e as WheelEvent & { wheelDeltaY?: number }).wheelDeltaY;
+    return e.deltaX === 0 && wd != null && wd !== 0 && wd % 120 === 0 && Math.abs(wd) !== Math.round(Math.abs(e.deltaY) * 3);
+  };
+  const pointer = (e: { clientX: number; clientY: number }) => {
+    const r = el.getBoundingClientRect();
+    return map.unproject([e.clientX - r.left, e.clientY - r.top]);
+  };
+  const clampZoom = (z: number) => Math.max(map.getMinZoom(), Math.min(map.getMaxZoom(), z));
+  const onWheel = (e: WheelEvent) => {
+    e.preventDefault();
+    const fresh = e.timeStamp - lastT > 120;
+    const mouse = fresh ? isMouseWheel(e) : lastMouse;
+    lastT = e.timeStamp;
+    lastMouse = mouse;
+    const unit = e.deltaMode === 1 ? 16 : e.deltaMode === 2 ? 400 : 1;
+    const dx = e.deltaX * unit, dy = e.deltaY * unit;
+    if (e.ctrlKey || e.metaKey) {
+      map.easeTo({ zoom: clampZoom(map.getZoom() - dy * 0.01), around: pointer(e), duration: 0 });
+    } else if (e.shiftKey) {
+      // Browsers turn shift + vertical scroll into horizontal scroll, so take whichever axis moved.
+      map.jumpTo({ bearing: map.getBearing() + (Math.abs(dx) > Math.abs(dy) ? dx : dy) * 0.3 });
+    } else if (e.altKey) {
+      // Orbit: Chromium never delivers a trackpad twist to a page, so Option + two-finger scroll stands in
+      // for it. Sideways turns the map, up/down tilts it. Mostly-sideways or mostly-vertical motion is
+      // locked to that one axis so a turn does not also tilt.
+      const ax = Math.abs(dx), ay = Math.abs(dy);
+      const turn = ax > ay * 1.5 ? dx : ay > ax * 1.5 ? 0 : dx;
+      const tilt = ay > ax * 1.5 ? dy : ax > ay * 1.5 ? 0 : dy;
+      map.jumpTo({
+        bearing: map.getBearing() + turn * 0.3,
+        pitch: map.getMaxPitch() > 0 ? Math.max(0, Math.min(map.getMaxPitch(), map.getPitch() - tilt * 0.25)) : 0,
+      });
+    } else if (mouse) {
+      const wd = (e as WheelEvent & { wheelDeltaY?: number }).wheelDeltaY;
+      const step = Math.max(-1, Math.min(1, wd ? wd / 240 : -dy / 100)); // one notch = half a zoom level
+      targetZoom = clampZoom((fresh ? map.getZoom() : targetZoom) + step);
+      map.easeTo({ zoom: targetZoom, around: pointer(e), duration: 160, easing: (t) => t });
+    } else {
+      map.panBy([dx, dy], { animate: false });
+    }
+  };
+  // Safari sends pinch and rotate on a Mac trackpad as gesture events instead of ctrl + wheel.
+  // On iPad the same events accompany real touches, which MapLibre already handles.
+  type GestureEvent = Event & { scale: number; rotation: number; clientX: number; clientY: number };
+  let touches = 0;
+  let g0: { zoom: number; bearing: number } | null = null;
+  const onTouch = (e: TouchEvent) => (touches = e.touches.length);
+  const onGestureStart = (e: Event) => {
+    e.preventDefault();
+    g0 = touches > 0 ? null : { zoom: map.getZoom(), bearing: map.getBearing() };
+  };
+  const onGestureChange = (e: Event) => {
+    e.preventDefault();
+    const g = e as GestureEvent;
+    if (!g0 || touches > 0 || !(g.scale > 0)) return;
+    map.easeTo({ zoom: clampZoom(g0.zoom + Math.log2(g.scale)), bearing: g0.bearing - g.rotation, around: pointer(g), duration: 0 });
+  };
+  const onGestureEnd = (e: Event) => {
+    e.preventDefault();
+    g0 = null;
+  };
+  // Touch and hold drops a pin (opens the "set start / add stop" menu), as in Apple Maps.
+  let holdTimer: ReturnType<typeof setTimeout> | undefined;
+  let holdAt: { x: number; y: number } | null = null;
+  const cancelHold = () => {
+    clearTimeout(holdTimer);
+    holdAt = null;
+  };
+  const onHoldStart = (e: TouchEvent) => {
+    cancelHold();
+    if (e.touches.length !== 1) return;
+    const t = e.touches[0]!;
+    holdAt = { x: t.clientX, y: t.clientY };
+    holdTimer = setTimeout(() => {
+      if (!holdAt) return;
+      const ll = pointer({ clientX: holdAt.x, clientY: holdAt.y });
+      holdAt = null;
+      suppressNextClick = performance.now();
+      useStore.getState().set({ mapClick: [ll.lng, ll.lat], selectedWaypoint: null });
+    }, HOLD_MS);
+  };
+  const onHoldMove = (e: TouchEvent) => {
+    const t = e.touches[0];
+    if (!holdAt || !t || e.touches.length !== 1 || Math.hypot(t.clientX - holdAt.x, t.clientY - holdAt.y) > HOLD_SLOP_PX) cancelHold();
+  };
+  el.addEventListener("touchstart", onHoldStart, { passive: true });
+  el.addEventListener("touchmove", onHoldMove, { passive: true });
+  el.addEventListener("touchend", cancelHold, { passive: true });
+  el.addEventListener("touchcancel", cancelHold, { passive: true });
+  el.addEventListener("wheel", onWheel, { passive: false });
+  el.addEventListener("touchstart", onTouch, { passive: true });
+  el.addEventListener("touchend", onTouch, { passive: true });
+  el.addEventListener("touchcancel", onTouch, { passive: true });
+  el.addEventListener("gesturestart", onGestureStart);
+  el.addEventListener("gesturechange", onGestureChange);
+  el.addEventListener("gestureend", onGestureEnd);
+  return () => {
+    cancelHold();
+    el.removeEventListener("touchstart", onHoldStart);
+    el.removeEventListener("touchmove", onHoldMove);
+    el.removeEventListener("touchend", cancelHold);
+    el.removeEventListener("touchcancel", cancelHold);
+    el.removeEventListener("wheel", onWheel);
+    el.removeEventListener("touchstart", onTouch);
+    el.removeEventListener("touchend", onTouch);
+    el.removeEventListener("touchcancel", onTouch);
+    el.removeEventListener("gesturestart", onGestureStart);
+    el.removeEventListener("gesturechange", onGestureChange);
+    el.removeEventListener("gestureend", onGestureEnd);
+  };
+}
 
 function gridCoords(a: AreaData): [[number, number], [number, number], [number, number], [number, number]] {
   const g = a.layers.grid;
@@ -83,7 +272,7 @@ function ringFeatures(rings: ReachRing[] | null): GeoJSON.FeatureCollection {
     type: "FeatureCollection",
     features: rings.map((r, i) => ({
       type: "Feature",
-      properties: { id: r.id, i, t: n > 1 ? i / (n - 1) : 1 },
+      properties: { id: r.id, i, t: n > 1 ? i / (n - 1) : 1, limit: r.kind === "limit" ? 1 : 0 },
       geometry: {
         type: "MultiPolygon",
         coordinates: r.coordinates
@@ -216,19 +405,23 @@ export function MapView() {
   const [ready, setReady] = useState(false);
   const [popupEl, setPopupEl] = useState<HTMLElement | null>(null);
   const urls = useRef<Partial<Record<OverlayId, string>>>({});
+  /** The picture each imagery source currently shows, so a tint switch only reloads what changed. */
+  const shownUrl = useRef(new Map<string, string>());
 
   // ---------- create map ----------
   useEffect(() => {
     const g = area.layers.grid;
     if (area.layers.elevation) setDemSource(g, area.layers.elevation, area.layers.elevRef);
     registerDemProtocol();
+    registerTintProtocol();
     const padLon = (g.east - g.west) * 0.6, padLat = (g.north - g.south) * 0.6;
     const map = new maplibregl.Map({
       container: containerRef.current!,
       style: {
         version: 8,
         sources: {},
-        layers: [{ id: "bg", type: "background", paint: { "background-color": "#0b0a0c" } }],
+        // Nothing is painted behind the map, so the star backdrop shows wherever there is no ground.
+        layers: [{ id: "bg", type: "background", paint: { "background-color": "rgba(0,0,0,0)" } }],
       },
       bounds: initialBounds(area),
       fitBoundsOptions: { padding: 40 },
@@ -238,37 +431,54 @@ export function MapView() {
       maxPitch: 80,
       attributionControl: false,
       dragRotate: true,
+      scrollZoom: false, // replaced by attachGestures
       renderWorldCopies: false,
     });
     mapInstance = map;
-    map.addControl(new maplibregl.NavigationControl({ visualizePitch: true }), "top-right");
+    const detachGestures = attachGestures(map);
+    // Bottom-right corner, scale under the zoom buttons (controls added later stack above earlier ones).
     map.addControl(new maplibregl.ScaleControl({ unit: "metric" }), "bottom-right");
+    map.addControl(new maplibregl.NavigationControl({ visualizePitch: true }), "bottom-right");
     (window as unknown as { __map: MLMap }).__map = map;
 
     map.on("load", () => {
+      mapReady = true;
+      if (pendingInsets) {
+        const p = pendingInsets;
+        pendingInsets = null;
+        setMapInsets(p, 0);
+      }
       const coords = gridCoords(area);
+      // The mapped square is solid ground: with imagery faded or off it stays dark instead of showing stars through it.
+      map.addSource("ground", { type: "geojson", data: { type: "Feature", properties: {}, geometry: { type: "Polygon", coordinates: [[...coords, coords[0]]] } } });
+      map.addLayer({ id: "ground", type: "fill", source: "ground", paint: { "fill-color": "#0a0b0d", "fill-antialias": false } });
       // Base imagery: one image source per manifest entry.
+      // Full-resolution tiles of a group are added on demand (see syncTiles); everything else loads now.
       for (const im of area.manifest.imagery) {
+        if (isDetailTile(area, im.id)) continue;
+        const url = imageUrl(area, im, useStore.getState().marsTint);
+        shownUrl.current.set(`img-${im.id}`, url);
         map.addSource(`img-${im.id}`, {
           type: "image",
-          url: `${area.base}/${im.file}`,
+          url,
           coordinates: [[im.west, im.north], [im.east, im.north], [im.east, im.south], [im.west, im.south]],
         });
-        // A group with both an overview image and a full-res tile set: overview when zoomed out, tiles when in.
-        const group = imageryGroup(im.id);
-        const hasTiles = area.manifest.imagery.some((o) => imageryGroup(o.id) === group && o.id !== group);
-        const zoomRange = !hasTiles ? {} : im.id === group ? { maxzoom: TILE_SWITCH_ZOOM } : { minzoom: TILE_SWITCH_ZOOM };
-        map.addLayer({ id: `img-${im.id}`, type: "raster", source: `img-${im.id}`, ...zoomRange, layout: { visibility: "none" }, paint: { "raster-fade-duration": 0, "raster-resampling": "linear" } });
+        map.addLayer({ id: `img-${im.id}`, type: "raster", source: `img-${im.id}`, layout: { visibility: "none" }, paint: { "raster-fade-duration": 0, "raster-resampling": "linear" } });
       }
       // DEM: one source for terrain, one for hillshade (MapLibre recommends separate sources).
       const demMax = demMaxZoom(g);
       for (const id of ["dem", "dem-hs"]) {
         map.addSource(id, { type: "raster-dem", tiles: ["marsdem://{z}/{x}/{y}"], tileSize: DEM_TILE_SIZE, encoding: "terrarium", maxzoom: demMax, minzoom: 8, bounds: [g.west, g.south, g.east, g.north] });
       }
-      map.addLayer({ id: "hillshade", type: "hillshade", source: "dem-hs", layout: { visibility: "none" }, paint: { "hillshade-exaggeration": 0.6, "hillshade-shadow-color": "#000000", "hillshade-highlight-color": "#ffe8d0", "hillshade-accent-color": "#3a1f14" } });
+      map.addLayer({ id: "hillshade", type: "hillshade", source: "dem-hs", layout: { visibility: "none" }, paint: { "hillshade-exaggeration": 0.6, "hillshade-shadow-color": "#000000", "hillshade-highlight-color": "#ffffff", "hillshade-accent-color": "#1c1e22" } });
       for (const id of RASTER_OVERLAYS) {
         map.addSource(`ov-${id}`, { type: "image", url: BLANK, coordinates: coords });
         map.addLayer({ id: `ov-${id}`, type: "raster", source: `ov-${id}`, layout: { visibility: "none" }, paint: { "raster-fade-duration": 0, "raster-resampling": id === "surface" ? "nearest" : "linear" } });
+      }
+      // Science layers keep their source pixels visible (nearest), so an 18 m CRISM pixel reads as one block.
+      for (const l of scienceLayers(area)) {
+        map.addSource(`sci-${l.id}`, { type: "image", url: BLANK, coordinates: coords });
+        map.addLayer({ id: `sci-${l.id}`, type: "raster", source: `sci-${l.id}`, layout: { visibility: "none" }, paint: { "raster-fade-duration": 0, "raster-resampling": "nearest" } });
       }
       map.addSource("rings", { type: "geojson", data: EMPTY_FC });
       map.addLayer({ id: "rings-line", type: "line", source: "rings", filter: ["<", ["get", "t"], 1], paint: { "line-color": RING_COLOR, "line-width": ["interpolate", ["linear"], ["get", "t"], 0, 1.2, 1, 2.2], "line-dasharray": [3, 2] } });
@@ -282,7 +492,7 @@ export function MapView() {
         type: "geojson",
         data: { type: "FeatureCollection", features: area.rover.waypoints.map((w, i) => ({ type: "Feature", properties: { i, sol: w.sol }, geometry: { type: "Point", coordinates: w.lonLat } })) },
       });
-      map.addLayer({ id: "waypoints", type: "circle", source: "waypoints", paint: { "circle-radius": ["interpolate", ["linear"], ["zoom"], 13, 2.5, 18, 6], "circle-color": "#f5f0e6", "circle-stroke-color": "#1a1210", "circle-stroke-width": 1.5, "circle-pitch-alignment": "map", "circle-pitch-scale": "map" } });
+      map.addLayer({ id: "waypoints", type: "circle", source: "waypoints", paint: { "circle-radius": ["interpolate", ["linear"], ["zoom"], 13, 2.5, 18, 6], "circle-color": "#f5f0e6", "circle-stroke-color": "#0a0b0d", "circle-stroke-width": 1.5, "circle-pitch-alignment": "map", "circle-pitch-scale": "map" } });
 
       map.addSource("routes", { type: "geojson", data: EMPTY_FC });
       map.addLayer({ id: "routes-alt", type: "line", source: "routes", layout: { "line-join": "round", "line-cap": "round" }, paint: { "line-color": ["get", "color"], "line-width": 3, "line-opacity": 0.35 } });
@@ -294,7 +504,7 @@ export function MapView() {
 
       map.addSource("cursor", { type: "geojson", data: EMPTY_FC });
       map.addLayer({ id: "cursor-halo", type: "circle", source: "cursor", paint: { "circle-radius": ["case", ["==", ["get", "kind"], "go"], 14, 9], "circle-color": ["case", ["==", ["get", "kind"], "go"], "#36d1c4", "#ffffff"], "circle-opacity": 0.25 } });
-      map.addLayer({ id: "cursor", type: "circle", source: "cursor", paint: { "circle-radius": ["case", ["==", ["get", "kind"], "go"], 7, 5], "circle-color": ["case", ["==", ["get", "kind"], "go"], "#36d1c4", "#ffffff"], "circle-stroke-color": "#0b0a0c", "circle-stroke-width": 2 } });
+      map.addLayer({ id: "cursor", type: "circle", source: "cursor", paint: { "circle-radius": ["case", ["==", ["get", "kind"], "go"], 7, 5], "circle-color": ["case", ["==", ["get", "kind"], "go"], "#36d1c4", "#ffffff"], "circle-stroke-color": "#0a0b0d", "circle-stroke-width": 2 } });
 
       setReady(true);
     });
@@ -326,6 +536,7 @@ export function MapView() {
     map.on("mouseenter", "waypoints", () => (map.getCanvas().style.cursor = "pointer"));
     map.on("mouseleave", "waypoints", () => (map.getCanvas().style.cursor = ""));
 
+    let tapTimer: ReturnType<typeof setTimeout> | undefined;
     map.on("click", (e) => {
       const s = useStore.getState();
       const ll: LonLat = [e.lngLat.lng, e.lngLat.lat];
@@ -342,27 +553,86 @@ export function MapView() {
           return;
         }
       }
-      s.set({ mapClick: ll, selectedWaypoint: null });
+      if (performance.now() - suppressNextClick < 700) return;
+      clearTimeout(tapTimer);
+      tapTimer = setTimeout(() => useStore.getState().set({ mapClick: ll, selectedWaypoint: null }), TAP_DELAY_MS);
+    });
+    map.on("dblclick", () => clearTimeout(tapTimer));
+    // Apple Maps style: tilting the flat map slides into 3D, levelling it out returns to 2D.
+    map.on("pitch", () => {
+      if (levelling || !area.layers.elevation || useStore.getState().view3d || map.getPitch() < TILT_ENTER_3D) return;
+      tiltDriven = true;
+      useStore.getState().set({ view3d: true });
+    });
+    map.on("moveend", () => {
+      if (!useStore.getState().view3d || map.getPitch() > TILT_LEAVE_3D || map.isMoving()) return;
+      tiltDriven = true;
+      useStore.getState().set({ view3d: false });
     });
 
     return () => {
+      detachGestures();
       map.remove();
       mapInstance = null;
+      mapReady = false;
     };
   }, [area]);
 
   // ---------- base imagery ----------
   const baseImagery = useStore((s) => s.baseImagery);
   const baseOpacity = useStore((s) => s.baseOpacity);
+  const marsTint = useStore((s) => s.marsTint);
   useEffect(() => {
     const map = mapInstance;
     if (!ready || !map) return;
     for (const im of area.manifest.imagery) {
+      if (!map.getLayer(`img-${im.id}`)) continue;
       const on = imageryGroup(im.id) === baseImagery;
+      // Overview images stay loaded; swap their picture when the tint is switched.
+      if (!isDetailTile(area, im.id)) {
+        const url = imageUrl(area, im, marsTint);
+        if (shownUrl.current.get(`img-${im.id}`) !== url) {
+          shownUrl.current.set(`img-${im.id}`, url);
+          (map.getSource(`img-${im.id}`) as maplibregl.ImageSource | undefined)?.updateImage({ url });
+        }
+      }
       map.setLayoutProperty(`img-${im.id}`, "visibility", on ? "visible" : "none");
       map.setPaintProperty(`img-${im.id}`, "raster-opacity", baseOpacity);
     }
-  }, [ready, baseImagery, baseOpacity, area]);
+    // Full-resolution tiles: only the ones in view while zoomed in, drawn over the overview image.
+    // An 8 km area has 16 of them (about 40 MB of texture each), far too much to hold at once.
+    const syncTiles = () => {
+      const zoomedIn = map.getZoom() >= TILE_SWITCH_ZOOM - 0.5;
+      const b = map.getBounds();
+      for (const im of area.manifest.imagery) {
+        if (!isDetailTile(area, im.id)) continue;
+        const id = `img-${im.id}`;
+        const want = zoomedIn && imageryGroup(im.id) === baseImagery && im.west < b.getEast() && im.east > b.getWest() && im.south < b.getNorth() && im.north > b.getSouth();
+        const url = imageUrl(area, im, marsTint);
+        let has = !!map.getSource(id);
+        if (has && want && shownUrl.current.get(id) !== url) {
+          map.removeLayer(id);
+          map.removeSource(id);
+          has = false;
+        }
+        if (want && !has) {
+          shownUrl.current.set(id, url);
+          map.addSource(id, { type: "image", url, coordinates: [[im.west, im.north], [im.east, im.north], [im.east, im.south], [im.west, im.south]] });
+          map.addLayer({ id, type: "raster", source: id, minzoom: TILE_SWITCH_ZOOM - 0.5, paint: { "raster-fade-duration": 0, "raster-resampling": "linear", "raster-opacity": baseOpacity } }, "hillshade");
+        } else if (want) {
+          map.setPaintProperty(id, "raster-opacity", baseOpacity);
+        } else if (has) {
+          map.removeLayer(id);
+          map.removeSource(id);
+        }
+      }
+    };
+    syncTiles();
+    map.on("moveend", syncTiles);
+    return () => {
+      map.off("moveend", syncTiles);
+    };
+  }, [ready, baseImagery, baseOpacity, marsTint, area]);
 
   // ---------- raster overlays ----------
   const overlays = useStore((s) => s.overlays);
@@ -391,6 +661,7 @@ export function MapView() {
       if (id === "elevation" && L.elevation) p = elevationUrl(g, L.elevation, L.elevMin, L.elevMax);
       if (id === "slope" && L.slope) p = slopeUrl(g, L.slope);
       if (id === "surface" && L.surface) p = surfaceUrl(g, L.surface, area.config.surfaceClasses);
+      if (id === "confidence" && L.confidence) p = confidenceUrl(g, L.confidence);
       if (id === "cost" && reach) p = costUrl(g, reach.outTimeS, reach.backTimeS, reach.usableS);
       if (!p) continue;
       urls.current[id] = "pending";
@@ -417,6 +688,34 @@ export function MapView() {
     map.setPaintProperty("waypoints", "circle-stroke-opacity", fade);
   }, [ready, overlays, reach, area, tab]);
 
+  // ---------- science overlays (data fetched the first time each is switched on) ----------
+  const sci = useStore((s) => s.sci);
+  const sciData = useStore((s) => s.sciData);
+  const sciUrls = useRef<Record<string, string>>({});
+  useEffect(() => {
+    const map = mapInstance;
+    if (!ready || !map) return;
+    for (const l of scienceLayers(area)) {
+      const st = sci[l.id];
+      const on = !!st?.on;
+      map.setLayoutProperty(`sci-${l.id}`, "visibility", on ? "visible" : "none");
+      if (st) map.setPaintProperty(`sci-${l.id}`, "raster-opacity", st.opacity);
+      if (!on || sciUrls.current[l.id]) continue;
+      sciUrls.current[l.id] = "pending";
+      void (async () => {
+        const data = useStore.getState().sciData[l.id] ?? (await loadFloatLayer(area, l.id));
+        if (!data) {
+          delete sciUrls.current[l.id];
+          return;
+        }
+        if (!useStore.getState().sciData[l.id]) useStore.getState().set({ sciData: { ...useStore.getState().sciData, [l.id]: data } });
+        const url = await scienceUrl(area.layers.grid, data, l.display?.min ?? 0, l.display?.max ?? 1, scienceRamp(area, l.id));
+        sciUrls.current[l.id] = url;
+        (map.getSource(`sci-${l.id}`) as ImageSource | undefined)?.updateImage({ url, coordinates: gridCoords(area) });
+      })();
+    }
+  }, [ready, sci, sciData, area]);
+
   // ---------- rings ----------
   const rings = useStore((s) => s.rings);
   const ringMarkers = useRef<maplibregl.Marker[]>([]);
@@ -435,10 +734,10 @@ export function MapView() {
       if (!outline.length) continue;
       const el = document.createElement("div");
       el.className = "ring-label";
-      const isLimit = r.budgetS === Math.max(...rings.map((x) => x.budgetS));
-      el.textContent = isLimit ? `Limit ${fmtDur(r.budgetS)}` : fmtDur(r.budgetS);
+      const isLimit = r.kind ? r.kind === "limit" : r.budgetS === Math.max(...rings.map((x) => x.budgetS));
+      el.textContent = isLimit ? `Limit${r.limitedBy ? ` · ${r.limitedBy}` : ""}` : fmtDur(r.budgetS);
       el.title = isLimit
-        ? `Walk limit: ground you can reach and get back from in ${fmtDur(r.budgetS)} of walking, leaving time for one stop`
+        ? `Walk limit: the farthest you can go, work one stop and still get home with the reserve intact on time, energy and oxygen${r.limitedBy ? `. Here ${r.limitedBy} runs out first` : ""}`
         : `Reachable and back to the start in ${fmtDur(r.budgetS)} of walking (round trip)`;
       if (isLimit) el.classList.add("limit");
       ringMarkers.current.push(new maplibregl.Marker({ element: el, anchor: "bottom" }).setLngLat(outline[0] as [number, number]).addTo(map));
@@ -576,9 +875,19 @@ export function MapView() {
   // ---------- 3D ----------
   const view3d = useStore((s) => s.view3d);
   const exaggeration = useStore((s) => s.exaggeration);
+  const last3d = useRef(false);
   useEffect(() => {
     const map = mapInstance;
     if (!ready || !map) return;
+    const byTilt = tiltDriven;
+    tiltDriven = false;
+    // Only a 2D/3D switch moves the camera; changing the vertical scale must not.
+    const switched = last3d.current !== view3d;
+    last3d.current = view3d;
+    // Tilt gestures work from the flat map too (they switch 3D on), so only a map without elevation is locked flat.
+    map.setMaxPitch(area.layers.elevation ? 80 : 0);
+    if (area.layers.elevation) map.touchPitch.enable();
+    else map.touchPitch.disable();
     if (view3d && area.layers.elevation) {
       map.setTerrain({ source: "dem", exaggeration });
       // The camera keeps its altitude above the *centre* elevation; refresh it once DEM tiles are
@@ -588,10 +897,16 @@ export function MapView() {
         if (e != null) map.jumpTo({ elevation: e });
       };
       map.once("idle", lift);
-      if (map.getPitch() < 30) map.easeTo({ pitch: 60, bearing: map.getBearing() || -20, duration: 900 });
+      // The 3D button swings the camera down; a tilt gesture is already holding it where the user wants.
+      if (switched && !byTilt && map.getPitch() < 30) map.easeTo({ pitch: 60, bearing: map.getBearing() || -20, duration: 900 });
     } else {
       map.setTerrain(null);
-      if (map.getPitch() > 0) map.easeTo({ pitch: 0, bearing: 0, duration: 600 });
+      // The 2D button levels the camera and faces north; levelling by gesture keeps the heading.
+      if (switched && !byTilt && map.getPitch() > 0) {
+        levelling = true;
+        map.once("moveend", () => (levelling = false));
+        map.easeTo({ pitch: 0, bearing: 0, duration: 600 });
+      }
     }
   }, [ready, view3d, exaggeration, area]);
 

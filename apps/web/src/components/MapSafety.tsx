@@ -2,7 +2,7 @@
 import { useEffect } from "react";
 import maplibregl from "maplibre-gl";
 import { selectedResult, usableTimeS, useStore } from "../store";
-import { fmtEnergy } from "../format";
+import { fmtEnergy, fmtO2 } from "../format";
 import { fmtMin as fmtDur } from "./SafetyBudget";
 import { getMap, RELAYOUT_LABELS } from "../map/MapView";
 import { PNR_METHOD_NOTE, usePnr } from "../usePnr";
@@ -60,17 +60,21 @@ export function MapSafety() {
   const ft = t.timeUsedFraction ?? t.totalTimeS / usableT;
   const fe = t.energyUsedFraction ?? t.energyKJ / usableE;
   const ok = t.withinLimits;
-  const over = t.limitingFactor === "energy" ? "Over O₂" : "Over time";
+  const fo = t.o2UsedFraction;
+  const over = t.limitingFactor === "oxygen" ? "Over O₂" : t.limitingFactor === "energy" ? "Over energy" : "Over time";
   return (
     <div className={`map-safety ${ok ? "is-ok" : "is-bad"}`}>
       <div className="ms-head">
         <span className="ms-title">Suit</span>
-        <span className={`ms-state ${ok ? "is-ok" : "is-bad"}`} title={ok ? "Time and O₂ / energy both inside the usable budget" : `Over the usable ${t.limitingFactor ?? ""} budget`}>
+        <span className={`ms-state ${ok ? "is-ok" : "is-bad"}`} title={ok ? "Time, energy and oxygen all inside the usable budget" : `Over the usable ${t.limitingFactor ?? ""} budget`}>
           {ok ? "Within limits" : over}
         </span>
       </div>
       <MiniBar label="Time" f={ft} text={`${fmtDur(t.totalTimeS)} of ${fmtDur(usableT)} usable (limit ${fmtDur(params.evaLimitS)} minus ${Math.round(params.reserveFraction * 100)}% reserve)`} />
-      <MiniBar label="O₂" f={fe} text={`${fmtEnergy(t.energyKJ)} of ${fmtEnergy(usableE)} usable metabolic energy (oxygen proxy)`} />
+      <MiniBar label="Energy" f={fe} text={`${fmtEnergy(t.energyKJ)} of ${fmtEnergy(usableE)} usable metabolic energy`} />
+      {fo != null && t.o2Kg != null && (
+        <MiniBar label="O₂" f={fo} text={`${fmtO2(t.o2Kg)} of ${fmtO2((params.o2BudgetKg ?? 0) * (1 - params.reserveFraction))} usable oxygen (breathing + leakage, modelled)`} />
+      )}
       {pnr && (
         <div
           className={`ms-pnr ${pnr.kind}`}

@@ -41,12 +41,16 @@ function runPlan(id: number, points: LonLat[], dwellS: number[], params: WalkPar
   post({ type: "plan", id, results, ms: performance.now() - t0 });
 }
 
-function runReach(id: number, start: LonLat, params: WalkParams, profileId: string, budgetsS: number[]) {
+function runReach(id: number, start: LonLat, params: WalkParams, profileId: string, budgetsS: number[], dwellS: number) {
   const t0 = performance.now();
   const profiles = core.DEFAULT_PROFILES ?? [];
   const profile = profiles.find((p) => p.id === profileId) ?? profiles[0]!;
   const reach = core.computeReach!(layers!, params, profile, start);
-  const rings = core.reachRings!(layers!.grid, reach, budgetsS);
+  // Fixed time rings, then the real limit (time, energy and oxygen together) as the outermost ring.
+  const usableS = params.evaLimitS * (1 - params.reserveFraction) - dwellS;
+  const rings = core.walkLimitRing
+    ? [...core.reachRings!(layers!.grid, reach, budgetsS), core.walkLimitRing(layers!.grid, reach, params, dwellS)]
+    : core.reachRings!(layers!.grid, reach, [...budgetsS, Math.max(0, usableS)]);
   const out = reach.outTimeS.slice();
   const back = reach.backTimeS.slice();
   const backE = reach.backEnergyKJ.slice();
@@ -69,7 +73,7 @@ function drain() {
     }
     try {
       if (m.type === "plan") runPlan(m.id, m.points, m.dwellS, m.params);
-      else if (m.type === "reach") runReach(m.id, m.start, m.params, m.profileId, m.budgetsS);
+      else if (m.type === "reach") runReach(m.id, m.start, m.params, m.profileId, m.budgetsS, m.dwellS);
     } catch (e) {
       post({ type: "error", kind, id: "id" in m ? m.id : undefined, message: String((e as Error)?.message ?? e) });
     }

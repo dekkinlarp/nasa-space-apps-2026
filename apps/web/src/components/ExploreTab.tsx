@@ -1,7 +1,7 @@
 import { useState } from "react";
 import { useStore } from "../store";
 import { getMap } from "../map/MapView";
-import { POI_TYPE_LABEL } from "./Cards";
+import { POI_TYPE_LABEL, PriorityTag } from "./Cards";
 import type { Poi, PoiType } from "../types";
 
 const ORDER: PoiType[] = ["drill-site", "science-target", "viewpoint", "start"];
@@ -82,7 +82,7 @@ export function ExploreTab() {
             </p>
             <p>
               A crew can cross from ridge to hollow, sample ridge walls, dig under the sand and trace the network in a single six-hour EVA. Pick a start,
-              add stops, and the planner checks the walk against time, energy and slope limits.
+              add stops, and the planner checks the walk against time, energy, oxygen and slope limits.
             </p>
           </>
         )}
@@ -114,6 +114,7 @@ export function ExploreTab() {
                   <div>
                     <div className="poi-name">
                       {p.name}
+                      <PriorityTag poi={p} tiny />
                       {p.positionSource === "illustrative" && (
                         <span className="badge est tiny" title="Position is illustrative, not a surveyed target">
                           illustrative

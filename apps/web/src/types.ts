@@ -2,6 +2,15 @@ import type { LayerManifest, LonLat, SurfaceClass, WalkParams, GridSpec } from "
 
 export type PoiType = "drill-site" | "science-target" | "start" | "viewpoint";
 
+export interface PoiEvidence {
+  claim: string;
+  /** rover = measured on the ground; orbital = seen from orbit; inferred = our reading of the pictures. */
+  basis: "rover" | "orbital" | "inferred";
+  source?: string;
+}
+
+export type PoiPriority = "primary" | "secondary" | "optional";
+
 export interface Poi {
   id: string;
   name: string;
@@ -16,6 +25,57 @@ export interface Poi {
   humanCan?: string;
   positionSource: string;
   sources: string[];
+  /** Planning priority for the walk's science objective. */
+  priority?: PoiPriority;
+  /** The question a stop here helps answer. */
+  objective?: string;
+  /** What the crew would do at the stop. */
+  activity?: string;
+  evidence?: PoiEvidence[];
+  /** How sure we are that the stop is where and what the card says. */
+  confidence?: "high" | "medium" | "low";
+  confidenceNote?: string;
+}
+
+export interface MineralLayerInfo {
+  id: string;
+  band: string;
+  name: string;
+  indicates: string;
+  caveat: string;
+  stats?: { coveragePct: number; positivePct: number; p50: number; p90: number; p98: number; scenePct?: Record<string, number> };
+}
+
+export interface CrismAlignment {
+  shiftPx: [number, number];
+  shiftM: [number, number];
+  corrUnshifted: number | null;
+  corrBest: number | null;
+  applied: boolean;
+}
+
+/** minerals.json, written by the pipeline's minerals step. */
+export interface Minerals {
+  observation: string;
+  mission: string;
+  acquired: string;
+  source: string;
+  parameterReference: string;
+  pixelM: number;
+  note: string;
+  coregistration: CrismAlignment & { method: string };
+  /** One entry per CRISM scene in the mosaic, first = preferred. Absent in single-scene data. */
+  scenes?: { obs: string; acquired: string; coregistration: CrismAlignment }[];
+  layers: MineralLayerInfo[];
+  poiSamples: Record<string, Record<string, { value: number | null; percentile: number | null }>>;
+}
+
+/** The parts of preview/verify-report.json the app shows. */
+export interface DataChecks {
+  generatedAt?: string;
+  georef?: { waypoints: number; meanDiffM: number; medianAbsDiffM: number; maxAbsDiffM: number };
+  slopeVsTilt?: { waypoints: number; medianSlopeDeg: number; medianTiltDeg: number; medianAbsDiffDeg: number };
+  problems?: string[];
 }
 
 export interface AppConfig {
@@ -91,6 +151,8 @@ export interface AreaData {
   layers: DisplayLayers;
   rover: RoverData;
   conditions: Conditions | null;
+  minerals: Minerals | null;
+  checks: DataChecks | null;
 }
 
 export interface Stop {

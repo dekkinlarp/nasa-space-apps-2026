@@ -12,6 +12,45 @@ export const POI_TYPE_LABEL: Record<string, string> = {
   viewpoint: "Viewpoint",
 };
 
+const PRIORITY_LABEL: Record<string, string> = { primary: "Primary objective", secondary: "Secondary objective", optional: "If time allows" };
+const BASIS_LABEL: Record<string, string> = { rover: "Rover", orbital: "Orbit", inferred: "Our reading" };
+
+export function PriorityTag({ poi, tiny }: { poi: Poi; tiny?: boolean }) {
+  if (!poi.priority) return null;
+  return <span className={`badge prio-${poi.priority} ${tiny ? "tiny" : ""}`}>{tiny ? poi.priority : PRIORITY_LABEL[poi.priority]}</span>;
+}
+
+/** What the orbital mineral layers read at the POI, next to how that compares with the rest of the area. */
+function MineralEvidence({ poi }: { poi: Poi }) {
+  const area = useStore((s) => s.area)!;
+  const m = area.minerals;
+  const samples = m?.poiSamples[poi.id];
+  if (!m || !samples) return null;
+  return (
+    <div className="kv">
+      <div className="k">
+        From orbit at this spot · CRISM {m.observation}, {m.pixelM} m pixels
+      </div>
+      <table className="minerals">
+        <tbody>
+          {m.layers.map((l) => {
+            const s = samples[l.id];
+            if (!s || s.value == null) return null;
+            return (
+              <tr key={l.id}>
+                <td>{l.name.replace(/\s*\(.*$/, "")}</td>
+                <td className={s.value > 0 ? "" : "dim"}>{s.value > 0 ? "present" : "not seen"}</td>
+                <td className="dim">{s.percentile != null ? `stronger than ${s.percentile}% of the area` : ""}</td>
+              </tr>
+            );
+          })}
+        </tbody>
+      </table>
+      <div className="small dim">One pixel covers an {m.pixelM} m patch, and sand or dust hides minerals from orbit, so "not seen" does not mean absent.</div>
+    </div>
+  );
+}
+
 export function PhotoThumb({ photo, distM }: { photo: RoverPhoto; distM?: number }) {
   return (
     <a className="photo" href={photo.sourceUrl ?? photo.url} target="_blank" rel="noreferrer" title="Open source image">
@@ -89,7 +128,30 @@ export function PoiCard({ poi }: { poi: Poi }) {
         )}
       </div>
       <h3>{poi.name}</h3>
+      <div className="badges">
+        <PriorityTag poi={poi} />
+      </div>
       <p className="lead">{poi.summary}</p>
+      {poi.objective && (
+        <div className="kv">
+          <div className="k">Question this stop answers</div>
+          <div>{poi.objective}</div>
+        </div>
+      )}
+      {poi.evidence && poi.evidence.length > 0 && (
+        <div className="kv">
+          <div className="k">Evidence</div>
+          <ul className="evidence">
+            {poi.evidence.map((e, i) => (
+              <li key={i}>
+                <span className={`basis b-${e.basis}`}>{BASIS_LABEL[e.basis] ?? e.basis}</span>
+                {e.claim}
+              </li>
+            ))}
+          </ul>
+        </div>
+      )}
+      <MineralEvidence poi={poi} />
       {poi.roverDid && (
         <div className="kv">
           <div className="k">Curiosity did</div>
@@ -106,6 +168,18 @@ export function PoiCard({ poi }: { poi: Poi }) {
         <div className="kv">
           <div className="k">A crew can</div>
           <div>{poi.humanCan}</div>
+        </div>
+      )}
+      {poi.activity && !poi.humanCan && (
+        <div className="kv">
+          <div className="k">At the stop</div>
+          <div>{poi.activity}</div>
+        </div>
+      )}
+      {poi.confidence && (
+        <div className="kv">
+          <div className="k">Confidence · {poi.confidence}</div>
+          <div className="small">{poi.confidenceNote}</div>
         </div>
       )}
       <PointStats lonLat={ll} />

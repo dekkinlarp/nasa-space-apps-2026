@@ -2,7 +2,7 @@ import type { LonLat, RouteResult, SurfaceClass, WalkParams } from "@marsmap/cor
 import { marsDistanceM, measure, type Measured } from "./geo";
 import type { DisplayLayers, RoverPhoto, StartPoint, Stop } from "./types";
 import { cellIndex } from "./geo";
-import { fmtDur, fmtEnergy } from "./format";
+import { fmtDur, fmtEnergy, fmtO2 } from "./format";
 
 export function nearestPhoto(photos: RoverPhoto[], p: LonLat): { photo: RoverPhoto; distM: number } | null {
   let best: RoverPhoto | null = null, bd = Infinity;
@@ -48,8 +48,11 @@ export function limitMessage(r: RouteResult, names: string[], params: WalkParams
   const who = names[i + 1] ?? `segment ${i + 1}`;
   const usableT = params.evaLimitS * (1 - params.reserveFraction);
   const usableE = params.energyBudgetKJ * (1 - params.reserveFraction);
+  const usableO = (params.o2BudgetKg ?? 0) * (1 - params.reserveFraction);
   const factor =
-    t.limitingFactor === "energy"
+    t.limitingFactor === "oxygen"
+      ? `the oxygen supply (${fmtO2(t.o2Kg ?? NaN)} needed vs ${fmtO2(usableO)} usable after reserve)`
+      : t.limitingFactor === "energy"
       ? `the energy budget (${fmtEnergy(t.energyKJ)} needed vs ${fmtEnergy(usableE)} usable after reserve)`
       : `the EVA time budget (${fmtDur(t.totalTimeS)} needed vs ${fmtDur(usableT)} usable after reserve)`;
   return `Reaching ${who} breaks ${factor}. Remove or reorder stops, shorten dwell times, or pick a closer start.`;
