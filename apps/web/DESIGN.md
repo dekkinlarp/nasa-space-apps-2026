@@ -15,8 +15,8 @@ colors:
   seam: "rgba(255, 255, 255, 0.07)"
   seam-2: "rgba(255, 255, 255, 0.13)"
   seam-3: "rgba(255, 255, 255, 0.32)"
-  glass: "rgba(17, 19, 23, 0.78)"
-  glass-thick: "rgba(15, 17, 20, 0.92)"
+  glass: "rgba(17, 19, 23, 0.89)"
+  glass-thick: "rgba(17, 19, 23, 0.89)"
   ok: "#4cc38a"
   warn: "#e5a93c"
   bad: "#f2594b"
@@ -165,8 +165,8 @@ one meaning.
   (6.7:1 over dark ground); on lighter surfaces such as a selected row, step up to Ink 2. Ink 4 is for marks
   such as grips and hatching, not text: about 3.3:1.
 - **Seams** (white at 7%, 13% and 32%): hairlines, input borders, and hover or dashed borders.
-- **Glass** (rgba(17,19,23,0.78)) and **Thick Glass** (rgba(15,17,20,0.92)): the floating material,
-  with a 12% white edge and a 28px blur. The edge is always drawn over the glass, never over bare ground, so
+- **Glass** (rgba(17,19,23,0.89)): the one floating material, 89% opaque on every surface, with a 12% white
+  edge and a 28px blur. `glass-thick` is the same value; the name remains for the surfaces that use it. The edge is always drawn over the glass, never over bare ground, so
   every panel's edge reads the same; a panel whose glass is an inner layer (`glass-host`) carries its edge on that layer.
 
 ### Status and data
@@ -287,7 +287,8 @@ Buttons are skeuomorphic: small solid things lit from above, not flat fills.
 - No filled pills: a count (the stops on the Plan tab) is a badge like any other.
 
 ### Panels and cards
-- **Material:** glass, with a 12% white edge and a float shadow. The side panel uses thick glass.
+- **Material:** glass at 89%, with a 12% white edge and a float shadow. The side panel, the cards, the bars and
+  the map labels are all the same glass, so no window reads darker than another.
 - **One component:** every floating surface is a `Panel` or takes its classes from `panelVariants`. That
   includes everything that pops up: info notes, popovers and select menus are glass by default, with the
   12px corner, so a new popover matches without asking for anything. No surface sets its own radius, fill or
