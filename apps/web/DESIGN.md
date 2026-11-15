@@ -339,9 +339,9 @@ countdown and place names all use it. This is the one place the map is skeuomorp
 raised controls and the segmented meters: lit from above, drawn with shadows only.
 
 - **The plate:** 18px tall, 4px corner, 11px medium in the mono face, on the panels' own Glass fill (a faded
-  black the ground shows through a little, not solid black; no blur, since there are many plates). No border: `shadow-plate`
-  gives it a dark keyline, a bright top lip with a soft highlight under it, a dark bottom edge and a short
-  shadow on the ground.
+  black the ground shows through a little, not solid black; no blur, since there are many plates). No border: it takes
+  the same relief as a filled button (`shadow-raised-strong`), so labels and buttons are lit alike: a dark
+  keyline, a soft highlight across the top, faint shade along the bottom and a short shadow on the ground.
 - **The text** is cut in: a 1px dark line above the letters. Ink 2 for a plain measure (a ring's time), Ink
   for a place, an event or a limit. Sentence case.
 - **Status shows once, on a mark** (`MAP_LABEL_MARK`): the label's icon, or a 6px lamp with a highlight, a dark

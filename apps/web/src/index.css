@@ -124,11 +124,8 @@
   --shadow-pressed: 0 0 0 1px rgba(0, 0, 0, 0.55), inset 0 2px 4px rgba(0, 0, 0, 0.4);
   /* The thumb of a switch, slider, tab bar or segmented control: the same raised recipe at a smaller scale. */
   --shadow-thumb: 0 1px 2px rgba(0, 0, 0, 0.35), 0 0 0 1px rgba(0, 0, 0, 0.4), inset 0 1px 0 rgba(255, 255, 255, 0.1), inset 0 0 0 1px rgba(255, 255, 255, 0.06);
-  /* A label on the map is a small black plate lit from above, like the raised controls: a dark keyline, a
-     bright top lip, a soft highlight under it, a dark bottom edge and a short shadow on the ground. */
-  --shadow-plate:
-    0 2px 3px rgba(0, 0, 0, 0.55), 0 0 0 1px rgba(0, 0, 0, 0.85), inset 0 1px 0 rgba(255, 255, 255, 0.24), inset 0 4px 5px -2px rgba(255, 255, 255, 0.09),
-    inset 0 -1px 0 rgba(0, 0, 0, 0.7);
+  /* A label on the map is a small plate with the same relief as a filled button (shadow-raised-strong), not a
+     recipe of its own: one light on every raised thing. */
   /* A dot on the map (a place pin, a post's foot) is a small dome lit from above, to match the plates: a dark
      keyline, a light ring so it holds on dark ground, a short shadow on the ground, a highlight under its top
      edge and shade under its lower half. Drawn with shadows only, so the dome's colour stays one token.
