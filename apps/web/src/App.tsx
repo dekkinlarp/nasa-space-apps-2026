@@ -4,7 +4,7 @@ import { loadArea, pickArea } from "./data";
 import { startEngine } from "./engine";
 import { getMap, MapView, setMapInsets } from "./map/MapView";
 import { pictureGroup } from "./map/imageryTiles";
-import { ChevronLeftIcon, CircleHelpIcon } from "lucide-react";
+import { CircleHelpIcon } from "lucide-react";
 import { SidebarIcon } from "./components/icons";
 import { Button } from "@/components/ui/button";
 import { Badge } from "@/components/ui/badge";
@@ -16,6 +16,7 @@ import { Slider } from "@/components/ui/slider";
 import { Spinner } from "@/components/ui/spinner";
 import { Tabs, TabsContent, TabsList, TabsTrigger } from "@/components/ui/tabs";
 import { Starfield } from "./map/Starfield";
+import { EdgeBlur, useScrollEdges } from "@/components/ui/scroll-edge";
 import { cn } from "@/lib/utils";
 import { SiteHeader } from "./components/SiteHeader";
 import { ExploreTab } from "./components/ExploreTab";
@@ -26,8 +27,8 @@ import { PoiCard, WaypointCard } from "./components/Cards";
 import { ProfileStrip } from "./components/ProfileStrip";
 import { GoPanel } from "./components/GoPanel";
 import { GoWalker } from "./components/GoWalker";
-import { MapLegend } from "./components/MapLegend";
 import { MapSafety } from "./components/MapSafety";
+import { StatusBar } from "./components/StatusBar";
 
 let loadStarted = false;
 
@@ -51,15 +52,38 @@ const SHELL =
 /** Phones and short landscape screens give the profile's room to the open sheet. */
 const SHELL_OPEN =
   "sheet-open [--sheet-h:0px] [--stage-left:calc(var(--side-w)+var(--gap)*2)] sheet:[--sheet-h:46dvh] phone:[--dock:0px]! phone:[--sheet-h:50dvh] squat:[--dock:0px]! squat:[--sheet-h:56dvh]";
-const SHELL_CLOSED = "sheet-closed [--sheet-h:0px] [--stage-left:var(--gap)] sheet:[--sheet-h:calc(58px+env(safe-area-inset-bottom))]";
+/** Folded, the sheet is its grabber, tab bar and status bar. */
+const SHELL_CLOSED = "sheet-closed [--sheet-h:0px] [--stage-left:var(--gap)] sheet:[--sheet-h:calc(var(--sheet-peek)+var(--foot))]";
+/** Pulled all the way up, the sheet leaves a strip of map at the top; the floating controls step aside. */
+const SHELL_FULL = "sheet-full sheet:[--sheet-h:calc(100dvh-64px)]!";
+/** Height of the status bar. On the bottom-sheet layout it is the sheet's last row, so the folded sheet is this much taller. Keep in step with --status-h in index.css. */
+const STATUS_H = 28;
+/** Height of the folded sheet. Touch screens get taller tabs, so a taller fold. Keep in step with --sheet-peek in index.css. */
+const sheetPeek = () => (typeof matchMedia === "function" && matchMedia("(pointer: coarse)").matches ? 84 : 76);
 
-/** The side panel leaves and returns by the left edge; under 860 px it is a bottom sheet that folds to its tab bar. */
+/** The side panel leaves and returns by the left edge; under 860 px it is a bottom sheet that folds to its tab bar.
+    It does not clip its overflow: in Chrome a rounded overflow clip stops the masks on the edge blur's layers
+    from applying, and each strip then renders as one solid frosted block. Nothing in it needs the clip.
+    The sheet keeps the same gap from the left and right edges as the other panels and sits flush on the bottom edge; the status bar is its last row. */
 const SIDE =
-  "glass-thick absolute top-[max(var(--gap),env(safe-area-inset-top))] bottom-(--gap) left-[max(var(--gap),env(safe-area-inset-left))] z-3 min-h-0 w-(--side-w) gap-0 overflow-hidden rounded-2xl shadow-float [transition:translate_var(--panel-ms)_var(--spring),visibility_0s] sheet:inset-x-0 sheet:top-auto sheet:bottom-0 sheet:h-(--sheet-h) sheet:w-auto sheet:rounded-b-none sheet:border-b-0 sheet:pb-[env(safe-area-inset-bottom)] sheet:[transition:height_var(--panel-ms)_var(--spring)]";
+  "glass-thick glass-host absolute! top-[max(var(--gap),env(safe-area-inset-top))] bottom-(--gap) left-[max(var(--gap),env(safe-area-inset-left))] z-3 min-h-0 w-(--side-w) gap-0 rounded-2xl shadow-float [transition:translate_var(--panel-ms)_var(--spring),visibility_0s] sheet:top-auto sheet:right-[max(var(--gap),env(safe-area-inset-right))] sheet:bottom-0 sheet:h-(--sheet-h) sheet:w-auto sheet:rounded-t-3xl sheet:rounded-b-none sheet:border-b-0 sheet:[transition:height_var(--panel-ms)_var(--spring)]";
 const SIDE_CLOSED = "wide:invisible wide:-translate-x-[calc(100%+var(--gap)*2)] wide:[transition:translate_var(--panel-ms)_var(--spring),visibility_0s_linear_var(--panel-ms)]";
 
 const TAB_BODY =
-  "tab-body scrollbar-thin overflow-y-auto px-4 pt-4 pb-10 text-base sheet:touch-pan-y sheet:overscroll-contain sheet:pt-3 sheet:pr-[max(16px,env(safe-area-inset-right))] sheet:pb-7 sheet:pl-[max(16px,env(safe-area-inset-left))] sheet:in-[.sheet-closed]:hidden";
+  "tab-body scrollbar-thin overflow-y-auto px-4 pt-4 pb-10 text-base sheet:touch-pan-y sheet:overscroll-contain sheet:pt-3 sheet:pr-[max(var(--gutter),env(safe-area-inset-right))] sheet:pb-7 sheet:pl-[max(var(--gutter),env(safe-area-inset-left))] sheet:in-[.sheet-closed]:hidden";
+
+/** Whether a media query matches, kept current as the window changes. */
+function useMediaQuery(query: string) {
+  const [matches, setMatches] = useState(() => typeof matchMedia === "function" && matchMedia(query).matches);
+  useEffect(() => {
+    const mq = matchMedia(query);
+    const on = () => setMatches(mq.matches);
+    on();
+    mq.addEventListener("change", on);
+    return () => mq.removeEventListener("change", on);
+  }, [query]);
+  return matches;
+}
 
 const narrowScreen = () => typeof matchMedia === "function" && matchMedia("(max-width: 860px)").matches;
 
@@ -93,7 +117,7 @@ function GestureHint({ view3d }: { view3d: boolean }) {
       <PopoverTrigger render={<Button variant="glass" size="icon-xl" aria-label="Map gestures" title="Map gestures" />}>
         <CircleHelpIcon className="size-[18px]" aria-hidden />
       </PopoverTrigger>
-      <PopoverContent align="end" sideOffset={8} className="glass bg-glass w-max max-w-[min(380px,calc(100vw-24px))] rounded-xl px-4 py-3 shadow-float-sm ring-0">
+      <PopoverContent side="top" align="end" sideOffset={8} className="glass bg-glass w-max max-w-[min(380px,calc(100vw-24px))] rounded-xl px-4 py-3 shadow-float-sm ring-0">
         <dl className="m-0 grid gap-1.5 text-sm" onClick={() => setOpen(false)}>
           {rows.map(([k, v]) => (
             <div key={k} className="flex justify-between gap-4">
@@ -107,10 +131,67 @@ function GestureHint({ view3d }: { view3d: boolean }) {
   );
 }
 
+/**
+ * The bottom sheet's handle, as on a phone's maps app: drag it up or down to move between the sheet's
+ * three heights, or tap it to step up (and back down from full). The sheet follows the finger while dragging.
+ */
+function SheetGrabber({ open, full, onGrow, onShrink, sheet }: { open: boolean; full: boolean; onGrow: () => void; onShrink: () => void; sheet: React.RefObject<HTMLElement | null> }) {
+  const drag = useRef<{ y: number; h: number; moved: boolean } | null>(null);
+  const release = () => {
+    const el = sheet.current;
+    if (!el) return;
+    el.style.height = "";
+    el.style.transition = "";
+  };
+  return (
+    <button
+      type="button"
+      className="hidden h-5 w-full flex-none cursor-grab touch-none items-end justify-center outline-offset-[-2px] sheet:flex active:cursor-grabbing"
+      aria-label={!open ? "Open the panel" : full ? "Shrink the panel" : "Expand the panel"}
+      aria-expanded={open}
+      onPointerDown={(e) => {
+        const el = sheet.current;
+        if (!el) return;
+        drag.current = { y: e.clientY, h: el.getBoundingClientRect().height, moved: false };
+        e.currentTarget.setPointerCapture(e.pointerId);
+      }}
+      onPointerMove={(e) => {
+        const d = drag.current, el = sheet.current;
+        if (!d || !el) return;
+        const dy = e.clientY - d.y;
+        if (!d.moved && Math.abs(dy) < 6) return;
+        d.moved = true;
+        el.style.transition = "none";
+        el.style.height = `${Math.max(sheetPeek() + STATUS_H, Math.min(window.innerHeight - 64, d.h - dy))}px`;
+      }}
+      onPointerUp={(e) => {
+        const d = drag.current;
+        drag.current = null;
+        if (!d) return;
+        release();
+        const dy = e.clientY - d.y;
+        // A drag of a few dozen pixels moves one height in its direction; a tap is handled by onClick.
+        if (d.moved && Math.abs(dy) > 32) (dy < 0 ? onGrow : onShrink)();
+        if (d.moved) e.currentTarget.dataset.dragged = "1";
+      }}
+      onPointerCancel={() => {
+        drag.current = null;
+        release();
+      }}
+      onClick={(e) => {
+        if (e.currentTarget.dataset.dragged) return void delete e.currentTarget.dataset.dragged;
+        (full ? onShrink : onGrow)();
+      }}
+    >
+      <span className="h-[5px] w-9 rounded-full bg-white/28" aria-hidden />
+    </button>
+  );
+}
+
 /** 3D render distance choices: side of the square of ground drawn around where the camera looks, km. */
 const RENDER_DISTANCES = [2, 4, 8, 16].map((km) => ({ value: String(km), label: `${km} × ${km} km` }));
 
-/** Top-right of the map: how the map is viewed. The vertical-scale slider and render distance appear beside it in 3D. */
+/** Bottom-right of the map: how the map is viewed. The vertical-scale slider and render distance appear beside it in 3D. */
 function ViewControls() {
   const view3d = useStore((s) => s.view3d);
   const ex = useStore((s) => s.exaggeration);
@@ -118,7 +199,7 @@ function ViewControls() {
   const set = useStore((s) => s.set);
   const hasElev = useStore((s) => !!s.area?.overview.elevation);
   return (
-    <div className="pointer-events-auto flex items-center gap-2">
+    <div className="pointer-events-auto flex flex-none items-center gap-2 sheet:basis-full sheet:justify-end">
       {view3d && (
         <Panel className="view-ctl flex h-11 items-center gap-3 px-4 text-ink-2 phone:hidden">
           <span className="text-sm whitespace-nowrap">Vertical ×{ex}</span>
@@ -169,7 +250,19 @@ export function App() {
   // The side panel can be collapsed: on wide screens it leaves the map the whole window,
   // on narrow ones it is a bottom sheet that folds down to its tab bar.
   const [sheetOpen, setSheetOpen] = useState(true);
+  // The bottom sheet rests at three heights: folded to its tab bar, half, and full.
+  const [sheetFull, setSheetFull] = useState(false);
+  const foldSheet = () => {
+    setSheetFull(false);
+    setSheetOpen(false);
+  };
+  const growSheet = () => (sheetOpen ? setSheetFull(true) : setSheetOpen(true));
+  const shrinkSheet = () => (sheetFull ? setSheetFull(false) : foldSheet());
+  // The bottom-sheet layout, as state: the status bar is rendered in a different place on it.
+  const narrow = useMediaQuery("(max-width: 860px)");
   const sideRef = useRef<HTMLElement>(null);
+  // Which edges of the open tab have content running off them, for the dissolve at those edges.
+  const edges = useScrollEdges(sideRef, ".tab-body", [tab, sheetOpen, sheetFull, !!area]);
   const dockRef = useRef<HTMLDivElement>(null);
 
   // The map runs under the floating chrome, so tell it which part is covered: its centre, and anything
@@ -182,7 +275,7 @@ export function App() {
       if (!side) return;
       const s = side.getBoundingClientRect();
       const dockH = dock ? dock.getBoundingClientRect().height + 12 : 0;
-      if (narrowScreen()) setMapInsets({ top: 56, bottom: (sheetOpen ? s.height : 58) + dockH }, ms);
+      if (narrowScreen()) setMapInsets({ top: 56, bottom: (sheetOpen ? s.height : sheetPeek() + STATUS_H) + dockH }, ms);
       else setMapInsets({ top: 56, left: sheetOpen ? s.right : 0, bottom: dockH }, ms);
     };
     apply(PANEL_MS);
@@ -269,14 +362,13 @@ export function App() {
     );
 
   return (
-    <div className={cn(SHELL, sheetOpen ? SHELL_OPEN : SHELL_CLOSED)}>
+    <div className={cn(SHELL, sheetOpen ? SHELL_OPEN : SHELL_CLOSED, sheetOpen && sheetFull && SHELL_FULL)}>
       {/* The map is the whole window; everything else floats over it. */}
       {/* isolate: a raised marker (hovered, selected) stacks among the markers, never above the panels. */}
       <div className="absolute inset-0 isolate bg-background">
         <Starfield />
         <MapView />
         <GoWalker />
-        <div className="pointer-events-none absolute bottom-[calc(var(--sheet-h)+2px)] left-1/2 max-w-[60%] -translate-x-1/2 truncate text-xs text-white/50 text-shadow-[0_1px_2px_#000] in-[.app:has(.profile)]:hidden">{area.manifest.imagery.find((i) => pictureGroup(i) === baseImagery)?.source ?? ""}</div>
       </div>
 
       <Tabs
@@ -285,9 +377,12 @@ export function App() {
         render={<aside ref={sideRef} />}
         className={cn(SIDE, !sheetOpen && SIDE_CLOSED)}
       >
+        {/* The glass, as a layer behind the content (see glass-host in index.css). */}
+        <i className="glass-layer-thick" aria-hidden />
+        <SheetGrabber open={sheetOpen} full={sheetFull} onGrow={growSheet} onShrink={shrinkSheet} sheet={sideRef} />
         <SiteHeader onCollapse={() => setSheetOpen(false)} />
         <nav
-          className="tabs flex flex-none gap-2 border-b px-4 pb-3 sheet:p-3 sheet:pl-[max(12px,env(safe-area-inset-left))] sheet:in-[.sheet-closed]:border-b-0"
+          className="tabs flex flex-none gap-2 border-b px-4 pb-3 sheet:pt-2.5 sheet:pr-[max(var(--gutter),env(safe-area-inset-right))] sheet:pl-[max(var(--gutter),env(safe-area-inset-left))] sheet:in-[.sheet-closed]:border-b-0"
           aria-label="Sections"
         >
           <TabsList className="flex-1 gap-0.5 rounded-[9px] bg-white/6 p-0.5 group-data-horizontal/tabs:h-auto">
@@ -296,7 +391,7 @@ export function App() {
                 key={t.id}
                 value={t.id}
                 // On the bottom sheet, tapping the open tab again folds it; any other tap opens it.
-                onClick={() => setSheetOpen(tab === t.id && narrowScreen() ? !sheetOpen : true)}
+                onClick={() => (tab === t.id && narrowScreen() && sheetOpen ? foldSheet() : setSheetOpen(true))}
                 className="h-[30px] rounded-[7px] text-sm text-ink-2 coarse:h-[38px] data-active:bg-white/16 data-active:text-foreground data-active:shadow-thumb"
               >
                 {t.label}
@@ -308,18 +403,12 @@ export function App() {
               </TabsTrigger>
             ))}
           </TabsList>
-          <Button
-            variant="ghost"
-            size="icon"
-            className="sheet-toggle hidden flex-[0_0_40px] text-ink-2 sheet:inline-flex"
-            aria-label={sheetOpen ? "Hide panel" : "Show panel"}
-            title={sheetOpen ? "Hide panel" : "Show panel"}
-            aria-expanded={sheetOpen}
-            onClick={() => setSheetOpen(!sheetOpen)}
-          >
-            <ChevronLeftIcon className={cn("size-4 transition-transform", sheetOpen ? "sheet:-rotate-90" : "sheet:rotate-90")} />
-          </Button>
         </nav>
+        {/* Text scrolling out under the tab bar or off the foot of the panel is blurred progressively, more
+            toward the edge. Each strip shows only at an edge with more content beyond it. */}
+        <div className="relative z-1 h-0 flex-none sheet:in-[.sheet-closed]:hidden">
+          <EdgeBlur side="top" show={edges.top} className="h-4" />
+        </div>
         <TabsContent value="explore" className={TAB_BODY}>
           <ExploreTab />
         </TabsContent>
@@ -329,35 +418,37 @@ export function App() {
         <TabsContent value="layers" className={TAB_BODY}>
           <LayersTab />
         </TabsContent>
+        <EdgeBlur side="bottom" show={edges.bottom} className="z-1 h-7 rounded-b-2xl sheet:bottom-(--foot) sheet:rounded-none sheet:in-[.sheet-closed]:hidden" />
+        {narrow && <StatusBar inSheet />}
       </Tabs>
 
       {/* The stage is the part of the map the side panel leaves visible. Floating pieces are laid out in it. */}
-      <div className="pointer-events-none absolute top-[max(var(--gap),env(safe-area-inset-top))] right-[max(var(--gap),env(safe-area-inset-right))] bottom-[calc(var(--sheet-h)+var(--gap))] left-(--stage-left) z-2 flex min-h-0 flex-col gap-(--gap) transition-[left] duration-(--panel-ms) ease-spring sheet:transition-[bottom]">
-        {/* One row of controls. The map key hangs from it when open, over the map, without pushing the cards down. */}
-        <div className="flex h-11 flex-none items-start gap-2 sheet:relative">
+      <div className="pointer-events-none absolute top-[max(var(--gap),env(safe-area-inset-top))] right-[max(var(--gap),env(safe-area-inset-right))] bottom-[calc(var(--sheet-h)+var(--gap))] left-(--stage-left) z-2 flex min-h-0 flex-col gap-(--gap) transition-[left] duration-(--panel-ms) ease-spring sheet:transition-[bottom] sheet:in-[.sheet-full]:hidden">
+        {/* Top-left: the button that brings back a hidden side panel, with the hover readout beside it.
+            Cards sit at the right; on the bottom-sheet layout they move left, clear of the zoom buttons. */}
+        <div className="flex min-h-0 flex-1 items-start justify-end gap-2 sheet:relative sheet:justify-start">
           {!sheetOpen && (
-            <Button variant="glass" size="icon-xl" className="pointer-events-auto sheet:hidden" aria-label="Show sidebar" title="Show sidebar" aria-expanded={false} onClick={() => setSheetOpen(true)}>
+            <Button variant="glass" size="icon-lg" className="pointer-events-auto flex-none rounded-xl coarse:size-11 sheet:hidden" aria-label="Show sidebar" title="Show sidebar" aria-expanded={false} onClick={() => setSheetOpen(true)}>
               <SidebarIcon on={false} />
             </Button>
           )}
-          <MapLegend />
-          <span className="flex-1" />
-          <ViewControls />
-        </div>
-        {/* Cards sit at the right; on the bottom-sheet layout they move left, clear of the zoom buttons. */}
-        <div className="flex min-h-0 flex-1 items-start justify-end sheet:relative sheet:justify-start">
-          <div className="card-slot relative z-5 flex max-h-[calc(100%-144px)] w-[340px] max-w-full flex-col compact:w-[300px] sheet:max-h-full phone:max-h-[62%] phone:w-full sheet:in-[.app:has(.go-panel)]:hidden">{poi ? <PoiCard poi={poi} /> : wp ? <WaypointCard /> : null}</div>
+          <HoverReadout />
+          <span className="flex-1 sheet:hidden" />
+          <div className="card-slot relative z-5 flex max-h-[calc(100%-144px)] w-[340px] max-w-full flex-col mr-12 compact:w-[300px] coarse:mr-14 sheet:mr-0 sheet:max-h-full phone:mr-12 phone:max-h-[62%] phone:w-auto phone:flex-1 sheet:in-[.app:has(.go-panel)]:hidden">{poi ? <PoiCard poi={poi} /> : wp ? <WaypointCard /> : null}</div>
         </div>
         <div className="flex min-w-0 flex-none flex-col gap-(--gap)">
-          {/* The right padding leaves the corner to the zoom and compass buttons and the scale bar under them. */}
-          <div className="flex min-w-0 items-end gap-2 pr-24 sheet:pr-[52px]">
-            <HoverReadout />
+          {/* The verdict or suit meter and the Go panel, with the view controls at the right end. On the bottom-sheet layout the view controls take a line of their own, above. */}
+          <div className="flex min-w-0 items-end gap-2 sheet:flex-wrap-reverse sheet:gap-y-0">
             <span className="grow" />
             <MapSafety planVisible={sheetOpen && tab === "plan"} />
             <GoPanel />
+            <ViewControls />
           </div>
-          <div className="empty:hidden" ref={dockRef}>
+          {/* The foot of the map: the elevation dock when there is a route, then the status bar. On the bottom-sheet
+              layout the status bar is the sheet's last row instead. */}
+          <div className="flex min-w-0 flex-col gap-2 empty:hidden" ref={dockRef}>
             {hasRoute && <ProfileStrip />}
+            {!narrow && <StatusBar />}
           </div>
         </div>
       </div>

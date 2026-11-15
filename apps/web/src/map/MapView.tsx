@@ -1,3 +1,4 @@
+import { CompassControl } from "./compassControl";
 import { useEffect, useRef, useState } from "react";
 import { createPortal } from "react-dom";
 import maplibregl, { type GeoJSONSource, type ImageSource, type Map as MLMap } from "maplibre-gl";
@@ -45,6 +46,18 @@ const DEFAULT_TRACK_STATE = useStore.getState().overlays.track;
 /** True when the traverse should recede: Plan tab open and the user has not set the track layer themselves. */
 export const isTrackFaded = (tab: string, track: LayerState) => tab === "plan" && track === DEFAULT_TRACK_STATE;
 let mapReady = false;
+
+// The scale bar is MapLibre's element, moved out of its corner into a slot the app lays out.
+let scaleEl: HTMLElement | null = null;
+let scaleSlot: HTMLElement | null = null;
+const placeScaleBar = () => {
+  if (scaleEl && scaleSlot && scaleEl.parentElement !== scaleSlot) scaleSlot.appendChild(scaleEl);
+};
+/** Give the scale bar a home in the app's own layout. Safe to call before or after the map exists. */
+export function mountScaleBar(slot: HTMLElement | null) {
+  scaleSlot = slot;
+  placeScaleBar();
+}
 let pendingInsets: { top?: number; right?: number; bottom?: number; left?: number } | null = null;
 
 /**
@@ -304,7 +317,7 @@ export const RELAYOUT_LABELS = "marsmap:relayout-labels";
 type Box = { l: number; t: number; r: number; b: number };
 const boxesHit = (a: Box, b: Box) => a.l < b.r && a.r > b.l && a.t < b.b && a.b > b.t;
 /** Map furniture a ring label must not sit under (relative to the map container). */
-const LABEL_OBSTACLES = ".view-ctl, .maplibregl-ctrl-top-right, .map-legend, .readout, .card-slot > *, .go-panel, .map-safety, .profile, .maplibregl-ctrl-bottom-right";
+const LABEL_OBSTACLES = ".view-ctl, .maplibregl-ctrl-top-right, .map-legend, .readout, .card-slot > *, .go-panel, .map-safety, .profile, .status-bar";
 
 /** The floating panels live beside the map layer, not inside it, so obstacles are looked up from the app root. */
 const obstacleRoot = (container: HTMLElement) => container.closest(".app") ?? container.parentElement;
@@ -495,9 +508,13 @@ export function MapView() {
     mapInstance = map;
     const detachGestures = attachGestures(map);
     keepCameraAboveGround(map);
-    // Bottom-right corner, scale under the zoom buttons (controls added later stack above earlier ones).
+    // Top-right corner, stacking downward: zoom buttons, then the compass dial.
+    map.addControl(new maplibregl.NavigationControl({ showCompass: false }), "top-right");
+    map.addControl(new CompassControl(), "top-right");
+    // MapLibre draws the scale bar; the app shows it beside the view controls (see mountScaleBar).
     map.addControl(new maplibregl.ScaleControl({ unit: "metric" }), "bottom-right");
-    map.addControl(new maplibregl.NavigationControl({ visualizePitch: true }), "bottom-right");
+    scaleEl = map.getContainer().querySelector<HTMLElement>(".maplibregl-ctrl-scale");
+    placeScaleBar();
     (window as unknown as { __map: MLMap }).__map = map;
 
     map.on("load", () => {

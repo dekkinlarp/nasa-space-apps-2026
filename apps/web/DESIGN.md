@@ -211,9 +211,10 @@ pointer back, so the map stays draggable in every gap.
 
 - **Side panel:** 372px (336px under 1100px), 12px from the window edge, with header, tabs and one
   scrolling tab body. It collapses off the left edge.
-- **Top row:** map key on the left, view controls on the right, 44px tall.
+- **Top right:** zoom buttons and the compass dial stack in the corner. The top left holds only the button that brings back a hidden side panel.
 - **Middle:** the point-of-interest card on the right, 340px (300px under 1100px).
-- **Bottom row:** hover readout, verdict or suit meter, then the elevation dock, which starts folded.
+- **Top left:** the hover readout (elevation, slope, surface, distance from start). When it is too narrow for its line, the cut edge fades and blurs and the line slides to its end and back.
+- **Bottom row:** verdict or suit meter, the scale bar, the 2D/3D switch and gesture help on the right. Below it the elevation dock, which starts folded, and at the very foot a slim status bar: the map key (it opens upward), imagery credit, scale bar, and the position under the pointer.
 - **Under 860px** the side panel becomes a bottom sheet (46dvh, 50dvh on phones) that folds to its tab
   bar; cards move to the left; a one-line verdict rides on the map.
 - **Under 600px** the card takes the full width and the open sheet takes the elevation dock's room.

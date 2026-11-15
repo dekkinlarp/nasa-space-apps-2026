@@ -15,8 +15,8 @@ export function SiteHeader({ onCollapse }: { onCollapse: () => void }) {
   return (
     <>
     {/* On the bottom sheet the header is one line: where this is, and whether the data is real. */}
-    <div className="hidden flex-none items-center gap-2 px-4 pt-3 text-sm sheet:flex sheet:in-[.sheet-closed]:hidden">
-      <span className="truncate font-medium">{name}</span>
+    <div className="hidden flex-none items-center gap-2 pt-2 pr-[max(var(--gutter),env(safe-area-inset-right))] pl-[max(var(--gutter),env(safe-area-inset-left))] text-base sheet:flex sheet:in-[.sheet-closed]:hidden">
+      <span className="truncate font-semibold">{name}</span>
       {area?.synthetic && (
         <Badge variant="warning" className="flex-none">
           Synthetic test data
@@ -33,7 +33,8 @@ export function SiteHeader({ onCollapse }: { onCollapse: () => void }) {
             {engine.error ? "Routing unavailable" : "Loading routing"}
           </span>
         )}
-        <Button variant="ghost" size="icon-xs" className={cn("-mr-1 text-ink-2", engine.ready && "ml-auto")} aria-label="Hide sidebar" title="Hide sidebar" aria-expanded onClick={onCollapse}>
+        {/* Same box and icon size as the button that brings the panel back (App.tsx), so the control does not change size when toggled. */}
+        <Button variant="ghost" size="icon-lg" className={cn("-my-1 -mr-2 text-ink-2 coarse:size-11", engine.ready && "ml-auto")} aria-label="Hide sidebar" title="Hide sidebar" aria-expanded onClick={onCollapse}>
           <SidebarIcon on />
         </Button>
       </div>

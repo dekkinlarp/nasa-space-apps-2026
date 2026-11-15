@@ -98,18 +98,20 @@ export function MapLegend() {
   const trackFaded = isTrackFaded(tab, overlays.track);
 
   return (
-    <Panel className={cn("map-legend scrollbar-thin z-4 max-h-[min(60dvh,440px)] flex-none overflow-y-auto text-sm sheet:max-h-[38dvh]", open ? "w-[164px]" : "w-auto")}>
+    <div className="relative flex-none">
+      {/* Lives in the status bar; the key itself opens upward from it, over the map. */}
       <button
-        className="flex h-[42px] w-full cursor-pointer items-center justify-between gap-2 px-3 text-sm font-medium text-foreground"
+        className="-mx-1 flex h-7 cursor-pointer items-center gap-1 rounded-sm px-1 text-xs font-medium text-foreground coarse:px-2"
         onClick={toggle}
         aria-expanded={open}
         title={open ? "Hide map key" : "Show what the lines and markers mean"}
       >
         <span>Key</span>
-        <ChevronDownIcon className={cn("size-3 text-muted-foreground transition-transform", !open && "-rotate-90")} aria-hidden />
+        <ChevronDownIcon className={cn("size-3 text-muted-foreground transition-transform", !open && "rotate-180")} aria-hidden />
       </button>
+      {/* The key is solid, not glass: it opens over the readout and the map, and a blur cannot reach through the bar it hangs from. */}
       {open && (
-        <div className="px-3 pb-2">
+        <Panel className="map-legend scrollbar-thin absolute bottom-full -left-2.5 z-4 mb-2.5 max-h-[min(60dvh,440px)] w-[164px] overflow-y-auto bg-popover! px-3 py-2 text-sm text-foreground sheet:max-h-[34dvh]">
           {sel && (
             <Section title="Route slope" tip={`Route coloured by slope underfoot. Hazard from ${b.caution}°, no entry over ${b.max}°.`}>
               <div className="m-0.5 flex h-1.5 overflow-hidden rounded-[3px] shadow-[0_0_0_2px_#120c0a]">
@@ -241,8 +243,8 @@ export function MapLegend() {
                 ))}
             </Section>
           )}
-        </div>
+        </Panel>
       )}
-    </Panel>
+    </div>
   );
 }

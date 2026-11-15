@@ -135,6 +135,9 @@
   --hull-3: #1d2126; /* pressed and selected */
   --well: #0a0b0d; /* inset: inputs */
   --track: #262a31; /* meter and switch tracks */
+  /* Scrollbar thumbs: light on dark, 3.5:1 against a panel at rest and 6:1 under the pointer */
+  --scroll-thumb: rgba(232, 234, 237, 0.42);
+  --scroll-thumb-hover: rgba(232, 234, 237, 0.62);
 
   /* Hairlines */
   --seam: rgba(255, 255, 255, 0.07);
@@ -197,6 +200,15 @@
 
   /* Layout */
   --gap: 12px;
+  /* Inner padding of the bottom sheet: its text, tabs and buttons share this inset. The sheet's sides and the
+     floating panels sit --gap from the window's edges; the sheet's foot is flush with the bottom. */
+  --gutter: 16px;
+  /* Height of the folded sheet: grabber plus tab bar. Keep in step with sheetPeek() in App.tsx. */
+  --sheet-peek: 76px;
+  /* The status bar's height, and its height as the last row of the bottom sheet (bar plus the device's
+     bottom inset). Keep --status-h in step with STATUS_H in App.tsx. */
+  --status-h: 28px;
+  --foot: calc(var(--status-h) + env(safe-area-inset-bottom, 0px));
   --side-w: 372px;
   /* Panels move like a critically damped spring: quick off the mark, no overshoot. Keep in step with PANEL_MS in App.tsx. */
   --panel-ms: 380ms;
@@ -208,6 +220,12 @@
 @media (max-width: 1100px) {
   :root {
     --side-w: 336px;
+  }
+}
+/* Touch screens have taller tabs, so the folded sheet is taller too. Keep in step with sheetPeek() in App.tsx. */
+@media (pointer: coarse) {
+  :root {
+    --sheet-peek: 84px;
   }
 }
 @media (prefers-reduced-transparency: reduce) {
@@ -224,6 +242,8 @@
     --blur: none;
     --glass-edge: rgba(255, 255, 255, 0.5);
     --ink-3: #b4b9c1;
+    --scroll-thumb: rgba(232, 234, 237, 0.8);
+    --scroll-thumb-hover: #e8eaed;
   }
 }
 
@@ -246,6 +266,42 @@
   border-style: solid;
   border-color: var(--glass-edge);
 }
+/* A panel that needs to blur its own content at an edge (text scrolling out of view) cannot carry the
+   glass itself: a blur nested inside a backdrop-filter only sees the panel, not the map, and shows as a
+   dark band. Such a panel is a glass-host, and the material sits in a glass-layer child behind its content. */
+@utility glass-host {
+  position: relative;
+  isolation: isolate;
+  background-color: transparent !important;
+  -webkit-backdrop-filter: none !important;
+  backdrop-filter: none !important;
+}
+@utility glass-layer {
+  position: absolute;
+  inset: 0;
+  z-index: -1;
+  border-radius: inherit;
+  pointer-events: none;
+  background-color: var(--glass);
+  -webkit-backdrop-filter: var(--blur);
+  backdrop-filter: var(--blur);
+}
+@utility glass-layer-thick {
+  position: absolute;
+  inset: 0;
+  z-index: -1;
+  border-radius: inherit;
+  pointer-events: none;
+  background-color: var(--glass-thick);
+  -webkit-backdrop-filter: var(--blur);
+  backdrop-filter: var(--blur);
+}
+/* Scales the progressive blur at a scrolling panel's edge (see EdgeBlur). Registered so it can ease in and out. */
+@property --edge-k {
+  syntax: "<number>";
+  inherits: true;
+  initial-value: 0;
+}
 /* Section headings: small, uppercase, slightly open. Not for value labels, buttons or names. */
 @utility caps {
   font-size: var(--text-xs);
@@ -254,9 +310,14 @@
   text-transform: uppercase;
   line-height: 1.25;
 }
+/* The thumb is a light overlay on the dark panels, at least 3:1 against them (WCAG 1.4.11), and brightens
+   while the pointer is over the scrolling area. It used to be --track, a near-black that vanished. */
 @utility scrollbar-thin {
   scrollbar-width: thin;
-  scrollbar-color: var(--track) transparent;
+  scrollbar-color: var(--scroll-thumb) transparent;
+  &:hover {
+    scrollbar-color: var(--scroll-thumb-hover) transparent;
+  }
 }
 
 @layer base {

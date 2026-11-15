@@ -1,13 +1,14 @@
 import { useStore } from "../store";
-import { fmtDist, fmtLonLat, fmtNum } from "../format";
+import { fmtDist, fmtNum } from "../format";
 import { sampleBest, surfaceById } from "../lib";
 import { cellIndex, marsDistanceM } from "../geo";
 import { scienceLayers, scienceRamp } from "../map/MapView";
 import { Panel } from "@/components/ui/panel";
 import { Swatch } from "@/components/ui/swatch";
+import { Ticker } from "@/components/ui/ticker";
 import { cn } from "@/lib/utils";
 
-const row = "mt-0.5 flex gap-x-3.5 gap-y-0.5 text-sm font-semibold whitespace-nowrap";
+const row = "flex items-baseline gap-x-3.5 text-sm font-semibold whitespace-nowrap";
 const unit = "text-xs font-normal text-muted-foreground";
 const tag = "mr-1 text-xs font-normal text-muted-foreground";
 
@@ -28,12 +29,18 @@ export function HoverReadout() {
   return (
     <Panel
       className={cn(
-        "readout pointer-events-none max-w-full min-w-0 px-3 py-2 text-sm sheet:in-[.app:has(.go-panel)]:hidden",
+        // Top-left of the map. It gives way to the card beside it: a line that no longer fits slides (Ticker).
+        // glass-host: the lines blur at their cut edges, so the glass is a layer behind them.
+        "readout glass-host pointer-events-none flex min-h-9 max-w-full coarse:min-h-11 min-w-0 flex-col justify-center gap-1 px-3.5 py-2 text-sm",
+        // On the bottom-sheet layout an open card or the Go panel takes this corner instead.
+        "sheet:in-[.app:has(.go-panel)]:hidden sheet:in-[.app:has(.card-slot>*)]:hidden",
       )}
     >
-      {picking && <div className="mb-[3px] font-medium text-foreground">Click the map to place the start</div>}
+      <i className="glass-layer" aria-hidden />
+      {picking && <div className="font-medium whitespace-nowrap text-foreground">Click the map to place the start</div>}
       {hover ? (
         <>
+          <Ticker>
           <div className={row}>
             <span title="Elevation">{fmtNum(hover.elevationM, 0, " m")}</span>
             <span title="Slope">
@@ -55,8 +62,10 @@ export function HoverReadout() {
               </span>
             )}
           </div>
+          </Ticker>
           {(sciOn.length > 0 || conf != null) && (
-            <div className={cn(row, "flex-wrap")}>
+            <Ticker>
+            <div className={row}>
               {sciOn.map((l) => {
                 const gd = sciData[l.id]!;
                 const cell = hover ? cellIndex(gd.grid, hover.lonLat) : null;
@@ -74,8 +83,8 @@ export function HoverReadout() {
                 </span>
               )}
             </div>
+            </Ticker>
           )}
-          <div className="mt-0.5 font-mono text-xs text-muted-foreground">{fmtLonLat(hover.lonLat)}</div>
         </>
       ) : null}
     </Panel>

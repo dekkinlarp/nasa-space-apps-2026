@@ -15,7 +15,8 @@ import { Segmented } from "@/components/ui/segmented";
 import { cn } from "@/lib/utils";
 
 /** On the bottom-sheet layout the Go panel takes the row and replaces the POI card and the hover readout. */
-const GO_PANEL = "go-panel w-80 max-w-full flex-none sheet:w-auto sheet:flex-1";
+// sheet:mt-2: on the bottom-sheet layout the view controls wrap onto a line above, and this is the space between.
+const GO_PANEL = "go-panel w-80 max-w-full flex-none sheet:mt-2 sheet:w-auto sheet:flex-1";
 
 /** One reading in the Go panel. */
 function Reading({ label, bad, children }: { label: string; bad?: boolean; children: ReactNode }) {

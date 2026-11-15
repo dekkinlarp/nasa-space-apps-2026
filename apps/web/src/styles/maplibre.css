@@ -5,15 +5,15 @@
  * Imported into the components layer by index.css, after MapLibre's stylesheet in the base layer.
  */
 
-/* Zoom, compass and scale: bottom-right, lifted clear of the bottom sheet and the profile dock. */
-.maplibregl-ctrl-bottom-right { right: max(var(--gap), env(safe-area-inset-right)) !important; bottom: calc(var(--sheet-h) + var(--dock) + var(--gap)) !important; transition: bottom var(--panel-ms) var(--spring); }
+/* Zoom and compass: top-right corner. The scale bar is moved into the app's own layout (mountScaleBar). */
+.maplibregl-ctrl-top-right { top: max(var(--gap), env(safe-area-inset-top)) !important; right: max(var(--gap), env(safe-area-inset-right)) !important; }
 .maplibregl-ctrl-group { background: var(--glass) !important; -webkit-backdrop-filter: var(--blur); backdrop-filter: var(--blur); border: 1px solid var(--glass-edge); border-radius: 12px !important; box-shadow: var(--float-sm) !important; overflow: hidden; }
 .maplibregl-ctrl-group button { width: 36px !important; height: 36px !important; }
 .maplibregl-ctrl-group button + button { border-top: 1px solid var(--seam-2) !important; }
 .maplibregl-ctrl-group button:not(:disabled):hover { background-color: rgba(255, 255, 255, 0.1) !important; }
 .maplibregl-ctrl-group button .maplibregl-ctrl-icon { filter: invert(0.85); }
-.maplibregl-ctrl-bottom-right .maplibregl-ctrl { margin: 8px 0 0 0; }
-.maplibregl-ctrl-scale { background: rgba(15, 17, 20, 0.6) !important; color: var(--ink-2) !important; border: 1px solid var(--ink-3) !important; border-top: 0 !important; font: 11px/14px var(--font) !important; padding: 0 4px !important; }
+.maplibregl-ctrl-top-right .maplibregl-ctrl { margin: 0 0 8px 0; }
+.maplibregl-ctrl-scale { margin: 0 !important; background: rgba(15, 17, 20, 0.6) !important; color: var(--ink-2) !important; border: 1px solid var(--ink-3) !important; border-top: 0 !important; font: 11px/14px var(--font) !important; padding: 0 4px !important; }
 
 /* The click menu's popup: the content itself is React (ClickMenu). */
 .click-popup .maplibregl-popup-content { padding: 10px 12px; color: var(--ink); font: 13.5px/1.45 var(--font); background: var(--glass); -webkit-backdrop-filter: var(--blur); backdrop-filter: var(--blur); border: 1px solid var(--glass-edge); border-radius: 12px; box-shadow: var(--float-sm); }

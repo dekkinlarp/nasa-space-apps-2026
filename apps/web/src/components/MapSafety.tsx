@@ -110,7 +110,7 @@ export function MapSafety({ planVisible }: { planVisible: boolean }) {
   return (
     <>
       {/* Phones and tablets: the sheet's verdict is a scroll away, so one line of it rides on the map. */}
-      <Panel className={cn("map-safety hidden h-9 min-w-0 flex-none items-center gap-1.5 px-3 text-sm sheet:flex", !ok && "border-bad/55")} role="status">
+      <Panel className={cn("map-safety mt-2 hidden h-9 min-w-0 flex-none items-center gap-1.5 px-3 text-sm sheet:flex", !ok && "border-bad/55")} role="status">
         {ok ? <CheckIcon className="size-4 flex-none text-ok" aria-hidden /> : <TriangleAlertIcon className="size-4 flex-none text-bad" aria-hidden />}
         <b className="font-semibold whitespace-nowrap">{ok ? "Fits the limits" : over}</b>
         <span className="truncate text-muted-foreground">

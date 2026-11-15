@@ -19,7 +19,13 @@ const buttonVariants = cva(
           "bg-destructive/10 text-destructive hover:bg-destructive/20 focus-visible:border-destructive/40 focus-visible:ring-destructive/20 dark:bg-destructive/20 dark:hover:bg-destructive/30 dark:focus-visible:ring-destructive/40",
         link: "h-auto px-0 font-normal text-muted-foreground underline underline-offset-2 hover:text-foreground",
         /** Floats over the map on the glass material. */
-        glass: "glass text-ink-2 shadow-float-sm hover:border-seam-strong hover:text-foreground aria-expanded:border-seam-strong aria-expanded:text-foreground",
+        // bg-clip-border: buttons clip their fill to the padding box, which left the 1px edge showing the raw,
+        // saturated backdrop blur (an orange ring over Mars) instead of the dark glass the panels have under theirs.
+        // border-glass-edge is stated here because the base class's border-transparent otherwise wins over `glass`.
+        // No border change on hover, press or toggle: over the map a brighter edge picks up the ground's colour and
+        // reads as an orange outline. State shows in the icon's brightness; keyboard focus is a plain light outline.
+        glass:
+          "glass border-glass-edge bg-clip-border text-ink-2 shadow-float-sm hover:text-foreground aria-expanded:text-foreground focus-visible:border-glass-edge focus-visible:ring-0 focus-visible:outline-2 focus-visible:outline-offset-2 focus-visible:outline-foreground",
       },
       size: {
         default:
