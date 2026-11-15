@@ -2,7 +2,7 @@ import type { ComponentProps, ReactNode } from "react";
 import { useStore, type OverlayId } from "../store";
 import type { LayerEntry } from "@marsmap/core";
 import { imageryGroup, scienceLayers, scienceRamp } from "../map/MapView";
-import { tintable } from "../map/tint";
+import { tintable } from "../map/imageryTiles";
 import { CONFIDENCE_CLEAR, CONFIDENCE_LOW, COST_RAMP, cssGradient, ELEV_RAMP, SLOPE_STOPS } from "../map/rasters";
 import type { AreaData } from "../types";
 import { Badge } from "@/components/ui/badge";

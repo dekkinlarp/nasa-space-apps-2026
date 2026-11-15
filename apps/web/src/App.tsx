@@ -10,6 +10,7 @@ import { Badge } from "@/components/ui/badge";
 import { Panel } from "@/components/ui/panel";
 import { Popover, PopoverContent, PopoverTrigger } from "@/components/ui/popover";
 import { Segmented } from "@/components/ui/segmented";
+import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "@/components/ui/select";
 import { Slider } from "@/components/ui/slider";
 import { Spinner } from "@/components/ui/spinner";
 import { Tabs, TabsContent, TabsList, TabsTrigger } from "@/components/ui/tabs";
@@ -81,10 +82,14 @@ function GestureHint({ view3d }: { view3d: boolean }) {
   );
 }
 
-/** Top-right of the map: how the map is viewed. The vertical-scale slider appears beside it in 3D. */
+/** 3D render distance choices: side of the square of ground drawn around where the camera looks, km. */
+const RENDER_DISTANCES = [2, 4, 8, 16].map((km) => ({ value: String(km), label: `${km} × ${km} km` }));
+
+/** Top-right of the map: how the map is viewed. The vertical-scale slider and render distance appear beside it in 3D. */
 function ViewControls() {
   const view3d = useStore((s) => s.view3d);
   const ex = useStore((s) => s.exaggeration);
+  const renderKm = useStore((s) => s.renderDistanceKm);
   const set = useStore((s) => s.set);
   const hasElev = useStore((s) => !!s.area?.layers.elevation);
   return (
@@ -93,6 +98,21 @@ function ViewControls() {
         <Panel className="flex h-11 items-center gap-3 px-4 text-ink-2 phone:hidden">
           <span className="caps whitespace-nowrap">Vertical ×{ex}</span>
           <Slider aria-label="Vertical exaggeration" className="w-[110px] sheet:w-20" min={1} max={10} step={0.5} value={[ex]} onValueChange={(v) => set({ exaggeration: Array.isArray(v) ? v[0]! : v })} />
+          <span className="caps ml-1 whitespace-nowrap" title="How much ground is drawn in 3D, centred on where you are looking. Smaller is faster on slow devices.">
+            Draw
+          </span>
+          <Select items={RENDER_DISTANCES} value={String(renderKm)} onValueChange={(v) => v && set({ renderDistanceKm: Number(v) })}>
+            <SelectTrigger aria-label="3D render distance" size="sm" className="w-[104px]">
+              <SelectValue />
+            </SelectTrigger>
+            <SelectContent>
+              {RENDER_DISTANCES.map((it) => (
+                <SelectItem key={it.value} value={it.value}>
+                  {it.label}
+                </SelectItem>
+              ))}
+            </SelectContent>
+          </Select>
         </Panel>
       )}
       <Segmented

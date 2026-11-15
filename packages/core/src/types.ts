@@ -74,6 +74,8 @@ export interface ImageryEntry {
   heightPx: number;
   source: string;
   metersPerPixel?: number;
+  /** Mars-coloured copy of a grayscale picture (cosmetic tint), relative to the area's data folder. */
+  tintFile?: string;
 }
 
 /** data/<areaId>/layers.json */

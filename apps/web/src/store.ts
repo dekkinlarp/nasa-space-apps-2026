@@ -58,6 +58,8 @@ interface State {
   sciData: Record<string, Float32Array>;
   view3d: boolean;
   exaggeration: number;
+  /** 3D only: side of the square of ground drawn around the point the camera looks at, km. */
+  renderDistanceKm: number;
 
   selectedPoi: Poi | null;
   selectedWaypoint: Waypoint | null;
@@ -124,6 +126,7 @@ export const useStore = create<State>((set, get) => ({
   sciData: {},
   view3d: false,
   exaggeration: 3,
+  renderDistanceKm: 8,
 
   selectedPoi: null,
   selectedWaypoint: null,
