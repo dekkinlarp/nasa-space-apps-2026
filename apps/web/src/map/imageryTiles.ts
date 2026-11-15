@@ -1,16 +1,18 @@
 /**
- * Base imagery as map tiles. The pipeline ships each imagery group as one overview picture and,
- * for HiRISE, a grid of full-resolution pieces (about 10 megapixels each). Handing those to MapLibre
- * as image sources meant uploading whole 40 MB textures on the main thread whenever a piece came
+ * Base imagery as map tiles. The pipeline ships each imagery group as a pyramid of pictures: level 0
+ * at full resolution in pieces of at most 2048 px, each level up 4x coarser, up to one picture of the
+ * whole region (older data: one overview picture plus full-resolution pieces). Handing those to
+ * MapLibre as image sources meant uploading whole textures on the main thread whenever a piece came
  * into view, and in 3D drawing them unmipmapped into every terrain tile. Instead a marsimg://
- * protocol cuts 256 px tiles out of the decoded pictures, so MapLibre only ever uploads small tiles
- * and picks the level of detail itself.
+ * protocol cuts 256 px tiles out of the decoded pictures of the level that matches the tile's zoom,
+ * so MapLibre only ever uploads small tiles and picks the level of detail itself.
  *
  *   marsimg://<group>/<t|r>/{z}/{x}/{y}     t = Mars tint, r = as delivered
  *
  * The Mars tint is cosmetic colouring of single-band (grayscale) visible imagery: the pixels'
- * brightness pattern is the data; the colour is not measured. The data pipeline ships it ready-made
- * (scripts/src/tint.ts writes `tintFile` beside each picture), so tinted tiles cost nothing extra here.
+ * brightness pattern is the data; the colour is not measured. Pictures marked `gray` are tinted here
+ * with two canvas blend fills per tile (multiply by LIGHT, then screen with SHADOW); older data ships
+ * ready-tinted copies (`tintFile`).
  */
 import maplibregl from "maplibre-gl";
 import type { ImageryEntry } from "@marsmap/core";
@@ -23,15 +25,19 @@ export const IMAGERY_TILE_SIZE = 256;
 
 /** Strip a tile suffix like _0_1 / _r0_c1 so a set of pieces is one base-imagery choice. */
 export const imageryGroup = (id: string) => id.replace(/[_-]r?\d+[_-]c?\d+$/, "");
+/** The base-imagery choice a picture belongs to. */
+export const pictureGroup = (im: ImageryEntry) => im.group ?? imageryGroup(im.id);
+
+/** Mars tint: white ground becomes LIGHT, black is lifted to SHADOW (same as the old pipeline step). */
+const LIGHT = "#ffb47c";
+const SHADOW = "#1c0d07";
 
 interface Group {
   id: string;
-  /** Pictures that cover the whole group at its coarsest resolution (usually one). */
-  overview: ImageryEntry[];
-  /** Full-resolution pieces, if any. */
-  detail: ImageryEntry[];
+  /** Pictures by pyramid level, finest (0) first; each level tiles the group. */
+  levels: { mpp: number; pics: ImageryEntry[] }[];
   bounds: [number, number, number, number];
-  /** Every picture has a Mars-tinted copy (thermal imagery has none: it shows temperature, not the ground). */
+  /** Every picture can be shown Mars-tinted (thermal imagery cannot: it shows temperature, not the ground). */
   tinted: boolean;
 }
 
@@ -44,17 +50,20 @@ const mpp = (im: ImageryEntry) => im.metersPerPixel ?? ((im.east - im.west) * M_
 export function setImageryArea(area: AreaData) {
   base = area.base;
   groups.clear();
+  const byLevel = new Map<string, Map<number, ImageryEntry[]>>();
   for (const im of area.manifest.imagery) {
-    const id = imageryGroup(im.id);
+    const id = pictureGroup(im);
     let g = groups.get(id);
-    if (!g) groups.set(id, (g = { id, overview: [], detail: [], bounds: [im.west, im.south, im.east, im.north], tinted: true }));
-    g.tinted &&= !!im.tintFile;
-    (im.id === id ? g.overview : g.detail).push(im);
+    if (!g) groups.set(id, (g = { id, levels: [], bounds: [im.west, im.south, im.east, im.north], tinted: true }));
+    g.tinted &&= !!im.tintFile || !!im.gray;
+    // Older data: the picture named like the group is the overview, the rest are full-resolution pieces.
+    const level = im.level ?? (im.id === id ? 1 : 0);
+    const lv = byLevel.get(id) ?? byLevel.set(id, new Map()).get(id)!;
+    lv.set(level, [...(lv.get(level) ?? []), im]);
     g.bounds = [Math.min(g.bounds[0], im.west), Math.min(g.bounds[1], im.south), Math.max(g.bounds[2], im.east), Math.max(g.bounds[3], im.north)];
   }
-  for (const g of groups.values()) {
-    // A group delivered only in pieces draws them at every zoom.
-    if (!g.overview.length) [g.overview, g.detail] = [g.detail, []];
+  for (const [id, lv] of byLevel) {
+    groups.get(id)!.levels = [...lv.entries()].sort((a, b) => a[0] - b[0]).map(([, pics]) => ({ mpp: Math.min(...pics.map(mpp)), pics }));
   }
   pictures.clear();
 }
@@ -68,7 +77,7 @@ export const imageryTilesUrl = (group: string, tint: boolean) => `${SCHEME}://${
 
 /** Zoom at which one tile pixel is about one pixel of the group's sharpest picture (MapLibre over-zooms beyond it). */
 export function imageryMaxZoom(g: Group): number {
-  const finest = Math.min(...[...g.overview, ...g.detail].map(mpp));
+  const finest = g.levels[0]?.mpp ?? 1;
   const lat = ((g.bounds[1] + g.bounds[3]) / 2) * (Math.PI / 180);
   // The map draws a Mars degree as an Earth degree, so a Mars metre is R_earth / R_mars map metres.
   const mapMpp = finest * (EARTH_RADIUS_M / MARS_RADIUS_M);
@@ -79,8 +88,8 @@ export function imageryMaxZoom(g: Group): number {
 // ---------- decoded pictures (decoded off the main thread by createImageBitmap) ----------
 
 const pictures = new Map<string, Promise<ImageBitmap>>();
-/** Full-resolution pieces are ~40 MB each decoded; keep only the most recently used few. */
-const MAX_PICTURES = 8;
+/** A 2048 px piece is 16 MB decoded; keep only the most recently used. */
+const MAX_PICTURES = 20;
 
 function picture(file: string): Promise<ImageBitmap> {
   let p = pictures.get(file);
@@ -114,11 +123,12 @@ async function renderTile(g: Group, tint: boolean, z: number, x: number, y: numb
   const W = lonOf(x, z), E = lonOf(x + 1, z), N = latOf(y, z), Sth = latOf(y + 1, z);
   const y0 = mercY(N), y1 = mercY(Sth);
   const hits = (im: ImageryEntry) => im.west < E && im.east > W && im.south < N && im.north > Sth;
-  // Full-resolution pieces once the tile is sharper than the overview can show.
+  // The coarsest level that is still about as sharp as the tile (finest level when zoomed past it).
   const tileMpp = ((E - W) * M_PER_DEG_LAT * Math.cos((((N + Sth) / 2) * Math.PI) / 180)) / S;
-  const overview = g.overview.filter(hits);
-  const detail = g.detail.length && tileMpp < Math.min(...g.overview.map(mpp)) * 0.75 ? g.detail.filter(hits) : [];
-  const ims = [...overview, ...detail];
+  let lv = g.levels[0];
+  for (const l of g.levels) if (l.mpp <= tileMpp * 1.33) lv = l;
+  const ims = (lv?.pics ?? []).filter(hits);
+  const selfTint = (im: ImageryEntry) => tint && !im.tintFile && !!im.gray;
   const bitmaps = await Promise.all(ims.map((im) => picture(tint && im.tintFile ? im.tintFile : im.file)));
   if (signal.aborted) throw new DOMException("aborted", "AbortError");
 
@@ -126,6 +136,7 @@ async function renderTile(g: Group, tint: boolean, z: number, x: number, y: numb
   const ctx = canvas.getContext("2d")!;
   ctx.clearRect(0, 0, S, S);
   ctx.imageSmoothingQuality = "medium";
+  const tintRects: [number, number, number, number][] = [];
   ims.forEach((im, i) => {
     const bmp = bitmaps[i]!;
     // Part of the picture inside the tile, in picture pixels (rows are linear in latitude) ...
@@ -135,8 +146,25 @@ async function renderTile(g: Group, tint: boolean, z: number, x: number, y: numb
     // ... and in tile pixels (rows are Web Mercator).
     const dx = ((w - W) / (E - W)) * S, dw = ((e - w) / (E - W)) * S;
     const dy = ((mercY(n) - y0) / (y1 - y0)) * S, dh = ((mercY(s) - mercY(n)) / (y1 - y0)) * S;
-    if (sw > 0 && sh > 0) ctx.drawImage(bmp, sx, sy, sw, sh, dx, dy, dw, dh);
+    if (sw > 0 && sh > 0) {
+      ctx.drawImage(bmp, sx, sy, sw, sh, dx, dy, dw, dh);
+      if (selfTint(im)) tintRects.push([dx, dy, dw, dh]);
+    }
   });
+  if (tintRects.length) {
+    // Multiply by LIGHT, then screen with SHADOW, only over the pictures drawn (not the empty ground).
+    ctx.save();
+    ctx.beginPath();
+    for (const r of tintRects) ctx.rect(...r);
+    ctx.clip();
+    ctx.globalCompositeOperation = "multiply";
+    ctx.fillStyle = LIGHT;
+    ctx.fillRect(0, 0, S, S);
+    ctx.globalCompositeOperation = "screen";
+    ctx.fillStyle = SHADOW;
+    ctx.fillRect(0, 0, S, S);
+    ctx.restore();
+  }
   return canvas.transferToImageBitmap();
 }
 

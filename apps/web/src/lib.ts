@@ -1,6 +1,6 @@
 import type { LonLat, RouteResult, SurfaceClass, WalkParams } from "@marsmap/core";
 import { marsDistanceM, measure, type Measured } from "./geo";
-import type { DisplayLayers, RoverPhoto, StartPoint, Stop } from "./types";
+import type { AreaData, DisplayLayers, RoverPhoto, StartPoint, Stop } from "./types";
 import { cellIndex } from "./geo";
 import { fmtDur, fmtEnergy, fmtO2 } from "./format";
 
@@ -13,7 +13,8 @@ export function nearestPhoto(photos: RoverPhoto[], p: LonLat): { photo: RoverPho
   return best ? { photo: best, distM: bd } : null;
 }
 
-export function sampleAt(L: DisplayLayers, p: LonLat) {
+export function sampleAt(L: DisplayLayers | null, p: LonLat) {
+  if (!L) return null;
   const i = cellIndex(L.grid, p);
   if (i == null) return null;
   const e = L.elevation?.[i];
@@ -21,7 +22,17 @@ export function sampleAt(L: DisplayLayers, p: LonLat) {
     elevationM: e != null && Number.isFinite(e) ? e : null,
     slopeDeg: L.slope?.[i] ?? null,
     surfaceId: L.surface?.[i] ?? null,
+    confidence: L.confidence?.[i] ?? null,
+    /** Cell size the values come from (the overview is coarser than the planning window). */
+    cellSizeM: L.grid.cellSizeM,
   };
+}
+
+/** Values at a point: full resolution inside the planning window, the region overview elsewhere. */
+export function sampleBest(area: AreaData, detail: DisplayLayers | null, p: LonLat) {
+  const d = sampleAt(detail, p);
+  if (d && d.elevationM != null) return d;
+  return sampleAt(area.overview, p) ?? d;
 }
 
 export function surfaceById(classes: SurfaceClass[], id: number | null | undefined) {

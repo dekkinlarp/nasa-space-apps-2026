@@ -74,6 +74,8 @@ export function MapLegend() {
   const selectedProfile = useStore((s) => s.selectedProfile);
   const overlays = useStore((s) => s.overlays);
   const rings = useStore((s) => s.rings);
+  const clipped = useStore((s) => !!s.reach?.clipped && !!s.area?.tiles);
+  const windowOn = useStore((s) => !!s.area?.tiles && !!s.detail);
   const start = useStore((s) => s.start);
   const stops = useStore((s) => s.stops);
   const area = useStore((s) => s.area)!;
@@ -178,6 +180,25 @@ export function MapLegend() {
                   Walk limit
                 </Row>
               )}
+              {clipped && (
+                <Row
+                  sw={<LineSwatch color={RING_LIMIT_COLOR} dash="1 3" width={1.8} />}
+                  tip="This walk reaches past the 8 km square of full-resolution ground loaded around it, so the rings stop at that square's edge. Move the start, or add a stop, to shift the square."
+                >
+                  Cut at planning window
+                </Row>
+              )}
+            </Section>
+          )}
+
+          {windowOn && (
+            <Section>
+              <Row
+                sw={<LineSwatch color="rgba(255,255,255,.75)" dash="4 3" width={1.2} />}
+                tip="Routes and walk limits are worked out on 2 m ground loaded for this 8 km square around the walk. Elsewhere the map shows a 16 m overview. The square follows the start and stops."
+              >
+                Planning window
+              </Row>
             </Section>
           )}
 

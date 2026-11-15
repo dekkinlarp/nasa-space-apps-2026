@@ -1,5 +1,16 @@
-import { fetchLayerBytes, type LayerManifest, type LonLat } from "@marsmap/core";
-import type { AppConfig, AreaData, Conditions, DataChecks, DisplayLayers, DrillSite, Minerals, RoverData, RoverPhoto, Waypoint } from "./types";
+import {
+  computeSlope,
+  manifestTiles,
+  readLayerWhole,
+  readLayerWindow,
+  readOverview,
+  windowGrid,
+  type GridSpec,
+  type LayerManifest,
+  type LonLat,
+  type TileWindow,
+} from "@marsmap/core";
+import type { AppConfig, AreaData, Conditions, DataChecks, DisplayLayers, DrillSite, GridData, Minerals, RoverData, RoverPhoto, Waypoint } from "./types";
 
 async function getJson<T>(url: string): Promise<T> {
   const r = await fetch(url);
@@ -137,6 +148,58 @@ function parseConditions(raw: Record<string, unknown> | null): Conditions | null
   };
 }
 
+const median = (a: Float32Array) => {
+  const sample: number[] = [];
+  const step = Math.max(1, Math.floor(a.length / 200_000));
+  for (let i = 0; i < a.length; i += step) if (Number.isFinite(a[i]!)) sample.push(a[i]!);
+  sample.sort((p, q) => p - q);
+  return sample[sample.length >> 1] ?? 0;
+};
+
+function minMax(a: Float32Array | null): [number, number] {
+  let lo = Infinity, hi = -Infinity;
+  if (a)
+    for (let i = 0; i < a.length; i++) {
+      const v = a[i]!;
+      if (!Number.isFinite(v)) continue;
+      if (v < lo) lo = v;
+      if (v > hi) hi = v;
+    }
+  return [lo, hi];
+}
+
+/**
+ * The region-wide display layers: the overview copies of a tiled area, or the layers themselves
+ * (full resolution) for a small untiled area such as the fixture.
+ */
+async function loadOverview(manifest: LayerManifest, base: string): Promise<DisplayLayers> {
+  const fb = binaryFrom(base);
+  const read = async (id: string) => {
+    const e = manifest.layers.find((l) => l.id === id);
+    if (!e) return null;
+    try {
+      return await readOverview(e, manifest.grid, fb);
+    } catch {
+      return null;
+    }
+  };
+  const [elev, slope, surface, confidence] = await Promise.all([read("elevation"), read("slope"), read("surface"), read("surface_confidence")]);
+  const grid = elev?.grid ?? manifest.grid;
+  const same = <T extends { grid: GridSpec }>(x: T | null) => (x && x.grid.width === grid.width && x.grid.height === grid.height ? x : null);
+  const elevation = (elev?.data as Float32Array | undefined) ?? null;
+  const [elevMin, elevMax] = minMax(elevation);
+  return {
+    grid,
+    elevation,
+    slope: (same(slope)?.data as Float32Array | undefined) ?? (elevation ? computeSlope(grid, elevation) : null),
+    surface: (same(surface)?.data as Uint8Array | undefined) ?? null,
+    confidence: (same(confidence)?.data as Uint8Array | undefined) ?? null,
+    elevMin,
+    elevMax,
+    elevRef: elevation ? median(elevation) : 0,
+  };
+}
+
 export async function loadArea(areaId: string, synthetic: boolean): Promise<AreaData> {
   const base = `/data/${areaId}`;
   const [manifest, config, condRaw, minerals, report] = await Promise.all([
@@ -149,63 +212,51 @@ export async function loadArea(areaId: string, synthetic: boolean): Promise<Area
   // The report lists every waypoint; the app only needs the summary.
   if (report?.georef) delete report.georef.rows;
   const checks: DataChecks | null = report;
-  const g = manifest.grid;
-  const n = g.width * g.height;
-  const bin = async (id: string) => {
-    const e = manifest.layers.find((l) => l.id === id);
+  const [overview, rover] = await Promise.all([loadOverview(manifest, base), loadRover(base)]);
+  return { areaId, base, synthetic, manifest, config, overview, tiles: manifestTiles(manifest), rover, conditions: parseConditions(condRaw), minerals, checks };
+}
+
+/**
+ * Full-resolution display layers of a planning window of tiles. Slope is computed here from the
+ * elevation (Horn), as the routing worker does. Colour range and 3D reference come from the overview,
+ * so the window matches the map around it.
+ */
+export async function loadDetail(area: AreaData, win: TileWindow | null): Promise<DisplayLayers> {
+  const m = area.manifest;
+  if (!area.tiles || !win) return area.overview;
+  const fb = binaryFrom(area.base);
+  const read = async (id: string) => {
+    const e = m.layers.find((l) => l.id === id && l.tiles);
     if (!e) return null;
-    let buf: ArrayBuffer;
     try {
-      buf = await fetchLayerBytes(e, binaryFrom(base));
+      return await readLayerWindow(e, m.grid, win, fb);
     } catch {
       return null;
     }
-    const arr = e.dtype === "float32" ? new Float32Array(buf) : new Uint8Array(buf);
-    if (arr.length !== n) return null;
-    if (arr instanceof Float32Array && e.nodata != null && Number.isFinite(e.nodata)) {
-      const nd = Math.fround(e.nodata);
-      for (let i = 0; i < n; i++) if (arr[i] === nd) arr[i] = NaN;
-    }
-    return arr;
   };
-  const [elevation, slope, surface, confidence, rover] = await Promise.all([
-    bin("elevation") as Promise<Float32Array | null>,
-    bin("slope") as Promise<Float32Array | null>,
-    bin("surface") as Promise<Uint8Array | null>,
-    bin("surface_confidence") as Promise<Uint8Array | null>,
-    loadRover(base),
-  ]);
-  let elevMin = Infinity, elevMax = -Infinity;
-  if (elevation) {
-    const nd = manifest.layers.find((l) => l.id === "elevation")?.nodata;
-    for (let i = 0; i < elevation.length; i++) {
-      const v = elevation[i]!;
-      if (!Number.isFinite(v) || v === nd) continue;
-      if (v < elevMin) elevMin = v;
-      if (v > elevMax) elevMax = v;
-    }
-  }
-  let elevRef = 0;
-  if (elevation) {
-    const sample: number[] = [];
-    for (let i = 0; i < elevation.length; i += 97) if (Number.isFinite(elevation[i]!)) sample.push(elevation[i]!);
-    sample.sort((a, b) => a - b);
-    elevRef = sample[sample.length >> 1] ?? elevMin;
-  }
-  const layers: DisplayLayers = { grid: g, elevation, slope, surface, confidence, elevMin, elevMax, elevRef };
-  return { areaId, base, synthetic, manifest, config, layers, rover, conditions: parseConditions(condRaw), minerals, checks };
+  const [elevation, surface, confidence] = await Promise.all([read("elevation"), read("surface"), read("surface_confidence")]);
+  const grid = windowGrid(m.grid, area.tiles.size, win);
+  const elev = (elevation as Float32Array | null) ?? null;
+  return {
+    grid,
+    elevation: elev,
+    slope: elev ? computeSlope(grid, elev) : null,
+    surface: (surface as Uint8Array | null) ?? null,
+    confidence: (confidence as Uint8Array | null) ?? null,
+    elevMin: area.overview.elevMin,
+    elevMax: area.overview.elevMax,
+    elevRef: area.overview.elevRef,
+  };
 }
 
 /** Fetch one float32 layer of the manifest on demand (science overlays are loaded when first switched on). */
-export async function loadFloatLayer(area: AreaData, id: string): Promise<Float32Array | null> {
+export async function loadFloatLayer(area: AreaData, id: string): Promise<GridData | null> {
   const e = area.manifest.layers.find((l) => l.id === id);
-  const g = area.manifest.grid;
-  if (!e || e.dtype !== "float32") return null;
-  let arr: Float32Array;
+  if (!e || e.dtype !== "float32" || e.tiles) return null;
   try {
-    arr = new Float32Array(await fetchLayerBytes(e, binaryFrom(area.base)));
+    const { grid, data } = await readLayerWhole(e, area.manifest.grid, binaryFrom(area.base));
+    return data instanceof Float32Array && data.length === grid.width * grid.height ? { grid, data } : null;
   } catch {
     return null;
   }
-  return arr.length === g.width * g.height ? arr : null;
 }

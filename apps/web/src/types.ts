@@ -1,4 +1,4 @@
-import type { LayerManifest, LonLat, SurfaceClass, WalkParams, GridSpec } from "@marsmap/core";
+import type { LayerManifest, LonLat, SurfaceClass, WalkParams, GridSpec, TileSet } from "@marsmap/core";
 
 export type PoiType = "drill-site" | "science-target" | "start" | "viewpoint";
 
@@ -129,7 +129,10 @@ export interface Conditions {
   source: string | null;
 }
 
-/** Display copy of the rasters (the worker holds its own copy for routing). */
+/**
+ * Display copy of rasters on one grid (the worker holds its own copy for routing): the coarse overview
+ * of the whole region, or the full-resolution planning window.
+ */
 export interface DisplayLayers {
   grid: GridSpec;
   elevation: Float32Array | null;
@@ -142,13 +145,25 @@ export interface DisplayLayers {
   elevRef: number;
 }
 
+/** A science layer's data on its own grid. */
+export interface GridData {
+  grid: GridSpec;
+  data: Float32Array;
+}
+
 export interface AreaData {
   areaId: string;
   base: string;
   synthetic: boolean;
   manifest: LayerManifest;
   config: AppConfig;
-  layers: DisplayLayers;
+  /**
+   * The whole region: a coarse overview when the area is tiled, else the full-resolution layers.
+   * Full resolution for the planning window is `detail` in the store.
+   */
+  overview: DisplayLayers;
+  /** Tiling of the full-resolution layers, or null when the area is small enough to load whole. */
+  tiles: TileSet | null;
   rover: RoverData;
   conditions: Conditions | null;
   minerals: Minerals | null;

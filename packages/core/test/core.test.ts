@@ -68,12 +68,10 @@ describe("grid", () => {
     expect(lonLatToCell(gale, [NaN, 0])).toBeNull();
   });
 
-  it("distanceM matches the configured demo square", () => {
-    const sideM = gale.width * gale.cellSizeM;
-    expect(gale.height).toBe(gale.width);
+  it("distanceM matches the configured area size", () => {
     const lat = (gale.north + gale.south) / 2;
-    expect(distanceM(gale, [gale.west, gale.south], [gale.west, gale.north])).toBeCloseTo(sideM, -1);
-    expect(distanceM(gale, [gale.west, lat], [gale.east, lat])).toBeCloseTo(sideM, -1);
+    expect(distanceM(gale, [gale.west, gale.south], [gale.west, gale.north])).toBeCloseTo(gale.height * gale.cellSizeM, -1);
+    expect(distanceM(gale, [gale.west, lat], [gale.east, lat])).toBeCloseTo(gale.width * gale.cellSizeM, -1);
     // Neighbouring cell centres are one cell apart.
     expect(distanceM(gale, cellToLonLat(gale, 0), cellToLonLat(gale, 1))).toBeCloseTo(gale.cellSizeM, 1);
   });

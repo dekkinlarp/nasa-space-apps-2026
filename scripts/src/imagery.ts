@@ -1,17 +1,28 @@
 /**
- * imagery/*.jpg: stitches NASA Mars Trek WMTS tiles (equirectangular, 2^(z+1) x 2^z tiles of
- * 256 px, top-left -180/90) and crops them to the area bounds.
+ * imagery/<layer>/l<level>/<r>_<c>.jpg: Mars Trek WMTS imagery over the region as a picture pyramid.
+ *
+ * Level 0 is the layer at its finest zoom, cut into pieces of at most PIECE px; each level up is 4x
+ * coarser, until one piece holds the whole region. The app draws map tiles from the pieces of the level
+ * that matches the zoom (apps/web/src/map/imageryTiles.ts), so it never decodes more than a few pieces.
+ * Level 0 is built one band of PIECE rows at a time: the full-resolution HiRISE mosaic of the region
+ * (about 52 000 x 63 000 px) is never held in memory.
+ *
+ * HiRISE also gets grayscale copies on the shared grid for the surface estimate and the CRISM alignment:
+ * data/cache/<id>/hirise_grid.u8 (2 m cells) and hirise_ov.u8 (overview cells).
  */
-import { existsSync, readFileSync } from "node:fs";
+import { existsSync, readFileSync, rmSync } from "node:fs";
 import { join } from "node:path";
 import sharp from "sharp";
 import type { ImageryEntry } from "../../packages/core/src/types";
-import { areaDir, cacheDir, gridFromArea, isMain, loadArea, log, needs, type AreaConfig } from "./lib/area";
-import { cachedFile, fetchBuffer, HttpError, pool, writeAtomic, writeJson } from "./lib/net";
+import { areaDir, cacheDir, FORCE, gridFromArea, isMain, loadArea, log, type AreaConfig } from "./lib/area";
+import { writeAtomic, writeJson } from "./lib/net";
+import { bandGrid, coarseGrid, RegionFile } from "./lib/tiles";
+import { degPerPx, pixelWindow, stitchGray, trekMaxZoom } from "./lib/trek";
+import { BAND_ROWS } from "./elevation";
 
-const TREK = "https://trek.nasa.gov/tiles/Mars/EQ";
-const TILE = 256;
-const MAX_SIDE = 4096;
+/** Largest side of one picture: a decoded piece is PIECE^2 x 4 bytes (16 MB) in the browser. */
+const PIECE = 2048;
+const QUALITY = 84;
 
 interface LayerSpec {
   id: string;
@@ -19,10 +30,10 @@ interface LayerSpec {
   layer: string;
   preferZoom: number;
   source: string;
-  /** Also write an n x n full-resolution split (pieces of at most MAX_SIDE) when the crop exceeds MAX_SIDE. */
-  split?: boolean;
-  /** Write a grayscale copy resampled onto the grid (for the surface estimate). */
+  /** Write grayscale copies on the grid (for the surface estimate and the CRISM alignment). */
   gridCopy?: boolean;
+  /** Single-band visible imagery: the app may tint it Mars-coloured. Thermal imagery is left alone. */
+  gray?: boolean;
   optional?: boolean;
 }
 
@@ -33,8 +44,8 @@ export const LAYERS: LayerSpec[] = [
     layer: "curiosity_hirise_mosaic",
     preferZoom: 16,
     source: "NASA Mars Trek WMTS curiosity_hirise_mosaic (MRO HiRISE, NASA/JPL/UArizona)",
-    split: true,
     gridCopy: true,
+    gray: true,
   },
   {
     id: "ctx",
@@ -42,6 +53,7 @@ export const LAYERS: LayerSpec[] = [
     layer: "Gale_CTX_BlockAdj_dd",
     preferZoom: 12,
     source: "NASA Mars Trek WMTS Gale_CTX_BlockAdj_dd (MRO CTX, NASA/JPL/MSSS)",
+    gray: true,
   },
   {
     id: "themis_night",
@@ -61,217 +73,188 @@ export const LAYERS: LayerSpec[] = [
   },
 ];
 
-async function maxZoom(layer: string): Promise<{ zoom: number; ext: string }> {
-  const file = join(cacheDir("trek", layer), "WMTSCapabilities.xml");
-  const xml = (await cachedFile(`${TREK}/${layer}/1.0.0/WMTSCapabilities.xml`, file)).toString("utf8").replace(/<!--[\s\S]*?-->/g, "");
-  const ids = [...xml.matchAll(/<TileMatrix>\s*<ows:Identifier>(\d+)<\/ows:Identifier>/g)].map((m) => Number(m[1]));
-  const fmt = /<Format>image\/(\w+)<\/Format>/.exec(xml)?.[1] ?? "png";
-  if (!ids.length) throw new Error(`no TileMatrix in capabilities for ${layer}`);
-  return { zoom: Math.max(...ids), ext: fmt === "jpeg" ? "jpg" : fmt };
-}
-
-async function tile(layer: string, z: number, row: number, col: number, ext: string): Promise<Buffer | null> {
-  const file = join(cacheDir("trek", layer, String(z), String(row)), `${col}.${ext}`);
-  const miss = file + ".404";
-  if (existsSync(file)) return readFileSync(file);
-  if (existsSync(miss)) return null;
-  try {
-    const buf = await fetchBuffer(`${TREK}/${layer}/1.0.0/default/default028mm/${z}/${row}/${col}.${ext}`);
-    writeAtomic(file, buf);
-    return buf;
-  } catch (e) {
-    if (e instanceof HttpError && e.status === 404) {
-      writeAtomic(miss, "");
-      return null;
-    }
-    throw e;
-  }
-}
-
-interface Crop {
-  img: sharp.Sharp;
-  raw: Buffer;
-  width: number;
-  height: number;
-  bounds: { south: number; north: number; west: number; east: number };
-  degPerPx: number;
-  zoom: number;
-  missing: number;
-}
-
-async function stitch(spec: LayerSpec, a: AreaConfig, zoom: number, ext: string): Promise<Crop> {
-  const span = 180 / 2 ** zoom;
-  const degPerPx = span / TILE;
-  // Global pixel coords of the area (x from -180, y from +90).
-  const x0 = Math.floor((a.west + 180) / degPerPx);
-  const x1 = Math.ceil((a.east + 180) / degPerPx);
-  const y0 = Math.floor((90 - a.north) / degPerPx);
-  const y1 = Math.ceil((90 - a.south) / degPerPx);
-  const c0 = Math.floor(x0 / TILE);
-  const c1 = Math.floor((x1 - 1) / TILE);
-  const r0 = Math.floor(y0 / TILE);
-  const r1 = Math.floor((y1 - 1) / TILE);
-  const jobs: { row: number; col: number }[] = [];
-  for (let row = r0; row <= r1; row++) for (let col = c0; col <= c1; col++) jobs.push({ row, col });
-  log("imagery", `${spec.id}: z${zoom} tiles rows ${r0}-${r1} cols ${c0}-${c1} (${jobs.length} tiles)`);
-  let missing = 0;
-  let done = 0;
-  const tiles = await pool(jobs, 6, async (j) => {
-    const buf = await tile(spec.layer, zoom, j.row, j.col, ext);
-    if (!buf) missing++;
-    if (++done % 100 === 0) log("imagery", `${spec.id}: ${done}/${jobs.length}`);
-    return { ...j, buf };
-  });
-  if (missing === jobs.length) throw new HttpError(404, `${spec.layer} z${zoom}: all tiles missing`);
-  const W = (c1 - c0 + 1) * TILE;
-  const H = (r1 - r0 + 1) * TILE;
-  const parts: sharp.OverlayOptions[] = [];
-  for (const t of tiles) {
-    if (!t.buf) continue;
-    const png = await sharp(t.buf).removeAlpha().toColourspace("srgb").png().toBuffer();
-    parts.push({ input: png, left: (t.col - c0) * TILE, top: (t.row - r0) * TILE });
-  }
-  const composed = await sharp({ create: { width: W, height: H, channels: 3, background: { r: 0, g: 0, b: 0 } }, limitInputPixels: false })
-    .composite(parts)
-    .raw()
-    .toBuffer({ resolveWithObject: true });
-  // composite() output carries an alpha channel; drop it so the buffer is plain RGB.
-  const mosaic =
-    composed.info.channels === 3
-      ? composed.data
-      : await sharp(composed.data, { raw: { width: W, height: H, channels: composed.info.channels }, limitInputPixels: false })
-          .removeAlpha()
-          .raw()
-          .toBuffer();
-  if (mosaic.length !== W * H * 3) throw new Error(`unexpected mosaic size ${mosaic.length}`);
-  const width = x1 - x0;
-  const height = y1 - y0;
-  const raw = await sharp(mosaic, { raw: { width: W, height: H, channels: 3 }, limitInputPixels: false })
-    .extract({ left: x0 - c0 * TILE, top: y0 - r0 * TILE, width, height })
-    .raw()
-    .toBuffer();
-  return {
-    img: sharp(raw, { raw: { width, height, channels: 3 }, limitInputPixels: false }),
-    raw,
-    width,
-    height,
-    bounds: { west: x0 * degPerPx - 180, east: x1 * degPerPx - 180, north: 90 - y0 * degPerPx, south: 90 - y1 * degPerPx },
-    degPerPx,
-    zoom,
-    missing,
-  };
-}
-
 const mPerDeg = (a: AreaConfig) => (Math.PI / 180) * a.marsRadiusM;
 
-async function writeJpeg(raw: Buffer, w: number, h: number, file: string, maxSide = MAX_SIDE): Promise<[number, number]> {
-  let img = sharp(raw, { raw: { width: w, height: h, channels: 3 }, limitInputPixels: false });
-  let ow = w;
-  let oh = h;
-  if (Math.max(w, h) > maxSide) {
-    const s = maxSide / Math.max(w, h);
-    ow = Math.round(w * s);
-    oh = Math.round(h * s);
-    img = img.resize(ow, oh, { kernel: "lanczos3", fit: "fill" });
+/** A picture level held in memory (levels 1 and up): gray pixels and a mask of real ones. */
+interface Level {
+  w: number;
+  h: number;
+  gray: Uint8Array;
+  valid: Uint8Array;
+}
+
+/** 4x4 block average over valid pixels of rows [0, h) of src into rows starting at dstRow of dst. */
+function shrink4(src: { gray: Uint8Array; valid: Uint8Array }, w: number, h: number, dst: Level, dstRow: number): void {
+  const dh = Math.ceil(h / 4);
+  for (let y = 0; y < dh; y++) {
+    const dy = dstRow + y;
+    if (dy >= dst.h) break;
+    for (let x = 0; x < dst.w; x++) {
+      let s = 0, n = 0;
+      for (let yy = y * 4; yy < Math.min(h, y * 4 + 4); yy++)
+        for (let xx = x * 4; xx < Math.min(w, x * 4 + 4); xx++) {
+          const i = yy * w + xx;
+          if (src.valid[i]) (s += src.gray[i]!), n++;
+        }
+      if (n) {
+        dst.gray[dy * dst.w + x] = Math.round(s / n);
+        dst.valid[dy * dst.w + x] = 1;
+      }
+    }
   }
-  const buf = await img.jpeg({ quality: 88, mozjpeg: true }).toBuffer();
-  writeAtomic(file, buf);
-  return [ow, oh];
 }
 
 export async function runImagery(): Promise<ImageryEntry[]> {
   const a = loadArea();
-  const g = gridFromArea(a);
   const dir = areaDir(a, "imagery");
   const indexFile = join(cacheDir(a.id), "imagery-entries.json");
-  const entries: ImageryEntry[] = [];
   const prev: ImageryEntry[] = existsSync(indexFile) ? (JSON.parse(readFileSync(indexFile, "utf8")) as ImageryEntry[]) : [];
+  const entries: ImageryEntry[] = [];
   for (const spec of LAYERS) {
-    const mainFile = join(dir, `${spec.id}.jpg`);
-    const prevEntries = prev.filter((e) => e.id === spec.id || e.id.startsWith(`${spec.id}_`));
-    const gridFile = join(cacheDir(a.id), `${spec.id}_grid.u8`);
-    if (!needs(mainFile) && prevEntries.length && (!spec.gridCopy || existsSync(gridFile))) {
-      log("imagery", `${spec.id}.jpg exists, skipping`);
-      entries.push(...prevEntries);
+    const mine = prev.filter((e) => e.group === spec.id);
+    const gridDone = !spec.gridCopy || (existsSync(join(cacheDir(a.id), "hirise_grid.u8")) && existsSync(join(cacheDir(a.id), "hirise_ov.u8")));
+    if (!FORCE && mine.length && mine.every((e) => existsSync(join(areaDir(a), e.file))) && gridDone && existsSync(join(cacheDir(a.id), `imagery-${spec.id}.done`))) {
+      log("imagery", `${spec.id}: ${mine.length} pictures exist, skipping`);
+      entries.push(...mine);
       continue;
     }
-    let crop: Crop | null = null;
     try {
-      const { zoom: maxZ, ext } = await maxZoom(spec.layer);
-      for (let z = Math.min(spec.preferZoom, maxZ); z >= Math.min(spec.preferZoom, maxZ) - 3 && !crop; z--) {
-        try {
-          crop = await stitch(spec, a, z, ext);
-        } catch (e) {
-          if (e instanceof HttpError && e.status === 404) log("imagery", `${spec.id}: z${z} unavailable, trying lower`);
-          else throw e;
-        }
-      }
+      const { zoom: maxZ, ext } = await trekMaxZoom(spec.layer);
+      const z = Math.min(spec.preferZoom, maxZ);
+      entries.push(...(await pyramid(spec, a, z, ext, dir)));
+      if (spec.gridCopy) await gridCopy(spec, a, z, ext);
+      writeAtomic(join(cacheDir(a.id), `imagery-${spec.id}.done`), new Date().toISOString());
     } catch (e) {
       if (!spec.optional) throw e;
       log("imagery", `${spec.id}: skipped (${(e as Error).message})`);
-      continue;
     }
-    if (!crop) {
-      if (spec.optional) continue;
-      throw new Error(`no imagery for ${spec.id}`);
-    }
-    const mpp = crop.degPerPx * mPerDeg(a);
-    log("imagery", `${spec.id}: crop ${crop.width}x${crop.height} px @ z${crop.zoom} (${mpp.toFixed(2)} m/px), missing tiles ${crop.missing}`);
-    const [w, h] = await writeJpeg(crop.raw, crop.width, crop.height, mainFile);
-    entries.push({
-      id: spec.id,
-      name: spec.name,
-      file: `imagery/${spec.id}.jpg`,
-      ...crop.bounds,
-      widthPx: w,
-      heightPx: h,
-      source: `${spec.source}, z${crop.zoom}`,
-      metersPerPixel: Number(((mpp * crop.width) / w).toFixed(3)),
-    });
-    if (spec.split && Math.max(crop.width, crop.height) > MAX_SIDE) {
-      // As many pieces per side as it takes to keep every piece at or under MAX_SIDE at full resolution.
-      const n = Math.ceil(Math.max(crop.width, crop.height) / MAX_SIDE);
-      const xs = Array.from({ length: n + 1 }, (_, i) => Math.round((crop!.width * i) / n));
-      const ys = Array.from({ length: n + 1 }, (_, i) => Math.round((crop!.height * i) / n));
-      for (let r = 0; r < n; r++)
-        for (let c = 0; c < n; c++) {
-          const left = xs[c]!;
-          const top = ys[r]!;
-          const pw = xs[c + 1]! - left;
-          const ph = ys[r + 1]! - top;
-          const part = await sharp(crop.raw, { raw: { width: crop.width, height: crop.height, channels: 3 }, limitInputPixels: false })
-            .extract({ left, top, width: pw, height: ph })
-            .raw()
-            .toBuffer();
-          const name = `${spec.id}_${r}_${c}`;
-          const [ow, oh] = await writeJpeg(part, pw, ph, join(dir, `${name}.jpg`));
-          entries.push({
-            id: name,
-            name: `${spec.name}, full-res tile row ${r} col ${c} (row 0 = north)`,
-            file: `imagery/${name}.jpg`,
-            west: crop.bounds.west + left * crop.degPerPx,
-            east: crop.bounds.west + (left + pw) * crop.degPerPx,
-            north: crop.bounds.north - top * crop.degPerPx,
-            south: crop.bounds.north - (top + ph) * crop.degPerPx,
-            widthPx: ow,
-            heightPx: oh,
-            source: `${spec.source}, z${crop.zoom}`,
-            metersPerPixel: Number(mpp.toFixed(3)),
-          });
-        }
-    }
-    if (spec.gridCopy) {
-      // Grayscale copy on the shared grid (crop bounds match the area to < 1 image pixel).
-      const gray = await sharp(crop.raw, { raw: { width: crop.width, height: crop.height, channels: 3 }, limitInputPixels: false })
-        .toColourspace("b-w")
-        .resize(g.width, g.height, { kernel: "cubic", fit: "fill" })
-        .raw()
-        .toBuffer();
-      writeAtomic(gridFile, gray.subarray(0, g.width * g.height));
-    }
+    // Saved after every layer, so a failed run keeps what it finished.
+    writeJson(indexFile, [...entries, ...prev.filter((p) => !entries.some((e) => e.group === p.group) && !mine.includes(p))]);
   }
   writeJson(indexFile, entries);
   return entries;
+}
+
+async function pyramid(spec: LayerSpec, a: AreaConfig, z: number, ext: string, dir: string): Promise<ImageryEntry[]> {
+  const px = pixelWindow(a, z);
+  const d = degPerPx(z);
+  const W = px.x1 - px.x0, H = px.y1 - px.y0;
+  const bounds = { west: px.x0 * d - 180, north: 90 - px.y0 * d };
+  const mpp0 = d * mPerDeg(a);
+  rmSync(join(dir, spec.id), { recursive: true, force: true });
+  // Levels up to the first that fits in one piece.
+  let top = 0;
+  while (Math.max(W, H) / 4 ** top > PIECE) top++;
+  const levels = Array.from({ length: top + 1 }, (_, i) => i);
+  log("imagery", `${spec.id}: z${z}, ${W}x${H} px (${mpp0.toFixed(2)} m/px), ${levels.length} level(s)`);
+  const entries: ImageryEntry[] = [];
+  let pieces = 0, bytes = 0;
+
+  const writePieces = async (level: number, rowOff: number, band: { gray: Uint8Array; valid: Uint8Array; w: number; h: number }) => {
+    const scale = 4 ** level;
+    for (let x = 0; x < band.w; x += PIECE) {
+      const pw = Math.min(PIECE, band.w - x), ph = band.h;
+      const crop = new Uint8Array(pw * ph);
+      let any = false;
+      for (let y = 0; y < ph; y++) {
+        crop.set(band.gray.subarray(y * band.w + x, y * band.w + x + pw), y * pw);
+        if (!any) for (let k = 0; k < pw; k++) if (band.valid[y * band.w + x + k]) { any = true; break; }
+      }
+      if (!any) continue;
+      const r = Math.floor(rowOff / PIECE), c = Math.floor(x / PIECE);
+      const rel = `imagery/${spec.id}/l${level}/${r}_${c}.jpg`;
+      const buf = await sharp(Buffer.from(crop.buffer, crop.byteOffset, crop.byteLength), { raw: { width: pw, height: ph, channels: 1 }, limitInputPixels: false })
+        // sharp would otherwise write 1-channel input as RGB.
+        .toColourspace("b-w")
+        .jpeg({ quality: QUALITY, mozjpeg: true })
+        .toBuffer();
+      writeAtomic(join(dir, "..", rel), buf);
+      pieces++;
+      bytes += buf.length;
+      entries.push({
+        id: `${spec.id}_l${level}_${r}_${c}`,
+        group: spec.id,
+        level,
+        gray: spec.gray,
+        name: spec.name,
+        file: rel,
+        west: bounds.west + x * scale * d,
+        east: bounds.west + Math.min(W, (x + pw) * scale) * d,
+        north: bounds.north - rowOff * scale * d,
+        south: bounds.north - Math.min(H, (rowOff + ph) * scale) * d,
+        widthPx: pw,
+        heightPx: ph,
+        source: `${spec.source}, z${z}`,
+        metersPerPixel: Number((mpp0 * scale).toFixed(3)),
+      });
+    }
+  };
+
+  // Level 0 in bands of PIECE rows straight from the tiles; level 1 accumulates in memory.
+  const mk = (w: number, h: number): Level => ({ w, h, gray: new Uint8Array(w * h), valid: new Uint8Array(w * h) });
+  let next: Level | null = levels.length > 1 ? mk(Math.ceil(W / 4), Math.ceil(H / 4)) : null;
+  for (let y = 0; y < H; y += PIECE) {
+    const bh = Math.min(PIECE, H - y);
+    const band = await stitchGray(spec.layer, z, ext, px.x0, px.y0 + y, W, bh);
+    await writePieces(0, y, { ...band, w: W, h: bh });
+    if (next) shrink4(band, W, bh, next, y / 4);
+    if ((y / PIECE) % 4 === 3 || y + PIECE >= H) log("imagery", `${spec.id}: level 0 rows ${y + bh}/${H}, ${pieces} pieces, ${(bytes / 1e6).toFixed(0)} MB`);
+  }
+  for (let level = 1; level < levels.length && next; level++) {
+    const cur: Level = next;
+    next = level + 1 < levels.length ? mk(Math.ceil(cur.w / 4), Math.ceil(cur.h / 4)) : null;
+    for (let y = 0; y < cur.h; y += PIECE) {
+      const bh = Math.min(PIECE, cur.h - y);
+      const sub = { gray: cur.gray.subarray(y * cur.w, (y + bh) * cur.w), valid: cur.valid.subarray(y * cur.w, (y + bh) * cur.w) };
+      await writePieces(level, y, { ...sub, w: cur.w, h: bh });
+      if (next) shrink4(sub, cur.w, bh, next, y / 4);
+    }
+    log("imagery", `${spec.id}: level ${level} ${cur.w}x${cur.h} px done`);
+  }
+  log("imagery", `${spec.id}: ${pieces} pictures, ${(bytes / 1e6).toFixed(0)} MB`);
+  return entries;
+}
+
+/** Grayscale copies of the layer on the 2 m grid and on the overview grid, one band of grid rows at a time. */
+async function gridCopy(spec: LayerSpec, a: AreaConfig, z: number, ext: string): Promise<void> {
+  const g = gridFromArea(a);
+  const F = a.overviewFactor ?? 8;
+  const og = coarseGrid(g, F);
+  const d = degPerPx(z);
+  const full = new RegionFile(join(cacheDir(a.id), `${spec.id}_grid.u8`), g.width, g.height, "uint8", true);
+  const ov = new Uint8Array(og.width * og.height);
+  for (let r0 = 0; r0 < g.height; r0 += BAND_ROWS) {
+    const r1 = Math.min(g.height, r0 + BAND_ROWS);
+    const bg = bandGrid(g, r0, r1);
+    // Pixel window of the band (fractional), snapped outwards to whole pixels and resampled to the cells.
+    const fx0 = (bg.west + 180) / d, fx1 = (bg.east + 180) / d, fy0 = (90 - bg.north) / d, fy1 = (90 - bg.south) / d;
+    const x0 = Math.floor(fx0), y0 = Math.floor(fy0), w = Math.ceil(fx1) - x0, h = Math.ceil(fy1) - y0;
+    const { gray } = await stitchGray(spec.layer, z, ext, x0, y0, w, h);
+    // Crop to the exact band footprint (sharp needs whole pixels: error < 1 px = 0.64 m).
+    const left = Math.round(fx0 - x0), top = Math.round(fy0 - y0);
+    const cw = Math.min(w - left, Math.round(fx1 - fx0)), ch = Math.min(h - top, Math.round(fy1 - fy0));
+    const cells = await sharp(Buffer.from(gray.buffer, gray.byteOffset, gray.byteLength), { raw: { width: w, height: h, channels: 1 }, limitInputPixels: false })
+      .extract({ left, top, width: cw, height: ch })
+      .resize(bg.width, bg.height, { kernel: "cubic", fit: "fill" })
+      // Without this sharp returns 3 channels (sRGB) for 1-channel input.
+      .toColourspace("b-w")
+      .raw()
+      .toBuffer();
+    if (cells.length !== bg.width * bg.height) throw new Error(`grid copy: ${cells.length} bytes, expected ${bg.width * bg.height}`);
+    const band = new Uint8Array(cells.buffer, cells.byteOffset, bg.width * bg.height);
+    full.write(r0, band);
+    // Overview cells: plain block mean.
+    for (let oy = Math.floor(r0 / F); oy < Math.ceil(r1 / F); oy++)
+      for (let ox = 0; ox < og.width; ox++) {
+        let s = 0, n = 0;
+        for (let y = oy * F; y < Math.min(r1, oy * F + F); y++)
+          for (let x = ox * F; x < Math.min(g.width, ox * F + F); x++) (s += band[(y - r0) * g.width + x]!), n++;
+        if (n) ov[oy * og.width + ox] = Math.round(s / n);
+      }
+    if ((r0 / BAND_ROWS) % 8 === 7 || r1 === g.height) log("imagery", `${spec.id}: grid copy rows ${r1}/${g.height}`);
+  }
+  full.close();
+  writeAtomic(join(cacheDir(a.id), `${spec.id}_ov.u8`), ov);
 }
 
 if (isMain(import.meta.url)) await runImagery();

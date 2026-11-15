@@ -24,6 +24,10 @@ export interface AreaConfig {
   cellSizeM: number;
   width: number;
   height: number;
+  /** Side of one tile, cells. width and height are whole multiples of it. */
+  tileSize?: number;
+  /** Overview cells are this many grid cells across. */
+  overviewFactor?: number;
   marsRadiusM: number;
 }
 

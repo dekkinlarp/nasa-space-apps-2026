@@ -11,7 +11,7 @@ import { cn } from "@/lib/utils";
 export function SiteHeader({ onCollapse }: { onCollapse: () => void }) {
   const area = useStore((s) => s.area);
   const engine = useStore((s) => s.engine);
-  const g = area?.layers.grid;
+  const g = area?.manifest.grid;
   const status = engine.ready ? "ok" : engine.error ? "bad" : "busy";
   return (
     <header className="site-head flex-none px-4 pt-4 pb-3 sheet:hidden">
@@ -31,7 +31,7 @@ export function SiteHeader({ onCollapse }: { onCollapse: () => void }) {
       <h1 className="mt-3 mb-1.5 text-2xl font-bold tracking-[-0.022em]">{area?.config.area?.name ?? "Gale Crater boxwork"}</h1>
       {g && (
         <div className="text-sm text-muted-foreground">
-          {fmtLonLat([(g.west + g.east) / 2, (g.south + g.north) / 2])} · {((g.width * g.cellSizeM) / 1000).toFixed(0)} km square · {g.cellSizeM} m grid
+          {fmtLonLat([(g.west + g.east) / 2, (g.south + g.north) / 2])} · {g.width === g.height ? `${((g.width * g.cellSizeM) / 1000).toFixed(0)} km square` : `${((g.width * g.cellSizeM) / 1000).toFixed(0)} × ${((g.height * g.cellSizeM) / 1000).toFixed(0)} km`} · {g.cellSizeM} m grid
         </div>
       )}
       {area?.synthetic && (

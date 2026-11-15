@@ -1,6 +1,13 @@
-/** Bridges the store and the routing worker: re-plans and re-computes rings on change (debounced). */
-import type { LonLat } from "@marsmap/core";
+/**
+ * Bridges the store and the routing workers: re-plans and re-computes rings on change (debounced).
+ *
+ * In a tiled region it also owns the planning window: an 8 km square of full-resolution tiles around
+ * the start and stops. When the walk moves near the window's edge (or out of it) a new window is
+ * chosen; the workers load its routing rasters and the page loads its display rasters (`detail`).
+ */
+import { chooseWindow, sameWindow, type LonLat, type TileWindow } from "@marsmap/core";
 import { useStore, usableTimeS } from "./store";
+import { loadDetail } from "./data";
 import type { AreaData, StartPoint, Stop } from "./types";
 import type { WorkerIn, WorkerOut } from "./worker/protocol";
 
@@ -21,6 +28,7 @@ let planSeq = 0;
 let reachSeq = 0;
 let planTimer: ReturnType<typeof setTimeout> | undefined;
 let reachTimer: ReturnType<typeof setTimeout> | undefined;
+let detailSeq = 0;
 
 const send = (m: WorkerIn) => (m.type === "reach" ? reachWorker : planWorker)?.postMessage(m);
 
@@ -43,6 +51,14 @@ function schedulePlan() {
     const rp = routePoints(s.start, s.stops, s.returnToStart);
     if (!rp) {
       s.set({ results: null, planStatus: "idle", planError: null });
+      return;
+    }
+    if (!s.winFits) {
+      s.set({
+        results: null,
+        planStatus: "error",
+        planError: "The start and stops are too far apart to plan at full resolution: a walk is planned on an 8 km square around them. Pick stops closer together.",
+      });
       return;
     }
     s.set({ planStatus: "calculating" });
@@ -73,6 +89,36 @@ function scheduleReach() {
   }, 200);
 }
 
+/** Points the planning window must hold: the start and every stop. */
+function windowPoints(s: { start: StartPoint | null; stops: Stop[] }): LonLat[] {
+  return [...(s.start ? [s.start.lonLat] : []), ...s.stops.map((x) => x.lonLat)];
+}
+
+/** Move the planning window if the walk needs it; tell the workers and load the display rasters. */
+function updateWindow(area: AreaData, focus?: LonLat) {
+  if (!area.tiles) return;
+  const s = useStore.getState();
+  const pts = windowPoints(s);
+  if (!pts.length && focus) pts.push(focus);
+  if (!pts.length && s.win) return;
+  const { win, fits } = chooseWindow(area.manifest.grid, area.tiles, pts, s.win);
+  if (fits !== s.winFits) s.set({ winFits: fits });
+  if (sameWindow(win, s.win)) return;
+  setWindow(area, win);
+}
+
+function setWindow(area: AreaData, win: TileWindow) {
+  useStore.getState().set({ win, rings: null, reach: null });
+  for (const w of [planWorker, reachWorker]) w?.postMessage({ type: "window", win });
+  const seq = ++detailSeq;
+  void loadDetail(area, win).then(
+    (detail) => {
+      if (seq === detailSeq) useStore.getState().set({ detail });
+    },
+    (e) => console.error("planning window", e),
+  );
+}
+
 export function startEngine(area: AreaData) {
   planWorker?.terminate();
   reachWorker?.terminate();
@@ -89,8 +135,11 @@ export function startEngine(area: AreaData) {
         schedulePlan();
         scheduleReach();
       }
+    } else if (m.type === "window") {
+      // Nothing to do: requests queued in the worker run now. Logged for the curious.
+      if (import.meta.env.DEV) console.debug(`planning window ${m.grid.id} loaded in ${Math.round(m.ms)} ms`);
     } else if (m.type === "error") {
-      if (m.kind === "init") s.set({ engine: { ...s.engine, ready: false, error: m.message } });
+      if (m.kind === "init" || m.kind === "window") s.set({ engine: { ...s.engine, ready: false, error: m.message } });
       else if (m.kind === "plan") s.set({ planStatus: "error", planError: m.message });
       else s.set({ reachStatus: "error" });
     } else if (m.type === "plan") {
@@ -100,7 +149,7 @@ export function startEngine(area: AreaData) {
       if (m.id !== reachSeq || !s.start || !s.params) return;
       s.set({
         rings: m.rings,
-        reach: { outTimeS: m.outTimeS, backTimeS: m.backTimeS, backEnergyKJ: m.backEnergyKJ, start: s.start.lonLat, usableS: usableTimeS(s.params) },
+        reach: { grid: m.grid, clipped: m.clipped, outTimeS: m.outTimeS, backTimeS: m.backTimeS, backEnergyKJ: m.backEnergyKJ, start: s.start.lonLat, usableS: usableTimeS(s.params) },
         reachStatus: "ready",
       });
     }
@@ -115,9 +164,17 @@ export function startEngine(area: AreaData) {
   };
   planWorker = make();
   reachWorker = make();
+  if (area.tiles) {
+    // First window: around the start (or the points of interest when there is none).
+    const pois = area.config.pois;
+    const focus: LonLat | undefined = pois.length ? [pois.reduce((p, q) => p + q.lon, 0) / pois.length, pois.reduce((p, q) => p + q.lat, 0) / pois.length] : undefined;
+    useStore.getState().set({ win: null, detail: null });
+    updateWindow(area, focus);
+  } else useStore.getState().set({ win: null, detail: area.overview });
 
   unsub?.();
   unsub = useStore.subscribe((s, prev) => {
+    if (s.start !== prev.start || s.stops !== prev.stops) updateWindow(area);
     if (s.start !== prev.start || s.stops !== prev.stops || s.returnToStart !== prev.returnToStart || s.params !== prev.params) schedulePlan();
     if (s.start !== prev.start || s.params !== prev.params || s.selectedProfile !== prev.selectedProfile) scheduleReach();
   });

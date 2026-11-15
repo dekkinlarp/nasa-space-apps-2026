@@ -2,18 +2,32 @@
 /**
  * Runs @marsmap/core off the main thread. Requests of the same kind are coalesced:
  * only the newest plan / reach request is computed, so slider drags never queue up.
+ *
+ * A tiled region is routed one planning window at a time: a "window" message loads the routing
+ * rasters of that window of tiles, and plan / reach requests wait until it is in. An untiled area
+ * is loaded whole at init.
  */
-import type { Layers, LayerManifest, LonLat, SurfaceClass, WalkParams } from "@marsmap/core";
+import { loadWindowLayers, manifestTiles, type Layers, type LayerManifest, type LonLat, type SurfaceClass, type TileWindow, type WalkParams } from "@marsmap/core";
 import { core, missingCoreFunctions } from "../core";
 import type { WorkerIn, WorkerOut } from "./protocol";
 
 declare const self: DedicatedWorkerGlobalScope;
 
 let layers: Layers | null = null;
+let ctx: { manifest: LayerManifest; surfaceClasses: SurfaceClass[]; fetchBinary: (f: string) => Promise<ArrayBuffer> } | null = null;
+/** Bumped by every window request, so a slow load that has been superseded is dropped. */
+let loadSeq = 0;
 const pending: Partial<Record<"plan" | "reach", WorkerIn>> = {};
 let scheduled = false;
 
 const post = (m: WorkerOut, transfer: Transferable[] = []) => self.postMessage(m, transfer);
+
+function kick() {
+  if (!scheduled && layers && (pending.plan || pending.reach)) {
+    scheduled = true;
+    setTimeout(drain, 0);
+  }
+}
 
 async function init(base: string, manifest: LayerManifest, surfaceClasses: SurfaceClass[]) {
   const missing = missingCoreFunctions();
@@ -27,11 +41,29 @@ async function init(base: string, manifest: LayerManifest, surfaceClasses: Surfa
     if (!r.ok) throw new Error(`${url}: HTTP ${r.status}`);
     return r.arrayBuffer();
   };
+  ctx = { manifest, surfaceClasses, fetchBinary };
   try {
-    layers = await core.loadLayers!(manifest, fetchBinary, surfaceClasses);
+    // Small areas are routed whole; tiled regions wait for a window.
+    if (!manifestTiles(manifest)) layers = await loadWindowLayers(manifest, null, fetchBinary, surfaceClasses);
     post({ type: "ready", ok: true, missing: [], profiles: core.DEFAULT_PROFILES ?? [] });
   } catch (e) {
     post({ type: "error", kind: "init", message: String((e as Error)?.message ?? e) });
+  }
+}
+
+async function loadWindow(win: TileWindow) {
+  if (!ctx) return;
+  const seq = ++loadSeq;
+  layers = null;
+  const t0 = performance.now();
+  try {
+    const next = await loadWindowLayers(ctx.manifest, win, ctx.fetchBinary, ctx.surfaceClasses);
+    if (seq !== loadSeq) return;
+    layers = next;
+    post({ type: "window", win, grid: next.grid, ms: performance.now() - t0 });
+    kick();
+  } catch (e) {
+    if (seq === loadSeq) post({ type: "error", kind: "window", message: String((e as Error)?.message ?? e) });
   }
 }
 
@@ -51,10 +83,18 @@ function runReach(id: number, start: LonLat, params: WalkParams, profileId: stri
   const rings = core.walkLimitRing
     ? [...core.reachRings!(layers!.grid, reach, budgetsS), core.walkLimitRing(layers!.grid, reach, params, dwellS)]
     : core.reachRings!(layers!.grid, reach, [...budgetsS, Math.max(0, usableS)]);
+  // Is any cell on the window's edge reachable and back within the time and energy left after one stop?
+  const g = layers!.grid, W = g.width, H = g.height;
+  const usableE = params.energyBudgetKJ * (1 - params.reserveFraction) - ((params.dwellMetabolicW ?? 0) * dwellS) / 1000;
+  const within = (i: number) =>
+    reach.outTimeS[i]! + reach.backTimeS[i]! <= usableS && reach.outEnergyKJ[i]! + reach.backEnergyKJ[i]! <= usableE;
+  let clipped = false;
+  for (let c = 0; c < W && !clipped; c++) clipped = within(c) || within((H - 1) * W + c);
+  for (let r = 0; r < H && !clipped; r++) clipped = within(r * W) || within(r * W + W - 1);
   const out = reach.outTimeS.slice();
   const back = reach.backTimeS.slice();
   const backE = reach.backEnergyKJ.slice();
-  post({ type: "reach", id, rings, outTimeS: out, backTimeS: back, backEnergyKJ: backE, ms: performance.now() - t0 }, [
+  post({ type: "reach", id, rings, grid: layers!.grid, clipped, outTimeS: out, backTimeS: back, backEnergyKJ: backE, ms: performance.now() - t0 }, [
     out.buffer,
     back.buffer,
     backE.buffer,
@@ -64,20 +104,18 @@ function runReach(id: number, start: LonLat, params: WalkParams, profileId: stri
 function drain() {
   scheduled = false;
   for (const kind of ["plan", "reach"] as const) {
+    // Layers are swapped out while a new window loads; whatever is pending runs once it is in.
+    if (!layers) return;
     const m = pending[kind];
     if (!m) continue;
     delete pending[kind];
-    if (!layers) {
-      post({ type: "error", kind, id: "id" in m ? m.id : undefined, message: "Routing layers are not loaded." });
-      continue;
-    }
     try {
       if (m.type === "plan") runPlan(m.id, m.points, m.dwellS, m.params);
       else if (m.type === "reach") runReach(m.id, m.start, m.params, m.profileId, m.budgetsS, m.dwellS);
     } catch (e) {
       post({ type: "error", kind, id: "id" in m ? m.id : undefined, message: String((e as Error)?.message ?? e) });
     }
-    // Yield so newer requests that arrived during the computation replace older ones.
+    // Yield so newer requests (or a new window) that arrived during the computation come first.
     if (pending.plan || pending.reach) {
       scheduled = true;
       setTimeout(drain, 0);
@@ -89,17 +127,13 @@ function drain() {
 self.onmessage = (ev: MessageEvent<WorkerIn>) => {
   const m = ev.data;
   if (m.type === "init") {
-    void init(m.base, m.manifest, m.surfaceClasses).then(() => {
-      if (!scheduled && (pending.plan || pending.reach)) {
-        scheduled = true;
-        setTimeout(drain, 0);
-      }
-    });
+    void init(m.base, m.manifest, m.surfaceClasses).then(kick);
+    return;
+  }
+  if (m.type === "window") {
+    void loadWindow(m.win);
     return;
   }
   pending[m.type] = m;
-  if (!scheduled && layers) {
-    scheduled = true;
-    setTimeout(drain, 0);
-  }
+  kick();
 };

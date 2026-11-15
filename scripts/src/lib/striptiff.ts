@@ -162,6 +162,21 @@ export class RemoteStripTiff {
     return { buf, base: lo };
   }
 
+  /** Download (and cache) the strips for rows [r0, r1) without decoding them. */
+  async prefetchRows(r0: number, r1: number, concurrency = 4): Promise<void> {
+    const chunks: number[] = [];
+    for (let c = Math.floor(r0 / CHUNK_ROWS); c <= Math.floor((r1 - 1) / CHUNK_ROWS); c++) chunks.push(c);
+    let done = 0, last = 0;
+    await pool(chunks, concurrency, async (c) => {
+      await this.chunk(c);
+      done++;
+      if (Date.now() - last > 10_000 || done === chunks.length) {
+        last = Date.now();
+        log("elevation", `DEM chunks downloaded ${done}/${chunks.length}`);
+      }
+    });
+  }
+
   /**
    * Read rows [r0, r1) and columns [c0, c1) as float32 (nodata -> NaN).
    * Requires rowsPerStrip = 1 (true for the Gale mosaic).

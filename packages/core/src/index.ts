@@ -20,11 +20,32 @@
  * computeSlope, snapToPassable, the generic search engine (astar, flood, MinHeap), the oxygen
  * model (oxygenUsedKg, oxygenModelOn; optional o2* fields on WalkParams) and
  * walkLimitRing(grid, reach, params, dwellS?) -> ReachRing (time, energy and oxygen together).
+ * Tiled regions: loadWindowLayers(manifest, window, fetchBinary, surfaceClasses) loads the routing rasters
+ * of a window of tiles (chooseWindow picks it); routing then runs on that window's own GridSpec.
  */
 export * from "./types";
 export { DEFAULT_WALK_PARAMS, EARTH_GRAVITY, oxygenUsedKg, oxygenModelOn } from "./params";
 export { lonLatToCell, cellToLonLat, rowColToLonLat, distanceM, samplePoint, type CellRef } from "./grid";
 export { loadLayers, computeSlope, fetchLayerBytes } from "./load";
+export {
+  INT16_NODATA,
+  inflate,
+  encodeValues,
+  decodeValues,
+  decodeRaster,
+  tilePath,
+  manifestTiles,
+  windowGrid,
+  sameWindow,
+  chooseWindow,
+  readLayerWindow,
+  readLayerWhole,
+  readOverview,
+  loadWindowLayers,
+  WINDOW_SIDE_M,
+  WINDOW_MARGIN_M,
+  type TileWindow,
+} from "./tiles";
 export {
   createCostModel,
   BUILTIN_FACTORS,

@@ -1,7 +1,7 @@
 import type { ReactNode } from "react";
 import { useStore } from "../store";
 import { fmtDist, fmtLonLat, fmtNum } from "../format";
-import { nearestPhoto, sampleAt, surfaceById } from "../lib";
+import { nearestPhoto, sampleBest, surfaceById } from "../lib";
 import { marsDistanceM } from "../geo";
 import type { Poi, RoverPhoto } from "../types";
 import type { LonLat } from "@marsmap/core";
@@ -91,7 +91,8 @@ export function PhotoThumb({ photo, distM, className }: { photo: RoverPhoto; dis
 function PointStats({ lonLat }: { lonLat: LonLat }) {
   const area = useStore((s) => s.area)!;
   const start = useStore((s) => s.start);
-  const smp = sampleAt(area.layers, lonLat);
+  const detail = useStore((s) => s.detail);
+  const smp = sampleBest(area, detail, lonLat);
   const surf = surfaceById(area.config.surfaceClasses, smp?.surfaceId);
   return (
     <StatGrid className="border-y py-2">

@@ -12,9 +12,13 @@
 import { existsSync, readFileSync } from "node:fs";
 import { join } from "node:path";
 import type { LayerEntry } from "../../packages/core/src/types";
-import { CONFIG_DIR, areaDir, cacheDir, gridFromArea, isMain, loadArea, log, needs, type GridSpec } from "./lib/area";
+import { CONFIG_DIR, FORCE, areaDir, cacheDir, gridFromArea, isMain, loadArea, log, type GridSpec } from "./lib/area";
 import { cachedFile, fetchBuffer, writeAtomic, writeJson } from "./lib/net";
-import { writeF32 } from "./lib/demgrid";
+import { coarseGrid, deflateValues, U8_CODEC } from "./lib/tiles";
+import type { LayerCodec } from "../../packages/core/src/types";
+
+/** Band depths are small numbers: int16 steps of 1e-5 cover -0.33 to +0.33. */
+const CRISM_CODEC: LayerCodec = { kind: "int16", scale: 1e-5, offset: 0, delta: false, deflate: true };
 
 const PDS = "https://pds-geosciences.wustl.edu/mro/mro-m-crism-5-rdr-mptargeted-v1/mrocr_4001/mtrdr";
 
@@ -27,21 +31,42 @@ export interface CrismScene {
 
 /**
  * Scenes in priority order: a cell takes its value from the first scene that has data there.
- * The first covers the boxwork and most of the area; the second fills the strip west of it.
+ * Every MTRDR scene the PDS Orbital Data Explorer lists over the region (query: product type MTRDR,
+ * instrument CRISM, bounded by the region), except three that only clip its edges. First the two that
+ * cover the boxwork (as before), then the other full-resolution (FRT, 18 m) scenes with the low sun
+ * angles of 2011 first, then the rest of the FRTs, then the half-resolution (HRL, 36 m) scenes, which
+ * only fill gaps.
  */
 export const CRISM_SCENES: CrismScene[] = [
   { obs: "FRT0000B6F1", acquired: "2008-07-09", base: `${PDS}/2008/2008_191/frt0000b6f1/frt0000b6f1_07_su165j_mtr3` },
   { obs: "FRT0001BBA1", acquired: "2010-11-06", base: `${PDS}/2010/2010_310/frt0001bba1/frt0001bba1_07_su165j_mtr3` },
+  { obs: "FRT0002037A", acquired: "2011-09-11", base: `${PDS}/2011/2011_254/frt0002037a/frt0002037a_07_su165j_mtr3` },
+  { obs: "FRT00020B9D", acquired: "2011-10-14", base: `${PDS}/2011/2011_287/frt00020b9d/frt00020b9d_07_su165j_mtr3` },
+  { obs: "FRT00021C92", acquired: "2011-12-08", base: `${PDS}/2011/2011_342/frt00021c92/frt00021c92_07_su164j_mtr3` },
+  { obs: "FRT0001D889", acquired: "2011-03-29", base: `${PDS}/2011/2011_088/frt0001d889/frt0001d889_07_su165j_mtr3` },
+  { obs: "FRT0001CA91", acquired: "2010-12-31", base: `${PDS}/2010/2010_365/frt0001ca91/frt0001ca91_07_su165j_mtr3` },
+  { obs: "FRT000058A3", acquired: "2007-04-22", base: `${PDS}/2007/2007_112/frt000058a3/frt000058a3_07_su165j_mtr3` },
+  { obs: "FRT0000C0EF", acquired: "2008-08-17", base: `${PDS}/2008/2008_230/frt0000c0ef/frt0000c0ef_07_su165j_mtr3` },
+  { obs: "FRT0000C518", acquired: "2008-09-02", base: `${PDS}/2008/2008_246/frt0000c518/frt0000c518_07_su165j_mtr3` },
+  { obs: "FRT0000BFCA", acquired: "2008-08-11", base: `${PDS}/2008/2008_224/frt0000bfca/frt0000bfca_07_su167j_mtr3` },
+  { obs: "FRT0000BEE7", acquired: "2008-08-06", base: `${PDS}/2008/2008_219/frt0000bee7/frt0000bee7_07_su165j_mtr3` },
+  { obs: "FRT00010820", acquired: "2009-01-13", base: `${PDS}/2009/2009_013/frt00010820/frt00010820_07_su165j_mtr3` },
+  { obs: "FRT0000CD48", acquired: "2008-10-05", base: `${PDS}/2008/2008_279/frt0000cd48/frt0000cd48_07_su165j_mtr3` },
+  { obs: "FRT0000C620", acquired: "2008-09-08", base: `${PDS}/2008/2008_252/frt0000c620/frt0000c620_07_su166j_mtr3` },
+  { obs: "HRL0001233B", acquired: "2009-04-23", base: `${PDS}/2009/2009_113/hrl0001233b/hrl0001233b_07_su183j_mtr3` },
+  { obs: "HRL0000BABA", acquired: "2008-07-20", base: `${PDS}/2008/2008_202/hrl0000baba/hrl0000baba_07_su182j_mtr3` },
+  { obs: "HRL0000D21C", acquired: "2008-10-28", base: `${PDS}/2008/2008_302/hrl0000d21c/hrl0000d21c_07_su183j_mtr3` },
+  { obs: "HRL0000D349", acquired: "2008-11-02", base: `${PDS}/2008/2008_307/hrl0000d349/hrl0000d349_07_su182j_mtr3` },
 ];
-export const CRISM_SOURCE = `MRO CRISM targeted observations ${CRISM_SCENES.map((s) => `${s.obs} (${s.acquired})`).join(" and ")}, MTRDR summary-parameter products (*_SU165J_MTR3), NASA PDS Geosciences Node, ${PDS}/`;
+export const CRISM_SOURCE = `MRO CRISM targeted observations (${CRISM_SCENES.length} scenes, ${CRISM_SCENES.map((s) => s.obs).join(", ")}), MTRDR summary-parameter products (*_SU*J_MTR3), NASA PDS Geosciences Node, ${PDS}/`;
 const PARAM_DOC = "Viviano-Beck et al. 2014, JGR Planets 119, doi:10.1002/2014JE004627 (revised CRISM summary parameters)";
 
 /** Reflectance band used only to check alignment against the HiRISE photo. */
 const ALIGN_BAND = "R770";
 /** Search window for the alignment check, CRISM pixels each way. */
-const MAX_SHIFT = 14;
+const MAX_SHIFT = 20;
 /** Apply a shift only when it improves the correlation by at least this much. */
-const MIN_GAIN = 0.05;
+const MIN_GAIN = 0.02;
 
 export interface MineralBand {
   id: string;
@@ -152,7 +177,7 @@ interface OpenScene {
   sampler(band: string): Promise<(lon: number, lat: number) => number>;
 }
 
-const COREG_METHOD = `Pearson correlation between CRISM ${"R770"} reflectance and the HiRISE photo averaged to CRISM pixels, over whole-pixel shifts of up to 14 px, separately for each scene; a shift is applied only if it raises the correlation by 0.05 or more and is not at the edge of the search window.`;
+const COREG_METHOD = `Pearson correlation between CRISM ${"R770"} reflectance and the HiRISE photo averaged to CRISM pixels, over whole-pixel shifts of up to 20 px, separately for each scene; a shift is applied only if it raises the correlation by 0.02 or more and is not at the edge of the search window.`;
 
 /** Open one scene over the area: fetch its header, check its alignment against the HiRISE grid copy. Null if it misses the area. */
 async function openScene(scene: CrismScene, g: GridSpec, gray: Buffer | null): Promise<OpenScene | null> {
@@ -263,17 +288,21 @@ function quantile(sorted: Float32Array, q: number): number {
 
 export async function runMinerals(): Promise<void> {
   const a = loadArea();
-  const g: GridSpec = gridFromArea(a);
+  // CRISM pixels are 18 m (36 m for HRL scenes), so the layers live on the overview grid, not the 2 m grid.
+  const g: GridSpec = coarseGrid(gridFromArea(a), a.overviewFactor ?? 8, `${a.id}-overview`);
   const dir = areaDir(a);
   const outJson = join(dir, "minerals.json");
   const entriesFile = join(cacheDir(a.id), "mineral-layers.json");
-  if (!needs(outJson) && existsSync(entriesFile) && MINERAL_BANDS.every((m) => existsSync(join(dir, `${m.id}.f32`)))) {
-    log("minerals", "minerals.json exists, skipping");
-    return;
+  if (!FORCE && existsSync(outJson) && existsSync(entriesFile) && MINERAL_BANDS.every((m) => existsSync(join(dir, "crism", `${m.id}.bin`)))) {
+    const prev = JSON.parse(readFileSync(entriesFile, "utf8")) as LayerEntry[];
+    if (prev.length && JSON.stringify(prev[0]!.grid) === JSON.stringify(g)) {
+      log("minerals", "minerals.json exists, skipping");
+      return;
+    }
   }
-  const grayFile = join(cacheDir(a.id), "hirise_grid.u8");
+  const grayFile = join(cacheDir(a.id), "hirise_ov.u8");
   const gray = existsSync(grayFile) ? readFileSync(grayFile) : null;
-  if (!gray) log("minerals", "hirise_grid.u8 missing: alignment not checked");
+  if (!gray) log("minerals", "hirise_ov.u8 missing: alignment not checked");
   const scenes: OpenScene[] = [];
   for (const sc of CRISM_SCENES) {
     const o = await openScene(sc, g, gray);
@@ -293,46 +322,42 @@ export async function runMinerals(): Promise<void> {
   const sceneOf = new Uint8Array(N);
   for (const m of MINERAL_BANDS) {
     const samplers = await Promise.all(scenes.map((s) => s.sampler(m.band)));
-    // Later scenes were taken in a different season and atmosphere, so their values sit at a slightly
-    // different level. Each is moved by the median difference to the first scene where the two overlap.
+    // Scenes were taken in different seasons and atmospheres, so their values sit at slightly different
+    // levels. Each scene in turn is moved by its median difference to the mosaic built so far where the
+    // two overlap, then fills the cells still empty.
     const match: { observation: string; offset: number; overlapR: number | null; overlapSamples: number }[] = [];
-    const offsets = [0];
-    const step = Math.max(1, Math.round(pixelM / g.cellSizeM)); // about one sample per CRISM pixel
-    for (let k = 1; k < scenes.length; k++) {
+    const out = new Float32Array(N).fill(NaN);
+    const used = new Array<number>(scenes.length).fill(0);
+    const vals = new Float32Array(N);
+    for (let k = 0; k < scenes.length; k++) {
       const xs: number[] = [], ys: number[] = [];
-      for (let r = 0; r < g.height; r += step)
-        for (let c = 0; c < g.width; c += step) {
-          const p = samplers[0]!(lonOf(c), latOf(r)), q = samplers[k]!(lonOf(c), latOf(r));
-          if (!Number.isNaN(p) && !Number.isNaN(q)) {
-            xs.push(p);
+      for (let r = 0; r < g.height; r++) {
+        const lat = latOf(r);
+        for (let c = 0; c < g.width; c++) {
+          const i = r * g.width + c;
+          const q = samplers[k]!(lonOf(c), lat);
+          vals[i] = q;
+          if (!Number.isNaN(q) && !Number.isNaN(out[i]!)) {
+            xs.push(out[i]!);
             ys.push(q);
           }
         }
+      }
       const diffs = Float32Array.from(xs.map((x, i) => x - ys[i]!)).sort();
-      const offset = diffs.length >= 200 ? quantile(diffs, 0.5) : 0;
-      const r = pearson(xs, ys);
-      offsets.push(offset);
-      match.push({ observation: scenes[k]!.scene.obs, offset: Number(offset.toPrecision(3)), overlapR: Number.isFinite(r) ? Number(r.toFixed(2)) : null, overlapSamples: xs.length });
-      log("minerals", `${m.band}: ${scenes[k]!.scene.obs} vs ${scenes[0]!.scene.obs} in ${xs.length} overlapping pixels: r = ${r.toFixed(2)}, median offset ${offset.toPrecision(3)}`);
-    }
-    const out = new Float32Array(N);
-    const used = new Array<number>(scenes.length).fill(0);
-    for (let r = 0; r < g.height; r++) {
-      const lat = latOf(r);
-      for (let c = 0; c < g.width; c++) {
-        const lon = lonOf(c);
-        let v = NaN;
-        for (let k = 0; k < scenes.length && Number.isNaN(v); k++) {
-          v = samplers[k]!(lon, lat) + offsets[k]!;
-          if (!Number.isNaN(v)) {
-            used[k]!++;
-            sceneOf[r * g.width + c] = k + 1;
-          }
-        }
-        out[r * g.width + c] = v;
+      const offset = k > 0 && diffs.length >= 200 ? quantile(diffs, 0.5) : 0;
+      const rr = pearson(xs, ys);
+      if (k > 0) {
+        match.push({ observation: scenes[k]!.scene.obs, offset: Number(offset.toPrecision(3)), overlapR: Number.isFinite(rr) ? Number(rr.toFixed(2)) : null, overlapSamples: xs.length });
+        log("minerals", `${m.band}: ${scenes[k]!.scene.obs} vs mosaic in ${xs.length} overlapping cells: r = ${rr.toFixed(2)}, median offset ${offset.toPrecision(3)}`);
+      }
+      for (let i = 0; i < N; i++) {
+        if (!Number.isNaN(out[i]!) || Number.isNaN(vals[i]!)) continue;
+        out[i] = vals[i]! + offset;
+        used[k]!++;
+        sceneOf[i] = k + 1;
       }
     }
-    writeF32(join(dir, `${m.id}.f32`), out);
+    writeAtomic(join(dir, "crism", `${m.id}.bin`), deflateValues(out, CRISM_CODEC, g.width));
     const sorted = out.filter((v) => !Number.isNaN(v)).sort();
     const p = (q: number) => Number(quantile(sorted, q).toPrecision(4));
     let positive = 0;
@@ -369,11 +394,13 @@ export async function runMinerals(): Promise<void> {
     const shifts = scenes.filter((s) => s.coreg.applied).map((s) => `${s.scene.obs} by (${s.coreg.shiftPx.join(", ")}) px`);
     entries.push({
       id: m.id,
-      file: `${m.id}.f32`,
+      file: `crism/${m.id}.bin`,
+      grid: g,
+      codec: CRISM_CODEC,
       dtype: "float32",
       units: "band depth (unitless; above 0 means the absorption is present)",
       source: CRISM_SOURCE,
-      method: `Band ${m.band} of the summary-parameter product (${PARAM_DOC}). ${m.indicates} ${m.caveat} Nearest-neighbour resample of the ${pixelM} m CRISM pixels onto the grid${shifts.length ? `, after whole-pixel shifts found by matching CRISM reflectance to the HiRISE photo (${shifts.join("; ")})` : ""}.${scenes.length > 1 ? ` Cells outside ${scenes[0]!.scene.obs} are filled from ${scenes.slice(1).map((s) => s.scene.obs).join(", ")}, moved by the median difference between the scenes where they overlap.` : ""} An indicator, not an abundance.`,
+      method: `Band ${m.band} of the summary-parameter product (${PARAM_DOC}). ${m.indicates} ${m.caveat} Nearest-neighbour resample of the ${pixelM} m CRISM pixels onto ${g.cellSizeM} m cells${shifts.length ? `, after whole-pixel shifts found by matching CRISM reflectance to the HiRISE photo (${shifts.join("; ")})` : ""}.${scenes.length > 1 ? ` A mosaic of ${scenes.length} scenes: each cell takes the first scene (in the order ${scenes.map((s) => s.scene.obs).join(", ")}) with data there, each scene moved by its median difference to the scenes before it where they overlap.` : ""} An indicator, not an abundance.`,
       version: "2",
       estimated: false,
       name: m.name,
@@ -383,7 +410,7 @@ export async function runMinerals(): Promise<void> {
     });
     log("minerals", `${m.id} (${m.band}): coverage ${stats.coveragePct}% (${Object.entries(stats.scenePct).map(([k, v]) => `${k} ${v}%`).join(", ")}), ${positivePct}% above 0, p98 ${p(0.98)}`);
   }
-  writeAtomic(join(dir, "crism_scene.u8"), sceneOf);
+  writeAtomic(join(dir, "crism", "scene.bin"), deflateValues(sceneOf, U8_CODEC, g.width));
   writeJson(entriesFile, entries);
   writeJson(outJson, {
     generatedAt: new Date().toISOString(),
@@ -395,7 +422,7 @@ export async function runMinerals(): Promise<void> {
     pixelM,
     note:
       "Spectral indicators, not abundances. One CRISM pixel is 18 m across, so a value describes a patch of ground rather than a rock, and dust or sand cover weakens every indicator." +
-      (scenes.length > 1 ? ` The ${scenes[0]!.scene.obs} scene is used wherever it has data; the rest is filled from a second scene taken at a different time, so expect a visible seam and compare values across it with care.` : ""),
+      (scenes.length > 1 ? ` The map is a mosaic of ${scenes.length} scenes taken between 2007 and 2011, so expect visible seams between them and compare values across a seam with care.` : ""),
     // First scene's alignment, kept at the top level for readers that expect a single scene.
     coregistration: { method: COREG_METHOD, ...scenes[0]!.coreg },
     scenes: scenes.map((s) => ({ ...s.scene, coregistration: s.coreg })),

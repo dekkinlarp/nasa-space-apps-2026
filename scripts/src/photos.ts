@@ -1,6 +1,6 @@
 /**
  * rover/photos/: 1-3 Curiosity raw images (Navcam / Mastcam full frames, end of sol) for
- * ~36 waypoints spread across the sols spent inside the area, resized to <= 1280 px wide.
+ * ~72 waypoints spread across the sols spent inside the area (2 frames each), resized to <= 1280 px wide.
  *
  * API notes (explored 2026-11): `&sol=N` returns every image of that sol in one response
  * (num/page are ignored); `search=` / `extended=sample_type::full,` work but then the sol
@@ -13,8 +13,8 @@ import { areaDir, cacheDir, isMain, loadArea, log, needs } from "./lib/area";
 import { cachedFile, fetchBuffer, pool, writeAtomic, writeJson } from "./lib/net";
 import { runRover, type Waypoint } from "./rover";
 
-const TARGET_WAYPOINTS = 36;
-const PER_WAYPOINT = 3;
+const TARGET_WAYPOINTS = 72;
+const PER_WAYPOINT = 2;
 const API = (sol: number) => `https://mars.nasa.gov/rss/api/?feed=raw_images&category=msl&feedtype=json&num=50&page=0&order=sol+desc&&sol=${sol}`;
 const MUST_INCLUDE_SOLS = [4548, 4687, 4711];
 

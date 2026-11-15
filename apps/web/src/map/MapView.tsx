@@ -1,13 +1,14 @@
 import { useEffect, useRef, useState } from "react";
 import { createPortal } from "react-dom";
 import maplibregl, { type GeoJSONSource, type ImageSource, type Map as MLMap } from "maplibre-gl";
-import type { LonLat, ReachRing, RouteResult } from "@marsmap/core";
+import type { GridSpec, LonLat, ReachRing, RouteResult } from "@marsmap/core";
 import { selectedResult, useStore, type LayerState, type OverlayId } from "../store";
-import type { AreaData, Poi } from "../types";
-import { cellIndex, M_PER_DEG_LAT } from "../geo";
+import type { AreaData, DisplayLayers, Poi } from "../types";
+import { M_PER_DEG_LAT } from "../geo";
+import { sampleBest } from "../lib";
 import { confidenceUrl, costUrl, elevationUrl, SCIENCE_RAMPS, scienceUrl, slopeUrl, surfaceUrl } from "./rasters";
 import { loadFloatLayer } from "../data";
-import { demMaxZoom, DEM_TILE_SIZE, registerDemProtocol, setDemSource } from "./dem";
+import { demMaxZoom, demTilesUrl, DEM_TILE_SIZE, registerDemProtocol, setDemSource } from "./dem";
 import { IMAGERY_TILE_SIZE, imageryGroups, imageryMaxZoom, imageryTilesUrl, registerImageryProtocol, setImageryArea } from "./imageryTiles";
 import { fmtDur } from "../format";
 import { ClickMenu } from "../components/ClickMenu";
@@ -73,6 +74,19 @@ export function resizeMapDuring(ms: number) {
 }
 
 const RASTER_OVERLAYS = ["elevation", "slope", "surface", "confidence", "cost"] as const;
+/** Overlays drawn from the rasters (cost is drawn from the reach field instead). */
+const LAYER_OVERLAYS = ["elevation", "slope", "surface", "confidence"] as const;
+type LayerOverlay = (typeof LAYER_OVERLAYS)[number];
+
+/** Picture of one raster overlay of a set of display layers (null when that layer is missing). */
+function overlayUrl(id: LayerOverlay, L: DisplayLayers, a: AreaData): Promise<string> | null {
+  const g = L.grid;
+  if (id === "elevation" && L.elevation) return elevationUrl(g, L.elevation, L.elevMin, L.elevMax);
+  if (id === "slope" && L.slope) return slopeUrl(g, L.slope);
+  if (id === "surface" && L.surface) return surfaceUrl(g, L.surface, a.config.surfaceClasses);
+  if (id === "confidence" && L.confidence) return confidenceUrl(g, L.confidence);
+  return null;
+}
 
 /** Manifest layers the pipeline marked as science overlays (e.g. CRISM mineral indicators). */
 export const scienceLayers = (a: AreaData) => a.manifest.layers.filter((l) => l.group === "science" && l.dtype === "float32");
@@ -225,8 +239,7 @@ function attachGestures(map: MLMap): () => void {
   };
 }
 
-function gridCoords(a: AreaData): [[number, number], [number, number], [number, number], [number, number]] {
-  const g = a.layers.grid;
+function gridCoords(g: GridSpec): [[number, number], [number, number], [number, number], [number, number]] {
   return [[g.west, g.north], [g.east, g.north], [g.east, g.south], [g.west, g.south]];
 }
 
@@ -393,9 +406,9 @@ function placePoiLabels(map: MLMap, pins: { el: HTMLElement; ll: LonLat; rank: n
     });
 }
 
-/** Open on the points of interest (the boxwork), not the whole 3 km square. */
+/** Open on the points of interest (the boxwork), not the whole region. */
 function initialBounds(a: AreaData): [number, number, number, number] {
-  const g = a.layers.grid;
+  const g = a.manifest.grid;
   const pts = a.config.pois.filter((p) => p.lon >= g.west && p.lon <= g.east && p.lat >= g.south && p.lat <= g.north);
   if (pts.length < 2) return [g.west, g.south, g.east, g.north];
   const lons = pts.map((p) => p.lon), lats = pts.map((p) => p.lat);
@@ -408,13 +421,16 @@ export function MapView() {
   const [ready, setReady] = useState(false);
   const [popupEl, setPopupEl] = useState<HTMLElement | null>(null);
   const urls = useRef<Partial<Record<OverlayId, string>>>({});
+  /** The same for the planning window's full-resolution copies of the overlays. */
+  const detailUrls = useRef<Partial<Record<OverlayId, string>>>({});
   /** The tile URL each imagery source currently uses, so a tint switch only reloads what changed. */
   const shownUrl = useRef(new Map<string, string>());
 
   // ---------- create map ----------
   useEffect(() => {
-    const g = area.layers.grid;
-    if (area.layers.elevation) setDemSource(g, area.layers.elevation, area.layers.elevRef);
+    const g = area.manifest.grid;
+    const ov = area.overview;
+    if (ov.elevation) setDemSource({ grid: ov.grid, elev: ov.elevation }, null, ov.elevRef);
     registerDemProtocol();
     setImageryArea(area);
     registerImageryProtocol();
@@ -430,7 +446,7 @@ export function MapView() {
       bounds: initialBounds(area),
       fitBoundsOptions: { padding: 40 },
       maxBounds: [g.west - padLon, g.south - padLat, g.east + padLon, g.north + padLat],
-      minZoom: 11,
+      minZoom: 10,
       maxZoom: 21,
       maxPitch: 80,
       attributionControl: false,
@@ -452,7 +468,7 @@ export function MapView() {
         pendingInsets = null;
         setMapInsets(p, 0);
       }
-      const coords = gridCoords(area);
+      const coords = gridCoords(g);
       // The mapped square is solid ground: with imagery faded or off it stays dark instead of showing stars through it.
       map.addSource("ground", { type: "geojson", data: { type: "Feature", properties: {}, geometry: { type: "Polygon", coordinates: [[...coords, coords[0]]] } } });
       map.addLayer({ id: "ground", type: "fill", source: "ground", paint: { "fill-color": "#0a0b0d", "fill-antialias": false } });
@@ -466,18 +482,27 @@ export function MapView() {
       // DEM: one source for terrain, one for hillshade (MapLibre recommends separate sources).
       const demMax = demMaxZoom(g);
       for (const id of ["dem", "dem-hs"]) {
-        map.addSource(id, { type: "raster-dem", tiles: ["marsdem://{z}/{x}/{y}"], tileSize: DEM_TILE_SIZE, encoding: "terrarium", maxzoom: demMax, minzoom: 8, bounds: [g.west, g.south, g.east, g.north] });
+        map.addSource(id, { type: "raster-dem", tiles: [demTilesUrl()], tileSize: DEM_TILE_SIZE, encoding: "terrarium", maxzoom: demMax, minzoom: 8, bounds: [g.west, g.south, g.east, g.north] });
       }
       map.addLayer({ id: "hillshade", type: "hillshade", source: "dem-hs", layout: { visibility: "none" }, paint: { "hillshade-exaggeration": 0.6, "hillshade-shadow-color": "#000000", "hillshade-highlight-color": "#ffffff", "hillshade-accent-color": "#1c1e22" } });
+      // Each overlay is drawn twice where the area is tiled: the region overview, and on top of it the
+      // planning window at full resolution (ovd-*).
       for (const id of RASTER_OVERLAYS) {
+        const resampling = id === "surface" ? "nearest" : "linear";
         map.addSource(`ov-${id}`, { type: "image", url: BLANK, coordinates: coords });
-        map.addLayer({ id: `ov-${id}`, type: "raster", source: `ov-${id}`, layout: { visibility: "none" }, paint: { "raster-fade-duration": 0, "raster-resampling": id === "surface" ? "nearest" : "linear" } });
+        map.addLayer({ id: `ov-${id}`, type: "raster", source: `ov-${id}`, layout: { visibility: "none" }, paint: { "raster-fade-duration": 0, "raster-resampling": resampling } });
+        if (!area.tiles || id === "cost") continue;
+        map.addSource(`ovd-${id}`, { type: "image", url: BLANK, coordinates: coords });
+        map.addLayer({ id: `ovd-${id}`, type: "raster", source: `ovd-${id}`, layout: { visibility: "none" }, paint: { "raster-fade-duration": 0, "raster-resampling": resampling } });
       }
       // Science layers keep their source pixels visible (nearest), so an 18 m CRISM pixel reads as one block.
       for (const l of scienceLayers(area)) {
-        map.addSource(`sci-${l.id}`, { type: "image", url: BLANK, coordinates: coords });
+        map.addSource(`sci-${l.id}`, { type: "image", url: BLANK, coordinates: gridCoords(l.grid ?? g) });
         map.addLayer({ id: `sci-${l.id}`, type: "raster", source: `sci-${l.id}`, layout: { visibility: "none" }, paint: { "raster-fade-duration": 0, "raster-resampling": "nearest" } });
       }
+      // Outline of the planning window (the square of full-resolution ground routing runs on).
+      map.addSource("window", { type: "geojson", data: EMPTY_FC });
+      map.addLayer({ id: "window", type: "line", source: "window", paint: { "line-color": "#ffffff", "line-opacity": 0.55, "line-width": 1.2, "line-dasharray": [4, 3] } });
       map.addSource("rings", { type: "geojson", data: EMPTY_FC });
       map.addLayer({ id: "rings-line", type: "line", source: "rings", filter: ["<", ["get", "t"], 1], paint: { "line-color": RING_COLOR, "line-width": ["interpolate", ["linear"], ["get", "t"], 0, 1.2, 1, 2.2], "line-dasharray": [3, 2] } });
       // Walk-limit ring (and the no-go loops inside it): solid amber, drawn over the time rings where they coincide.
@@ -510,22 +535,9 @@ export function MapView() {
     // Hover readout.
     map.on("mousemove", (e) => {
       const ll: LonLat = [e.lngLat.lng, e.lngLat.lat];
-      const L = area.layers;
-      const i = cellIndex(L.grid, ll);
       const s = useStore.getState();
-      if (i == null) {
-        s.set({ hover: { lonLat: ll, elevationM: null, slopeDeg: null, surfaceId: null } });
-        return;
-      }
-      const ev = L.elevation?.[i];
-      s.set({
-        hover: {
-          lonLat: ll,
-          elevationM: ev != null && Number.isFinite(ev) ? ev : null,
-          slopeDeg: L.slope?.[i] ?? null,
-          surfaceId: L.surface?.[i] ?? null,
-        },
-      });
+      const smp = sampleBest(area, s.detail, ll);
+      s.set({ hover: { lonLat: ll, elevationM: smp?.elevationM ?? null, slopeDeg: smp?.slopeDeg ?? null, surfaceId: smp?.surfaceId ?? null } });
     });
     map.on("mouseleave", () => useStore.getState().set({ hover: null }));
     const zoomClass = () => containerRef.current?.classList.toggle("lowzoom", map.getZoom() < 15.6);
@@ -558,7 +570,7 @@ export function MapView() {
     map.on("dblclick", () => clearTimeout(tapTimer));
     // Apple Maps style: tilting the flat map slides into 3D, levelling it out returns to 2D.
     map.on("pitch", () => {
-      if (levelling || !area.layers.elevation || useStore.getState().view3d || map.getPitch() < TILT_ENTER_3D) return;
+      if (levelling || !area.overview.elevation || useStore.getState().view3d || map.getPitch() < TILT_ENTER_3D) return;
       tiltDriven = true;
       useStore.getState().set({ view3d: true });
     });
@@ -596,11 +608,30 @@ export function MapView() {
     }
   }, [ready, baseImagery, baseOpacity, marsTint, area]);
 
+  // ---------- planning window: terrain heights ----------
+  const detail = useStore((s) => s.detail);
+  useEffect(() => {
+    const map = mapInstance;
+    const ov = area.overview;
+    if (!ready || !map || !ov.elevation || !area.tiles) return;
+    const url = setDemSource({ grid: ov.grid, elev: ov.elevation }, detail?.elevation ? { grid: detail.grid, elev: detail.elevation } : null, ov.elevRef);
+    for (const id of ["dem", "dem-hs"]) (map.getSource(id) as maplibregl.RasterDEMTileSource | undefined)?.setTiles([url]);
+  }, [ready, detail, area]);
+  useEffect(() => {
+    const map = mapInstance;
+    if (!ready || !map || !area.tiles) return;
+    const c = detail ? gridCoords(detail.grid) : null;
+    (map.getSource("window") as GeoJSONSource | undefined)?.setData(
+      c ? { type: "Feature", properties: {}, geometry: { type: "Polygon", coordinates: [[...c, c[0]]] } } : EMPTY_FC,
+    );
+  }, [ready, detail, area]);
+
   // ---------- raster overlays ----------
   const overlays = useStore((s) => s.overlays);
   const tab = useStore((s) => s.tab);
   const reach = useStore((s) => s.reach);
   const gens = useRef<Partial<Record<OverlayId, number>>>({});
+  const detailGen = useRef(0);
   // Walk-cost heat is invalidated whenever the reach field changes (declared first so it runs first).
   useEffect(() => {
     const old = urls.current.cost;
@@ -608,30 +639,59 @@ export function MapView() {
     delete urls.current.cost;
     gens.current.cost = (gens.current.cost ?? 0) + 1;
   }, [reach]);
+  // The window's full-resolution overlays are redrawn when the window moves.
+  useEffect(() => {
+    for (const u of Object.values(detailUrls.current)) if (u && u !== "pending") URL.revokeObjectURL(u);
+    detailUrls.current = {};
+    detailGen.current++;
+  }, [detail]);
   useEffect(() => {
     const map = mapInstance;
     if (!ready || !map) return;
-    const L = area.layers;
-    const g = L.grid;
+    const show = (layer: string, on: boolean, opacity: number) => {
+      if (!map.getLayer(layer)) return;
+      map.setLayoutProperty(layer, "visibility", on ? "visible" : "none");
+      map.setPaintProperty(layer, "raster-opacity", opacity);
+    };
     for (const id of RASTER_OVERLAYS) {
       const st = overlays[id];
-      const vis = st.on && (id !== "cost" || reach != null);
-      map.setLayoutProperty(`ov-${id}`, "visibility", vis ? "visible" : "none");
-      map.setPaintProperty(`ov-${id}`, "raster-opacity", st.opacity);
-      if (!vis || urls.current[id]) continue;
-      let p: Promise<string> | null = null;
-      if (id === "elevation" && L.elevation) p = elevationUrl(g, L.elevation, L.elevMin, L.elevMax);
-      if (id === "slope" && L.slope) p = slopeUrl(g, L.slope);
-      if (id === "surface" && L.surface) p = surfaceUrl(g, L.surface, area.config.surfaceClasses);
-      if (id === "confidence" && L.confidence) p = confidenceUrl(g, L.confidence);
-      if (id === "cost" && reach) p = costUrl(g, reach.outTimeS, reach.backTimeS, reach.usableS);
+      if (id === "cost") {
+        const vis = st.on && reach != null;
+        show("ov-cost", vis, st.opacity);
+        if (!vis || urls.current.cost || !reach) continue;
+        urls.current.cost = "pending";
+        const gen = gens.current.cost ?? 0;
+        const g = reach.grid;
+        void costUrl(g, reach.outTimeS, reach.backTimeS, reach.usableS).then((url) => {
+          if ((gens.current.cost ?? 0) !== gen) return URL.revokeObjectURL(url);
+          urls.current.cost = url;
+          (map.getSource("ov-cost") as ImageSource | undefined)?.updateImage({ url, coordinates: gridCoords(g) });
+        });
+        continue;
+      }
+      show(`ov-${id}`, st.on, st.opacity);
+      if (st.on && !urls.current[id]) {
+        const p = overlayUrl(id, area.overview, area);
+        if (p) {
+          urls.current[id] = "pending";
+          const g = area.overview.grid;
+          void p.then((url) => {
+            urls.current[id] = url;
+            (map.getSource(`ov-${id}`) as ImageSource | undefined)?.updateImage({ url, coordinates: gridCoords(g) });
+          });
+        }
+      }
+      if (!area.tiles) continue;
+      show(`ovd-${id}`, st.on && !!detail, st.opacity);
+      if (!st.on || !detail || detailUrls.current[id]) continue;
+      const p = overlayUrl(id, detail, area);
       if (!p) continue;
-      urls.current[id] = "pending";
-      const gen = gens.current[id] ?? 0;
+      detailUrls.current[id] = "pending";
+      const gen = detailGen.current;
       void p.then((url) => {
-        if ((gens.current[id] ?? 0) !== gen) return URL.revokeObjectURL(url);
-        urls.current[id] = url;
-        (map.getSource(`ov-${id}`) as ImageSource | undefined)?.updateImage({ url, coordinates: gridCoords(area) });
+        if (detailGen.current !== gen) return URL.revokeObjectURL(url);
+        detailUrls.current[id] = url;
+        (map.getSource(`ovd-${id}`) as ImageSource | undefined)?.updateImage({ url, coordinates: gridCoords(detail.grid) });
       });
     }
     map.setLayoutProperty("hillshade", "visibility", overlays.hillshade.on ? "visible" : "none");
@@ -648,7 +708,7 @@ export function MapView() {
     map.setPaintProperty("track-casing", "line-opacity", 0.5 * fade);
     map.setPaintProperty("waypoints", "circle-opacity", overlays.track.opacity * fade);
     map.setPaintProperty("waypoints", "circle-stroke-opacity", fade);
-  }, [ready, overlays, reach, area, tab]);
+  }, [ready, overlays, reach, area, tab, detail]);
 
   // ---------- science overlays (data fetched the first time each is switched on) ----------
   const sci = useStore((s) => s.sci);
@@ -665,15 +725,15 @@ export function MapView() {
       if (!on || sciUrls.current[l.id]) continue;
       sciUrls.current[l.id] = "pending";
       void (async () => {
-        const data = useStore.getState().sciData[l.id] ?? (await loadFloatLayer(area, l.id));
-        if (!data) {
+        const gd = useStore.getState().sciData[l.id] ?? (await loadFloatLayer(area, l.id));
+        if (!gd) {
           delete sciUrls.current[l.id];
           return;
         }
-        if (!useStore.getState().sciData[l.id]) useStore.getState().set({ sciData: { ...useStore.getState().sciData, [l.id]: data } });
-        const url = await scienceUrl(area.layers.grid, data, l.display?.min ?? 0, l.display?.max ?? 1, scienceRamp(area, l.id));
+        if (!useStore.getState().sciData[l.id]) useStore.getState().set({ sciData: { ...useStore.getState().sciData, [l.id]: gd } });
+        const url = await scienceUrl(gd.grid, gd.data, l.display?.min ?? 0, l.display?.max ?? 1, scienceRamp(area, l.id));
         sciUrls.current[l.id] = url;
-        (map.getSource(`sci-${l.id}`) as ImageSource | undefined)?.updateImage({ url, coordinates: gridCoords(area) });
+        (map.getSource(`sci-${l.id}`) as ImageSource | undefined)?.updateImage({ url, coordinates: gridCoords(gd.grid) });
       })();
     }
   }, [ready, sci, sciData, area]);
@@ -864,12 +924,13 @@ export function MapView() {
     const switched = last3d.current !== view3d;
     last3d.current = view3d;
     // Tilt gestures work from the flat map too (they switch 3D on), so only a map without elevation is locked flat.
-    map.setMaxPitch(area.layers.elevation ? 80 : 0);
-    if (area.layers.elevation) map.touchPitch.enable();
+    const hasElev = !!area.overview.elevation;
+    map.setMaxPitch(hasElev ? 80 : 0);
+    if (hasElev) map.touchPitch.enable();
     else map.touchPitch.disable();
-    if (view3d && area.layers.elevation) {
+    if (view3d && hasElev) {
       map.setTerrain({ source: "dem", exaggeration });
-      tuneTerrain(map, area.layers.grid);
+      tuneTerrain(map, area.manifest.grid);
       // The camera keeps its altitude above the *centre* elevation; refresh it once DEM tiles are
       // in so the camera is not left inside a raised mesa.
       const lift = () => {
