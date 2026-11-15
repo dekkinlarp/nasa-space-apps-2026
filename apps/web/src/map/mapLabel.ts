@@ -9,13 +9,15 @@ export const MAP_LABEL = "font-mono text-[11px]/4 font-medium whitespace-nowrap"
 /**
  * Every label on the map is one physical thing: a small black plate with engraved mono text. The walk-limit
  * ring, the turn-back point, the walker's countdown and place names all use it.
+ * The plate is the panels' own dark glass, not solid black, so the labels and the panels read as one material
+ * (without the blur: there are too many plates to blur the ground behind each).
  * The plate is lit from above like the raised controls (`shadow-plate` in index.css): no border, the edge is
  * in the shadow. The text is cut in: a dark line above the letters. The text stays neutral; a label that
  * reports a status carries it once, on a mark (MAP_LABEL_MARK), never on the plate or the text.
  * In 2D a plate lies beside its point. In 3D (the map container has `map-3d`) it stands on a post above it:
  * MAP_LABEL_POST and MAP_LABEL_BASE are the post and the mark where it meets the ground.
  */
-export const MAP_LABEL_BOX = `${MAP_LABEL} inline-flex h-[18px] items-center rounded-sm bg-well px-1.5 shadow-plate text-shadow-[0_-1px_0_rgba(0,0,0,0.9)]`;
+export const MAP_LABEL_BOX = `${MAP_LABEL} inline-flex h-[18px] items-center rounded-sm bg-glass px-1.5 shadow-plate text-shadow-[0_-1px_0_rgba(0,0,0,0.9)]`;
 
 /** Text of a plate: quiet for a plain measure (a ring's time), full ink for one that names a place, an event or a limit. */
 export const MAP_LABEL_TONE = { neutral: "text-ink-2", strong: "text-foreground" } as const;

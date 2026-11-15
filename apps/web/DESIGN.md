@@ -337,7 +337,8 @@ Every label on the map is one physical thing: a small black plate with engraved 
 countdown and place names all use it. This is the one place the map is skeuomorphic, and it follows the
 raised controls and the segmented meters: lit from above, drawn with shadows only.
 
-- **The plate:** 18px tall, 4px corner, the Well fill, 11px medium in the mono face. No border: `shadow-plate`
+- **The plate:** 18px tall, 4px corner, 11px medium in the mono face, on the panels' own Glass fill (a faded
+  black the ground shows through a little, not solid black; no blur, since there are many plates). No border: `shadow-plate`
   gives it a dark keyline, a bright top lip with a soft highlight under it, a dark bottom edge and a short
   shadow on the ground.
 - **The text** is cut in: a 1px dark line above the letters. Ink 2 for a plain measure (a ring's time), Ink
