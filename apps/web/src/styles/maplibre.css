@@ -15,7 +15,9 @@
 .maplibregl-ctrl-top-right .maplibregl-ctrl { margin: 0 0 8px 0; }
 .maplibregl-ctrl-scale { margin: 0 !important; background: rgba(15, 17, 20, 0.6) !important; color: var(--ink-2) !important; border: 1px solid var(--ink-3) !important; border-top: 0 !important; font: 11px/14px var(--font) !important; padding: 0 4px !important; }
 
-/* The click menu's popup: the content itself is React (ClickMenu). */
+/* The click menu's popup: the content itself is React (ClickMenu). It sits above every marker, including the
+   depth-sorted ones in 3D (z-index = screen y) and a hovered or selected pin (100000). */
+.click-popup { z-index: 100001; }
 .click-popup .maplibregl-popup-content { padding: 10px 12px; color: var(--ink); font: 13.5px/1.45 var(--font); background: var(--glass); -webkit-backdrop-filter: var(--blur); backdrop-filter: var(--blur); border: 1px solid var(--glass-edge); border-radius: 12px; box-shadow: var(--float-sm); }
 /*
  * The tip is the same glass as the box, not a border triangle: a clipped block carrying the box's fill
