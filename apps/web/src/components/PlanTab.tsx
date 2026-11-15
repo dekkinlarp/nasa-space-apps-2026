@@ -1,11 +1,12 @@
 import { useState } from "react";
 import { useShallow } from "zustand/react/shallow";
 import { CheckIcon, GripVerticalIcon, PlayIcon, XIcon } from "lucide-react";
-import type { RouteResult, RouteSegment, SurfaceClass } from "@marsmap/core";
+import type { RouteResult, RouteSegment, SurfaceClass, WalkParams } from "@marsmap/core";
 import { selectedResult, usableTimeS, useStore } from "../store";
 import { fmtDist, fmtDur, fmtEnergy, fmtLonLat, fmtO2 } from "../format";
 import { limitMessage, pointNames } from "../lib";
 import { profileColor } from "../map/MapView";
+import { routeSlopeColor, slopeBands } from "../map/routeSlope";
 import { demoAvailable, flyTo, placeName, runDemoWalk } from "./ExploreTab";
 import { nearlyIdentical, routeDelta } from "./routeCompare";
 import { STOP_BADGE, STOP_BADGE_NUMBER, STOP_BADGE_START } from "../map/mapLabel";
@@ -38,7 +39,33 @@ export function SurfaceMixBar({ mix, classes }: { mix: Record<number, number>; c
   );
 }
 
-function Segment({ s, i, names, over, classes }: { s: RouteSegment; i: number; names: string[]; over: boolean; classes: SurfaceClass[] }) {
+/** How many bars a leg's slope chart has. */
+const SLOPE_BINS = 18;
+
+/**
+ * The slope along one leg as a row of small bars, start to end: each bar is the steepest ground in its
+ * stretch, as tall as that is against the no-go slope and in the colour the route line has there on the map.
+ */
+function SlopeBars({ s, params }: { s: RouteSegment; params: WalkParams }) {
+  if (s.profile.length < 2 || s.distanceM <= 0) return null;
+  const bins = new Array<number>(SLOPE_BINS).fill(0);
+  for (const p of s.profile) {
+    const b = Math.min(SLOPE_BINS - 1, Math.floor((p.distanceM / s.distanceM) * SLOPE_BINS));
+    bins[b] = Math.max(bins[b]!, Math.abs(p.slopeDeg));
+  }
+  // A stretch with no sample takes its neighbour's value, so short legs do not show gaps.
+  for (let b = 1; b < SLOPE_BINS; b++) if (!bins[b]) bins[b] = bins[b - 1]!;
+  const top = slopeBands(params).max;
+  return (
+    <span className="ml-auto flex h-3.5 w-[58px] flex-none items-end gap-px" role="img" aria-label={`Slope along the leg, up to ${Math.round(s.maxSlopeDeg)}°`}>
+      {bins.map((v, b) => (
+        <i key={b} className="block min-w-0 flex-1 rounded-[1px]" style={{ height: `${Math.max(14, Math.min(100, (v / top) * 100))}%`, background: routeSlopeColor(v, params) }} />
+      ))}
+    </span>
+  );
+}
+
+function Segment({ s, i, names, over, classes, params }: { s: RouteSegment; i: number; names: string[]; over: boolean; classes: SurfaceClass[]; params: WalkParams }) {
   return (
     <li className="border-b">
       <button type="button" className="group/seg block w-full cursor-pointer py-2.5 text-left" onClick={() => flyTo(s.to[0], s.to[1], 16)} aria-label={`Show ${names[i] ?? "?"} to ${names[i + 1] ?? "?"} on the map`}>
@@ -48,7 +75,7 @@ function Segment({ s, i, names, over, classes }: { s: RouteSegment; i: number; n
         </span>
         <span className="whitespace-nowrap">{fmtDur(s.timeS)}</span>
       </span>
-      <span className="mt-0.5 mb-1 flex flex-wrap gap-x-[9px] gap-y-0.5 text-xs text-muted-foreground">
+      <span className="mt-0.5 mb-1 flex flex-wrap items-end gap-x-[9px] gap-y-0.5 text-xs text-muted-foreground">
         <span className="text-foreground">{fmtDist(s.distanceM)}</span>
         <span>
           ↑{Math.round(s.ascentM)} ↓{Math.round(s.descentM)} m
@@ -56,6 +83,7 @@ function Segment({ s, i, names, over, classes }: { s: RouteSegment; i: number; n
         <span>≤{Math.round(s.maxSlopeDeg)}°</span>
         <span className={s.hazardM > 0 ? "text-warn" : undefined}>{Math.round(s.hazardM)} m hazard</span>
         <span>{fmtEnergy(s.energyKJ)}</span>
+        <SlopeBars s={s} params={params} />
       </span>
       <SurfaceMixBar mix={s.surfaceMix} classes={classes} />
       </button>
@@ -402,7 +430,7 @@ export function PlanTab() {
         <Disclosure title="Segment details" note={`${sel.segments.length} legs`}>
           <ol className="m-0 list-none border-t p-0">
             {sel.segments.map((s, i) => (
-              <Segment key={i} s={s} i={i} names={names} classes={classes} over={sel.totals.firstSegmentOverLimit != null && i >= sel.totals.firstSegmentOverLimit} />
+              <Segment key={i} s={s} i={i} names={names} classes={classes} params={params} over={sel.totals.firstSegmentOverLimit != null && i >= sel.totals.firstSegmentOverLimit} />
             ))}
           </ol>
         </Disclosure>
