@@ -15,11 +15,11 @@ import { selectedResult, useStore } from "../store";
 import { routePoints } from "../engine";
 import { buildTimeline, pointNames, positionAt } from "../lib";
 import { bearingDeg, marsDistanceM, MARS_RADIUS_M, offsetLonLat } from "../geo";
-import { getMap } from "../map/MapView";
+import { getMap, isCameraGliding, showOnMap } from "../map/MapView";
 import { GROUND_SVG, WALKER_SVG, bootPrintImage } from "./walkerArt";
 import { cycleSeconds, headingAlong, lerpAngle, meanSpeed, routePrints, trackPrints, walkedLine, walkerFrame, type Print, type WalkerState } from "./walkerMath";
 import { LocateFixedIcon, LocateIcon } from "lucide-react";
-import { MAP_LABEL_BOX, MAP_LABEL_TONE } from "../map/mapLabel";
+import { MAP_LABEL_BOX, MAP_LABEL_MARK, MAP_LABEL_TONE } from "../map/mapLabel";
 import { Button } from "@/components/ui/button";
 import { cn } from "@/lib/utils";
 
@@ -80,7 +80,7 @@ const mmss = (s: number) => {
 const RING_R = 8, RING_C = 2 * Math.PI * RING_R;
 /** The walker's label is a map label like the others, in the simulated-position colour. It holds only what belongs
     at the walker: the work time left at a stop. What the crew is doing and where is in the walk panel. */
-const LABEL_HTML = `<svg class="w-ring" width="12" height="12" viewBox="0 0 20 20" fill="none" stroke="currentColor" stroke-width="3" aria-hidden="true"><circle cx="10" cy="10" r="${RING_R}" opacity=".3"/><circle cx="10" cy="10" r="${RING_R}" stroke-linecap="round" stroke-dasharray="${RING_C}" stroke-dashoffset="${RING_C}" transform="rotate(-90 10 10)"/></svg><span class="w-l1"></span>`;
+const LABEL_HTML = `<svg class="w-ring ${MAP_LABEL_MARK.sim}" width="12" height="12" viewBox="0 0 20 20" fill="none" stroke="currentColor" stroke-width="3" aria-hidden="true"><circle cx="10" cy="10" r="${RING_R}" opacity=".3"/><circle cx="10" cy="10" r="${RING_R}" stroke-linecap="round" stroke-dasharray="${RING_C}" stroke-dashoffset="${RING_C}" transform="rotate(-90 10 10)"/></svg><span class="w-l1"></span>`;
 
 export function GoWalker() {
   const mode = useStore((s) => s.go.mode);
@@ -104,7 +104,7 @@ export function GoWalker() {
     // ----- DOM -----
     const el = document.createElement("div");
     el.className = "walker idle";
-    el.innerHTML = `<div class="w-label ${MAP_LABEL_BOX} ${MAP_LABEL_TONE.sim}">${LABEL_HTML}</div><div class="w-shadow"></div><div class="w-flip"><div class="w-lean">${WALKER_SVG}</div></div>`;
+    el.innerHTML = `<div class="w-label ${MAP_LABEL_BOX} ${MAP_LABEL_TONE.strong}">${LABEL_HTML}</div><div class="w-shadow"></div><div class="w-flip"><div class="w-lean">${WALKER_SVG}</div></div>`;
     const lean = el.querySelector(".w-lean") as HTMLElement;
     const l1 = el.querySelector(".w-l1") as HTMLElement;
     const ringArc = el.querySelector(".w-ring circle:last-child") as SVGCircleElement;
@@ -122,7 +122,7 @@ export function GoWalker() {
       if (e.originalEvent) useWalkerUi.getState().setFollow(false);
     };
     map.on("dragstart", stopFollowOnDrag);
-    if (useWalkerUi.getState().follow && map.getZoom() < FOLLOW_MIN_ZOOM) map.easeTo({ center: first, zoom: FOLLOW_MIN_ZOOM, duration: 1200 });
+    if (useWalkerUi.getState().follow && map.getZoom() < FOLLOW_MIN_ZOOM) showOnMap({ center: first, zoom: FOLLOW_MIN_ZOOM }, 1200);
 
     // ----- per-frame state -----
     const mean = meanSpeed(r);
@@ -224,7 +224,7 @@ export function GoWalker() {
       // Gentle camera follow (skipped while the map is animating or being zoomed by the user).
       // Eased in lon/lat, not screen pixels: the map has padding for the floating panels, so the
       // camera centre is not the container's middle, and steering toward the middle made it oscillate.
-      if (useWalkerUi.getState().follow && !map.isMoving()) {
+      if (useWalkerUi.getState().follow && !map.isMoving() && !isCameraGliding()) {
         const center = map.getCenter();
         const cp = map.project(center);
         const off = Math.hypot(a.x - cp.x, a.y - cp.y);

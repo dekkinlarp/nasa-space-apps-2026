@@ -13,10 +13,10 @@ import { Popover, PopoverContent, PopoverTrigger } from "@/components/ui/popover
 import { Segmented } from "@/components/ui/segmented";
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "@/components/ui/select";
 import { Slider } from "@/components/ui/slider";
+import { SlidingThumb } from "@/components/ui/sliding-thumb";
 import { Spinner } from "@/components/ui/spinner";
 import { Tabs, TabsContent, TabsList, TabsTrigger } from "@/components/ui/tabs";
 import { Starfield } from "./map/Starfield";
-import { EdgeBlur, useScrollEdges } from "@/components/ui/scroll-edge";
 import { cn } from "@/lib/utils";
 import { SiteHeader } from "./components/SiteHeader";
 import { ExploreTab } from "./components/ExploreTab";
@@ -118,7 +118,7 @@ function GestureHint({ view3d }: { view3d: boolean }) {
       ];
   return (
     <Popover open={open} onOpenChange={setOpen}>
-      <PopoverTrigger render={<Button variant="glass" size="icon-xl" aria-label="Map gestures" title="Map gestures" />}>
+      <PopoverTrigger render={<Button variant="glass" size="icon-xl" className="text-foreground" aria-label="Map gestures" title="Map gestures" />}>
         <CircleHelpIcon className="size-[18px]" aria-hidden />
       </PopoverTrigger>
       <PopoverContent surface="glass" side="top" align="end" sideOffset={8} className="w-max max-w-[min(380px,calc(100vw-24px))] px-4 py-3">
@@ -192,7 +192,7 @@ function SheetGrabber({ open, full, onGrow, onShrink, sheet }: { open: boolean; 
   );
 }
 
-/** 3D draw distance choices: side of the square of ground drawn around where the camera looks, km. */
+/** 3D draw distance choices: side of the square of ground drawn around where the camera looks when close to the ground, km (it grows as the camera pulls back). */
 const RENDER_DISTANCES = [2, 4, 8, 16].map((km) => ({ value: String(km), label: `${km} × ${km} km` }));
 
 /**
@@ -205,7 +205,7 @@ function View3dSettings() {
   const set = useStore((s) => s.set);
   return (
     <Popover>
-      <PopoverTrigger render={<Button variant="glass" size="icon-xl" aria-label="3D settings" title="3D settings" />}>
+      <PopoverTrigger render={<Button variant="glass" size="icon-xl" className="text-foreground" aria-label="3D settings" title="3D settings" />}>
         <SlidersHorizontalIcon className="size-[18px]" aria-hidden />
       </PopoverTrigger>
       <PopoverContent surface="glass" side="top" align="end" sideOffset={8} className="w-[264px] max-w-[calc(100vw-24px)] gap-3 px-4 py-3 text-sm">
@@ -289,8 +289,6 @@ export function App() {
   // The bottom-sheet layout, as state: the status bar is rendered in a different place on it.
   const narrow = useMediaQuery("(max-width: 860px)");
   const sideRef = useRef<HTMLElement>(null);
-  // Which edges of the open tab have content running off them, for the dissolve at those edges.
-  const edges = useScrollEdges(sideRef, ".tab-body", [tab, sheetOpen, sheetFull, !!area]);
   const dockRef = useRef<HTMLDivElement>(null);
 
   // The map runs under the floating chrome, so tell it which part is covered: its centre, and anything
@@ -408,21 +406,23 @@ export function App() {
         className={cn(SIDE, !sheetOpen && SIDE_CLOSED)}
       >
         {/* The glass, as a layer behind the content (see glass-host in index.css). */}
-        <i className="glass-layer-thick" aria-hidden />
+        <i className="glass-layer-thick sheet:bottom-0 sheet:border-b-0" aria-hidden />
         <SheetGrabber open={sheetOpen} full={sheetFull} onGrow={growSheet} onShrink={shrinkSheet} sheet={sideRef} />
         <SiteHeader onCollapse={() => setSheetOpen(false)} />
         <nav
           className="tabs flex flex-none gap-2 border-b px-4 pb-3 sheet:pt-2.5 sheet:pr-[max(var(--gutter),env(safe-area-inset-right))] sheet:pl-[max(var(--gutter),env(safe-area-inset-left))] sheet:in-[.sheet-closed]:border-b-0"
           aria-label="Sections"
         >
-          <TabsList className="flex-1 gap-0.5 rounded-lg bg-white/6 p-0.5 group-data-horizontal/tabs:h-auto">
+          <TabsList className="relative flex-1 gap-0.5 rounded-lg bg-white/6 p-0.5 group-data-horizontal/tabs:h-auto">
+            <SlidingThumb className="bg-white/16" />
             {TABS.map((t) => (
               <TabsTrigger
                 key={t.id}
                 value={t.id}
                 // On the bottom sheet, tapping the open tab again folds it; any other tap opens it.
                 onClick={() => (tab === t.id && narrowScreen() && sheetOpen ? foldSheet() : setSheetOpen(true))}
-                className="h-[30px] rounded-md text-sm text-ink-2 coarse:h-[38px] data-active:bg-white/16 data-active:text-foreground data-active:shadow-thumb"
+                // The fill behind the open tab is the sliding thumb.
+                className="h-[30px] rounded-md text-sm text-ink-2 transition-colors coarse:h-[38px] data-active:border-transparent data-active:bg-transparent data-active:text-foreground data-active:shadow-none"
               >
                 {t.label}
                 {t.id === "plan" && planCount > 0 && (
@@ -434,11 +434,6 @@ export function App() {
             ))}
           </TabsList>
         </nav>
-        {/* Text scrolling out under the tab bar or off the foot of the panel is blurred progressively, more
-            toward the edge. Each strip shows only at an edge with more content beyond it. */}
-        <div className="relative z-1 h-0 flex-none sheet:in-[.sheet-closed]:hidden">
-          <EdgeBlur side="top" show={edges.top} className="h-4" />
-        </div>
         <TabsContent value="explore" className={TAB_BODY}>
           <ExploreTab />
         </TabsContent>
@@ -451,13 +446,12 @@ export function App() {
         <TabsContent value="layers" className={TAB_BODY}>
           <LayersTab />
         </TabsContent>
-        <EdgeBlur side="bottom" show={edges.bottom} className="z-1 h-7 rounded-b-2xl sheet:bottom-(--foot) sheet:rounded-none sheet:in-[.sheet-closed]:hidden" />
         {narrow && <StatusBar inSheet />}
       </Tabs>
 
       {/* The stage is the part of the map the side panel leaves visible. Floating pieces are laid out in it. */}
       <div className="pointer-events-none absolute top-[max(var(--gap),env(safe-area-inset-top))] right-[max(var(--gap),env(safe-area-inset-right))] bottom-[calc(var(--sheet-h)+var(--gap))] left-(--stage-left) z-2 flex min-h-0 flex-col gap-(--gap) transition-[left] duration-(--panel-ms) ease-spring sheet:transition-[bottom] sheet:in-[.sheet-full]:hidden">
-        {/* Top-left: the button that brings back a hidden side panel, with the hover readout beside it.
+        {/* Top-left: the button that brings back a hidden side panel, and the prompt shown while placing the start.
             Cards sit at the right; on the bottom-sheet layout they move left, clear of the zoom buttons. */}
         <div className="flex min-h-0 flex-1 items-start justify-end gap-2 sheet:relative sheet:justify-start">
           {!sheetOpen && (

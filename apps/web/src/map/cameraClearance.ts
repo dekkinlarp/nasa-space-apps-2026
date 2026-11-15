@@ -85,3 +85,32 @@ export function keepCameraAboveGround(map: MLMap) {
     return { pitch: 0, zoom: tr.zoom - Math.log2(dist / distM) };
   };
 }
+
+interface CameraInternals {
+  _elevationFreeze: boolean;
+  _getTransformForUpdate(): { recalculateZoomAndCenter(terrain: unknown): void };
+  _applyUpdatedTransform(tr: unknown): void;
+}
+
+/**
+ * Puts the camera's reference height back on the ground after an animated move.
+ *
+ * MapLibre 5.24 stops following the ground under the centre when an easeTo or flyTo starts and, unless
+ * the move asked for a frozen height, never starts again: only the end of a drag does. After a wheel
+ * zoom or a "show on the map" flight in 3D the camera therefore kept the height of the place it left,
+ * which put it too close to (or inside) higher ground. This does what MapLibre does at the end of a
+ * drag: the centre is put back on the ground without moving the camera.
+ */
+export function followGroundAfterEase(map: MLMap) {
+  map.on("moveend", () => {
+    const m = map as unknown as CameraInternals;
+    if (!map.terrain || map.isMoving() || !m._elevationFreeze) return;
+    m._elevationFreeze = false;
+    if (map.getCenterClampedToGround()) {
+      const tr = m._getTransformForUpdate();
+      tr.recalculateZoomAndCenter(map.terrain);
+      m._applyUpdatedTransform(tr);
+    }
+    map.triggerRepaint();
+  });
+}

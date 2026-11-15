@@ -118,9 +118,21 @@ const latOf = (y: number, z: number) => (Math.atan(Math.sinh(Math.PI * (1 - (2 *
 
 let canvas: OffscreenCanvas | null = null;
 
-async function renderTile(g: Group, tint: boolean, z: number, x: number, y: number, signal: AbortSignal): Promise<ImageBitmap> {
+function renderTile(g: Group, tint: boolean, z: number, x: number, y: number, signal: AbortSignal): Promise<ImageBitmap> {
+  return renderBounds(g, tint, lonOf(x, z), lonOf(x + 1, z), latOf(y, z), latOf(y + 1, z), signal);
+}
+
+/**
+ * One square picture of a base-imagery choice over any bounds, drawn the way the map draws it (same
+ * pyramid level, same tint). The Layers tab uses it for its previews. Null for an unknown group.
+ */
+export function imageryPreview(group: string, tint: boolean, b: { west: number; east: number; north: number; south: number }, signal: AbortSignal): Promise<ImageBitmap> | null {
+  const g = groups.get(group);
+  return g ? renderBounds(g, tint && g.tinted, b.west, b.east, b.north, b.south, signal) : null;
+}
+
+async function renderBounds(g: Group, tint: boolean, W: number, E: number, N: number, Sth: number, signal: AbortSignal): Promise<ImageBitmap> {
   const S = IMAGERY_TILE_SIZE;
-  const W = lonOf(x, z), E = lonOf(x + 1, z), N = latOf(y, z), Sth = latOf(y + 1, z);
   const y0 = mercY(N), y1 = mercY(Sth);
   const hits = (im: ImageryEntry) => im.west < E && im.east > W && im.south < N && im.north > Sth;
   // The coarsest level that is still about as sharp as the tile (finest level when zoomed past it).

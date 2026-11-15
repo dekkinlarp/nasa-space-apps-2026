@@ -35,12 +35,12 @@ export const COST_RAMP: [number, string][] = [
   [0, "#36d1c4"], [0.1, "#4f9be8"], [0.25, "#8a6cf0"], [0.5, "#e05fb0"], [1, "#ff4d4d"],
 ];
 
-async function toUrl(canvas: HTMLCanvasElement): Promise<string> {
+export async function toUrl(canvas: HTMLCanvasElement): Promise<string> {
   const blob = await new Promise<Blob | null>((res) => canvas.toBlob(res, "image/png"));
   return blob ? URL.createObjectURL(blob) : canvas.toDataURL("image/png");
 }
 
-function paint(g: GridSpec, fn: (i: number, px: Uint8ClampedArray, o: number) => void): HTMLCanvasElement {
+export function paint(g: Pick<GridSpec, "width" | "height">, fn: (i: number, px: Uint8ClampedArray, o: number) => void): HTMLCanvasElement {
   const c = document.createElement("canvas");
   c.width = g.width;
   c.height = g.height;

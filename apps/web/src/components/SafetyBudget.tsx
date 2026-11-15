@@ -13,7 +13,7 @@ import { cn } from "@/lib/utils";
 /** Fill for each part of a bar and its legend key: walking, work at stops, suit leakage. */
 const PART: Record<string, string> = { walk: "bg-mars", dwell: "bg-poi-science-target", leak: "bg-muted-foreground" };
 /** The held-back reserve and anything over the usable budget are hatched. */
-const RESERVE = "bg-[repeating-linear-gradient(135deg,var(--track)_0_3px,var(--hull)_3px_7px)]";
+const RESERVE = "bg-[repeating-linear-gradient(135deg,var(--ink-4)_0_2px,var(--hull)_2px_6px)]";
 const OVER = "bg-[repeating-linear-gradient(135deg,color-mix(in_srgb,var(--bad)_95%,transparent)_0_3px,color-mix(in_srgb,var(--bad)_45%,transparent)_3px_7px)]";
 const LEFT = "bg-ok/16 ring-1 ring-ok/55 ring-inset";
 const key = "mr-1 inline-block size-[9px] rounded-[2px] align-[-1px]";

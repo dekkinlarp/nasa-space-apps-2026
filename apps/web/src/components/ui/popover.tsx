@@ -19,10 +19,11 @@ function PopoverContent({
   alignOffset = 0,
   side = "bottom",
   sideOffset = 4,
-  surface = "solid",
+  surface = "glass",
   ...props
 }: PopoverPrimitive.Popup.Props & {
-    /** "glass" for a popover that opens over the map: the same material as every other floating panel. */
+    /** "glass" (the default) is the material every floating panel shares. "solid" is only for a popup
+     *  nested inside a glass surface, where a second blur could not see the map. */
     surface?: "solid" | "glass"
   } &
   Pick<

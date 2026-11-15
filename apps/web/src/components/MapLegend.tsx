@@ -1,4 +1,5 @@
-import { useEffect, useState, type ReactNode } from "react";
+import { useEffect, type ReactNode } from "react";
+import { create } from "zustand";
 import { selectedResult, useStore } from "../store";
 import { fmtDur } from "../format";
 import { getMap, isTrackFaded, profileColor, RELAYOUT_LABELS, RING_COLOR, RING_LIMIT_COLOR } from "../map/MapView";
@@ -54,23 +55,54 @@ function Row({ sw, children, tip }: { sw: ReactNode; children: ReactNode; tip?: 
   );
 }
 
-/** Collapsible key for the lines and markers drawn on the map. Shows only what is on screen. */
-export function MapLegend() {
-  const [open, setOpen] = useState(() => {
+/** Whether the key is open. Shared, because its button is in the status bar and its panel floats beside the bar. */
+const useLegendUi = create<{ open: boolean; toggle: () => void }>((set, get) => ({
+  open: (() => {
     try {
       return localStorage.getItem(LS_KEY) === "1";
     } catch {
       return false;
     }
-  });
-  const toggle = () => {
-    setOpen(!open);
+  })(),
+  toggle: () => {
+    const open = !get().open;
+    set({ open });
     try {
-      localStorage.setItem(LS_KEY, open ? "0" : "1");
+      localStorage.setItem(LS_KEY, open ? "1" : "0");
     } catch {
       /* ignore */
     }
-  };
+  },
+}));
+
+/**
+ * The key's button, in the status bar. On the bottom sheet the key opens from the button itself. On wide screens
+ * the bar is glass, and a panel inside it could not blur the map (a blur nested in a blurred element only sees that
+ * element), so there the bar's wrapper renders MapLegendPanel beside the bar and this is `detached`.
+ */
+export function MapLegend({ detached = false }: { detached?: boolean }) {
+  const open = useLegendUi((u) => u.open);
+  const toggle = useLegendUi((u) => u.toggle);
+  return (
+    <div className="relative flex-none">
+      <button
+        className="-mx-1 flex h-7 cursor-pointer items-center gap-1 rounded-sm px-1 text-xs font-medium text-foreground coarse:px-2"
+        onClick={toggle}
+        aria-expanded={open}
+        title={open ? "Hide map key" : "Show what the lines and markers mean"}
+      >
+        <span>Key</span>
+        <ChevronDownIcon className={cn("size-3 text-muted-foreground transition-transform", !open && "rotate-180")} aria-hidden />
+      </button>
+      {/* Inside the sheet it opens over the sheet's own glass, so it is solid there. */}
+      {!detached && <MapLegendPanel className="absolute bottom-full -left-2.5 z-4 mb-2.5 bg-popover!" />}
+    </div>
+  );
+}
+
+/** The key itself: the lines and markers drawn on the map. Shows only what is on screen. */
+export function MapLegendPanel({ className }: { className?: string }) {
+  const open = useLegendUi((u) => u.open);
   const tab = useStore((s) => s.tab);
   const params = useStore((s) => s.params);
   const results = useStore((s) => s.results);
@@ -99,21 +131,9 @@ export function MapLegend() {
   const lastSol = area.rover.waypoints.reduce((m, w) => Math.max(m, w.sol ?? 0), 0);
   const trackFaded = isTrackFaded(tab, overlays.track);
 
+  if (!open) return null;
   return (
-    <div className="relative flex-none">
-      {/* Lives in the status bar; the key itself opens upward from it, over the map. */}
-      <button
-        className="-mx-1 flex h-7 cursor-pointer items-center gap-1 rounded-sm px-1 text-xs font-medium text-foreground coarse:px-2"
-        onClick={toggle}
-        aria-expanded={open}
-        title={open ? "Hide map key" : "Show what the lines and markers mean"}
-      >
-        <span>Key</span>
-        <ChevronDownIcon className={cn("size-3 text-muted-foreground transition-transform", !open && "rotate-180")} aria-hidden />
-      </button>
-      {/* The key is solid, not glass: it opens over the readout and the map, and a blur cannot reach through the bar it hangs from. */}
-      {open && (
-        <Panel className="map-legend scrollbar-thin absolute bottom-full -left-2.5 z-4 mb-2.5 max-h-[min(60dvh,440px)] w-[164px] overflow-y-auto bg-popover! px-3 py-2 text-sm text-foreground sheet:max-h-[34dvh]">
+        <Panel className={cn("map-legend scrollbar-thin max-h-[min(60dvh,440px)] w-max max-w-[240px] min-w-[164px] overflow-y-auto px-3 py-2 text-sm text-foreground sheet:max-h-[34dvh]", className)}>
           {sel && (
             <Section title="Route slope" tip={`Route coloured by slope underfoot. Hazard from ${b.caution}°, no entry over ${b.max}°.`}>
               <div className="m-0.5 flex h-1.5 overflow-hidden rounded-[3px] shadow-[0_0_0_2px_var(--well)]">
@@ -246,7 +266,5 @@ export function MapLegend() {
             </Section>
           )}
         </Panel>
-      )}
-    </div>
   );
 }

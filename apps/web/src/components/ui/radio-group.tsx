@@ -32,4 +32,18 @@ function RadioGroupItem({ className, ...props }: RadioPrimitive.Root.Props) {
   )
 }
 
-export { RadioGroup, RadioGroupItem }
+/** A radio that is its whole card: a picture and a caption, say. Style the chosen one with `group-data-checked/radio-card:`. */
+function RadioCard({ className, ...props }: RadioPrimitive.Root.Props) {
+  return (
+    <RadioPrimitive.Root
+      data-slot="radio-card"
+      className={cn(
+        "group/radio-card relative block cursor-pointer rounded-lg text-left data-disabled:cursor-not-allowed data-disabled:opacity-45",
+        className
+      )}
+      {...props}
+    />
+  )
+}
+
+export { RadioGroup, RadioGroupItem, RadioCard }

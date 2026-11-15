@@ -1,3 +1,4 @@
+import { RadiationIcon, SunIcon, ThermometerIcon, type LucideIcon } from "lucide-react";
 import { useStore } from "../store";
 import { fmtLonLat, fmtNum } from "../format";
 import { InfoTip } from "@/components/ui/info-tip";
@@ -52,36 +53,55 @@ export function SiteHeader({ onCollapse }: { onCollapse: () => void }) {
 /** A true minus sign, so temperatures read like the numbers on the profile axis. */
 const minus = (s: string) => s.replace(/-/g, "−");
 
+/** A small tile holding one figure over its label. */
+export const FACT_TILE = "flex min-w-0 flex-col-reverse rounded-lg bg-white/5 px-2.5 py-1.5 inset-ring inset-ring-white/8";
+
 /**
  * Where the site is, how big it is and the conditions a walk has to plan around. Opens the Explore tab.
  * The conditions are typical values from Curiosity's weather and radiation instruments, not live readings,
- * and the line says so; where they come from is behind the info button.
+ * and the heading says so; where they come from is behind the info button.
  */
 export function SiteFacts({ className }: { className?: string }) {
   const g = useStore((s) => s.area?.manifest.grid);
   const c = useStore((s) => s.area?.conditions);
   if (!g && !c) return null;
   const km = (cells: number) => ((cells * g!.cellSizeM) / 1000).toFixed(0);
-  const parts = c
+  const facts: [label: string, value: string, Icon: LucideIcon][] = c
     ? [
-        minus(`${fmtNum(c.tempMinC, 0)} to ${fmtNum(c.tempMaxC, 0, " °C")}`),
-        (c.sunrise || c.sunset) && `daylight ${c.sunrise ?? "?"}–${c.sunset ?? "?"}`,
-        c.radiationMSvPerDay != null && `${c.radiationMSvPerDay.toFixed(2)} mSv/sol`,
-      ].filter(Boolean)
+        ["Temperature", minus(`${fmtNum(c.tempMinC, 0)} to ${fmtNum(c.tempMaxC, 0, " °C")}`), ThermometerIcon],
+        ...(c.sunrise || c.sunset ? [["Daylight", `${c.sunrise ?? "?"}–${c.sunset ?? "?"}`, SunIcon] as [string, string, LucideIcon]] : []),
+        ...(c.radiationMSvPerDay != null ? [["Radiation", `${c.radiationMSvPerDay.toFixed(2)} mSv/sol`, RadiationIcon] as [string, string, LucideIcon]] : []),
+      ]
     : [];
-  const source = c ? [`${c.observed ? `REMS/RAD, ${c.observed}` : "Curiosity REMS/RAD"}. Daylight is local mean solar time.`, c.source].filter(Boolean).join("\n") : "";
   return (
-    <div className={cn("text-sm text-muted-foreground", className)}>
+    <div className={className}>
       {g && (
-        <div>
+        <div className="text-sm text-ink-2">
           {fmtLonLat([(g.west + g.east) / 2, (g.south + g.north) / 2])} · {g.width === g.height ? `${km(g.width)} km square` : `${km(g.width)} × ${km(g.height)} km`}
         </div>
       )}
-      {c && (
-        <div className="flex items-center gap-0.5">
-          <span>Typical sol: {parts.join(", ")}</span>
-          <InfoTip label="Where the typical conditions come from">{source}</InfoTip>
-        </div>
+      {facts.length > 0 && (
+        <>
+          <div className="mt-2 mb-1 flex items-center gap-0.5 text-xs text-ink-2">
+            A typical sol
+            <InfoTip label="Where the typical conditions come from" className="text-ink-2">
+              <p>Typical recent conditions, not today's weather{c?.observed ? `: ${c.observed}` : ""}.</p>
+              <p>Temperature and daylight are from Curiosity's REMS weather station; radiation is from its RAD instrument (Hassler et al. 2014). Daylight is local mean solar time.</p>
+            </InfoTip>
+          </div>
+          <dl className="m-0 grid gap-2" style={{ gridTemplateColumns: `repeat(${facts.length}, minmax(0, 1fr))` }}>
+            {/* An icon stands for each label; the units tell them apart, and a screen reader still gets the word. */}
+            {facts.map(([label, value, Icon]) => (
+              <div key={label} className="flex min-w-0 items-center gap-1.5 rounded-lg bg-white/5 px-2 py-1.5 inset-ring inset-ring-white/8" title={label}>
+                <dt className="flex-none text-ink-2">
+                  <Icon className="size-3.5" aria-hidden />
+                  <span className="sr-only">{label}</span>
+                </dt>
+                <dd className="m-0 text-sm font-medium whitespace-nowrap">{value}</dd>
+              </div>
+            ))}
+          </dl>
+        </>
       )}
     </div>
   );
