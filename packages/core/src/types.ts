@@ -49,6 +49,12 @@ export interface LayerEntry {
   group?: "science";
   /** (optional) Pixel size of the source data when it is coarser than the grid, metres. */
   nativeResolutionM?: number;
+  /**
+   * (optional) The file is published in this many pieces, `<file>.0` … `<file>.<parts-1>`, to be
+   * joined in order. Set for files too large for one static asset (Cloudflare caps a file at 25 MiB).
+   * Read layers through fetchLayerBytes, which handles both forms.
+   */
+  parts?: number;
   /** (optional) Value range for colouring a float layer; values at or below `min` are not drawn. */
   display?: { min: number; max: number };
 }

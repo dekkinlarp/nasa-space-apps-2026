@@ -31,6 +31,22 @@ function readUint8(buf: ArrayBuffer, n: number, entry: LayerEntry): Uint8Array {
 }
 
 /**
+ * The bytes of one layer: the single file, or its numbered parts fetched together and joined.
+ * `fetchBinary` receives a path relative to the area's data folder.
+ */
+export async function fetchLayerBytes(entry: LayerEntry, fetchBinary: (file: string) => Promise<ArrayBuffer>): Promise<ArrayBuffer> {
+  if (!entry.parts || entry.parts < 2) return fetchBinary(entry.file);
+  const bufs = await Promise.all(Array.from({ length: entry.parts }, (_, i) => fetchBinary(`${entry.file}.${i}`)));
+  const out = new Uint8Array(bufs.reduce((n, b) => n + b.byteLength, 0));
+  let at = 0;
+  for (const b of bufs) {
+    out.set(new Uint8Array(b), at);
+    at += b.byteLength;
+  }
+  return out.buffer;
+}
+
+/**
  * Slope in degrees from elevation using Horn's 3x3 method. Edge cells reuse the nearest
  * in-grid neighbour. NaN elevation propagates to NaN slope (treated as impassable).
  */
@@ -75,9 +91,9 @@ export async function loadLayers(
   const surfEntry = byId("surface");
 
   const [elevBuf, slopeBuf, surfBuf] = await Promise.all([
-    fetchBinary(elevEntry.file),
-    slopeEntry ? fetchBinary(slopeEntry.file) : Promise.resolve(null),
-    surfEntry ? fetchBinary(surfEntry.file) : Promise.resolve(null),
+    fetchLayerBytes(elevEntry, fetchBinary),
+    slopeEntry ? fetchLayerBytes(slopeEntry, fetchBinary) : Promise.resolve(null),
+    surfEntry ? fetchLayerBytes(surfEntry, fetchBinary) : Promise.resolve(null),
   ]);
 
   const elevation = readFloat32(elevBuf, n, elevEntry);

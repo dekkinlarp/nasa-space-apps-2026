@@ -24,7 +24,7 @@
 export * from "./types";
 export { DEFAULT_WALK_PARAMS, EARTH_GRAVITY, oxygenUsedKg, oxygenModelOn } from "./params";
 export { lonLatToCell, cellToLonLat, rowColToLonLat, distanceM, samplePoint, type CellRef } from "./grid";
-export { loadLayers, computeSlope } from "./load";
+export { loadLayers, computeSlope, fetchLayerBytes } from "./load";
 export {
   createCostModel,
   BUILTIN_FACTORS,

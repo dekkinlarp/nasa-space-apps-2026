@@ -10,37 +10,41 @@ pnpm --filter @marsmap/scripts run all -- --refresh # also re-fetch waypoints, p
 pnpm --filter @marsmap/scripts run all -- --area /abs/path/other-area.json
 ```
 
-Single steps: `elevation`, `imagery`, `derive`, `rover`, `photos`, `conditions`, `manifest`,
+Single steps: `elevation`, `imagery`, `derive`, `minerals`, `rover`, `photos`, `conditions`, `manifest`,
 `preview`, `verify`, `import-layer`. Run order matters: `elevation` → `imagery` → `derive`
 (the surface estimate needs the 1 m DEM window and the HiRISE grid copy).
 
 Everything is driven by `config/area.json`. Every step skips outputs that exist; it rebuilds
 when `--force` is passed or when `data/<id>/grid.json` differs from the current config.
 Raw downloads (DEM strips, map tiles, API responses) are cached under `data/cache/`, so a
-re-run downloads nothing. A first run downloads about 300 MB, mostly DEM strips. It
-takes about a minute.
+re-run downloads nothing. A first run for the 8 km area downloads about 1 GB, mostly DEM
+strips and HiRISE tiles, and takes about 12 minutes. Run it with
+`NODE_OPTIONS=--max-old-space-size=8192` to be safe: the stitched photo and 1 m DEM window are large.
 
 ## Outputs (`data/gale-boxwork/`)
 
-The grid is 1500 × 1500 cells of 2 m. Row 0 is north, column 0 is west. Rasters are raw
+The grid is 4000 × 4000 cells of 2 m. Row 0 is north, column 0 is west. Rasters are raw
 little-endian. See `packages/core/src/types.ts`.
 
 | File | What |
 |---|---|
 | `grid.json` | `GridSpec` built from `config/area.json` |
 | `layers.json` | `LayerManifest`: the layers below plus the imagery list with exact bounds and pixel sizes |
-| `elevation.f32` | Float32 metres (Mars areoid), 9 000 000 bytes |
-| `slope.f32` | Float32 degrees, 9 000 000 bytes |
+| `elevation.f32` | Float32 metres (Mars areoid), 64 000 000 bytes |
+| `<layer>.f32.0`, `.1`, … | The same layer in parts of at most 24 MiB, written by the manifest step for any layer file over that size. `layers.json` records the count in `parts`. The app and the release tarball use the parts; the pipeline keeps using the whole file |
+| `slope.f32` | Float32 degrees, 64 000 000 bytes |
 | `surface.u8` | Surface class ids (`config/surface-classes.json`), **estimated** |
 | `surface_confidence.u8` | 0–255 heuristic confidence (max 200), **estimated** |
+| `crism_clay.f32`, `crism_sulfate.f32`, `crism_hydration.f32` | CRISM mineral indicators (band depth), 18 m pixels resampled nearest-neighbour. Listed in `layers.json` with `group: "science"` |
+| `minerals.json` | CRISM observation details, per-layer stats, the alignment result and the reading at each POI |
 | `imagery/hirise.jpg` | HiRISE photo of the whole area, downscaled to 4096 px |
-| `imagery/hirise_{r}_{c}.jpg` | Full-res 0.64 m/px HiRISE in a 2×2 split (r 0 = north, c 0 = west). Each piece is its own `ImageryEntry` |
-| `imagery/ctx.jpg` | CTX photo, about 10 m/px (about 300 px) |
-| `imagery/themis_night.jpg`, `themis_day.jpg` | THEMIS IR, about 81 m/px (38 px). Coarse context only |
+| `imagery/hirise_{r}_{c}.jpg` | Full-res 0.64 m/px HiRISE in an n×n split with every piece at most 4096 px (4×4 for the 8 km area; r 0 = north, c 0 = west). Each piece is its own `ImageryEntry`; the app loads only the pieces in view when zoomed in |
+| `imagery/ctx.jpg` | CTX photo, about 10 m/px (about 790 px) |
+| `imagery/themis_night.jpg`, `themis_day.jpg` | THEMIS IR, about 81 m/px (100 px). Coarse context only |
 | `rover/MSL_waypoints.json`, `MSL_traverse.json` | Full MMGIS GeoJSON copies |
 | `rover/waypoints.area.json` | Waypoints in the bounds + 0.002° margin, with tidy properties and `insideArea` |
 | `rover/traverse.area.json` | Drive lines clipped to the bounds + margin, with the `sol` of the ending waypoint |
-| `rover/photos.json`, `rover/photos/*.jpg` | Navcam frames: 3 per waypoint, 38 waypoints, at most 1280 px wide |
+| `rover/photos.json`, `rover/photos/*.jpg` | Navcam frames: 3 per waypoint, 39 waypoints, at most 1280 px wide |
 | `rover/drill-sites.json` | Altadena, Valle de la Luna and Nevado Sajama. Positions are **inferred** |
 | `conditions.json` | Last 30 REMS sols (stale) plus the static RAD dose rate |
 | `preview/*.png`, `preview/verify-report.json` | Quick-looks and check results. Not used by the app |
@@ -54,7 +58,7 @@ little-endian. See `packages/core/src/types.ts`.
 - **Reading only the area:** `src/lib/striptiff.ts` parses the IFD over HTTP Range requests.
   The file is 3.87 GB, but it stores one 32980 px row per LZW strip, so the reader fetches only
   the strips that cover the area (in chunks of 64 rows). It decodes them with `src/lib/lzw.ts`.
-  For the 3 km demo area that is 48 chunks, about 232 MB, cached in `data/cache/dem-gale-1m-v3/`.
+  For the 8 km demo area that is 126 chunks, about 600 MB, cached in `data/cache/dem-gale-1m-v3/`.
 - **Georeferencing:** the projection comes from the GeoKeys, not from assumptions. It is
   equirectangular with centre lon 0, standard parallel 0 and R = 3396190 m. The tiepoint is
   PixelIsPoint, so the pixel-0 edge is at X = 8127993.49 and Y = −244781.08, which matches the
@@ -62,7 +66,7 @@ little-endian. See `packages/core/src/types.ts`.
 - **Resampling:** each 2 m cell is the area-weighted average of the 1 m pixels its footprint
   covers. Nodata (−32767) is excluded. The 1 m window is cached as
   `data/cache/<id>/dem_1m.f32` + `.json`.
-- **Check:** the DEM is compared with the 195 Curiosity waypoints inside the area. DEM minus
+- **Check:** the DEM is compared with the 535 Curiosity waypoints inside the area. DEM minus
   waypoint `elev_geoid` has a mean of −0.003 m, a median |d| of 0.055 m and a max |d| of 0.48 m.
   The MMGIS waypoint elevations are probably sampled from this same DEM, so this check
   validates the georeferencing (a horizontal offset of a few metres on 10° slopes would show up
@@ -74,7 +78,7 @@ little-endian. See `packages/core/src/types.ts`.
 
 ### slope.f32
 Horn 3×3 on the 2 m grid. Cell sizes come from the bounds (2.000 × 2.000 m). Edges use
-clamped neighbours. Demo area: median 12.1°, p90 30°, p99 47°. The max is about 75°, on
+clamped neighbours. Demo area: median 11.1°, p90 30°, p99 51°. The max is about 75°, on
 scarp faces.
 
 ### surface.u8 / surface_confidence.u8 (ESTIMATE)
@@ -97,6 +101,35 @@ firm soil 33%, sand 29%, rubble 6%, unknown 0%. Because ranks are relative, the 
 relative to whatever area you choose. The result has not been validated against rover
 observations.
 
+### Mineral indicators (CRISM)
+- **Source:** MRO CRISM targeted observations FRT0000B6F1 (9 July 2008) and FRT0001BBA1
+  (6 November 2010), MTRDR summary-parameter products `*_SU165J_MTR3` from the NASA PDS Geosciences Node
+  (`https://pds-geosciences.wustl.edu/mro/mro-m-crism-5-rdr-mptargeted-v1/mrocr_4001/mtrdr/2008/2008_191/frt0000b6f1/`).
+  It was found with the PDS Orbital Data Explorer REST API (`oderest.rsl.wustl.edu`, product type
+  MTRDR, queried by the area bounds); of the five scenes that touch the area it is the one covering
+  all of it.
+- **Reading only the area:** the image is 60 band-sequential float32 bands of 775 x 714 px (133 MB).
+  `src/minerals.ts` parses the ENVI header and range-reads only the rows over the area for four bands
+  (about 1.5 MB each), cached in `data/cache/crism-<observation>/`.
+- **Mosaic:** a cell takes the first scene in `CRISM_SCENES` that has data there: FRT0000B6F1 for
+  89.3% of the area, FRT0001BBA1 for the western 10.7%. The second scene is moved by the median
+  difference to the first where they overlap (52 443 pixels). The scenes agree only loosely there
+  (r = 0.23 clay, 0.40 sulfate, 0.20 bound water), so the seam is real. `crism_scene.u8` records
+  which scene each cell came from (1 or 2).
+- **Bands:** `D2300` (Fe/Mg clay), `SINDEX2` (hydrated sulfate), `BD1900_2` (bound water), defined
+  in Viviano-Beck et al. 2014 (doi:10.1002/2014JE004627). `R770` is used only for alignment.
+- **Alignment:** the projection matches the DEM's (equirectangular, centre lon 0, R = 3396190 m),
+  but the scene is offset. The step averages the HiRISE grid copy to CRISM pixels and tests
+  whole-pixel shifts of up to 14 px, per scene. Result here: FRT0000B6F1 r = 0.59 unshifted, 0.80 at
+  (8, 5) px; FRT0001BBA1 r = 0.30 unshifted, 0.64 at (11, 8) px. Both are applied. Over the central
+  3 km alone the first scene peaked at (9, 3) px with r = 0.83, so the offset varies across a scene
+  and one shift leaves an error of one to two pixels. A shift is skipped when it gains less than 0.05 or
+  lands on the edge of the search window.
+- **Display range:** 0 to the area's 98th percentile, stored in the layer's `display` field. Values
+  at or below 0 are not drawn.
+- **Other areas:** the scenes are listed in `CRISM_SCENES`. For a different area, pick covering
+  MTRDR scenes and edit that list (first = preferred).
+
 ### Imagery
 NASA Mars Trek WMTS (CORS ok):
 `https://trek.nasa.gov/tiles/Mars/EQ/{LAYER}/1.0.0/default/default028mm/{z}/{row}/{col}.png`.
@@ -105,12 +138,12 @@ NASA Mars Trek WMTS (CORS ok):
 - **Max zoom:** read from `WMTSCapabilities.xml`. If a level returns 404, the step falls back
   to lower levels.
 - **Layers used:**
-  - `curiosity_hirise_mosaic` at z16 (0.64 m/px, 380 tiles)
+  - `curiosity_hirise_mosaic` at z16 (0.64 m/px, 2550 tiles)
   - `Gale_CTX_BlockAdj_dd` at z12
   - `THEMIS_NightIR_ControlledMosaics_100m_v2_oct2018` and `THEMIS_DayIR_…` at z9
 - **Crop:** the stitched mosaic is cropped to the area, snapped to whole image pixels. The
   `ImageryEntry` bounds are therefore the *exact* snapped bounds, which differ from the grid by
-  less than one image pixel. The HiRISE crop is 4735 × 4718 px.
+  less than one image pixel. The HiRISE crop is 12625 × 12580 px.
 - **Downloads:** concurrency is 6, with retries. Tiles are cached in `data/cache/trek/`.
 
 ### Rover
@@ -178,7 +211,8 @@ applies.
 
 ## Known caveats
 - The surface classes are a heuristic, not ground truth.
-- The THEMIS layers are about 81 m/px, so only 38 px across the area.
+- The CRISM layers are indicators at 18 m per pixel, aligned to one to two pixels, with a seam between the two scenes.
+- The THEMIS layers are about 81 m/px, so only 100 px across the area.
 - The REMS weather is stale.
 - Drill-site and photo positions are rover waypoints.
 - pnpm reported `Ignored build scripts: esbuild, sharp`. Both work from their prebuilt

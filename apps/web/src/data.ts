@@ -1,4 +1,4 @@
-import type { LayerManifest, LonLat } from "@marsmap/core";
+import { fetchLayerBytes, type LayerManifest, type LonLat } from "@marsmap/core";
 import type { AppConfig, AreaData, Conditions, DataChecks, DisplayLayers, DrillSite, Minerals, RoverData, RoverPhoto, Waypoint } from "./types";
 
 async function getJson<T>(url: string): Promise<T> {
@@ -6,6 +6,13 @@ async function getJson<T>(url: string): Promise<T> {
   if (!r.ok) throw new Error(`${url}: HTTP ${r.status}`);
   return (await r.json()) as T;
 }
+
+/** Fetches a file of the area's data folder; used to read layers whole or in parts. */
+const binaryFrom = (base: string) => async (file: string) => {
+  const r = await fetch(`${base}/${file}`);
+  if (!r.ok) throw new Error(`${base}/${file}: HTTP ${r.status}`);
+  return r.arrayBuffer();
+};
 
 async function tryJson<T>(url: string): Promise<T | null> {
   try {
@@ -147,9 +154,12 @@ export async function loadArea(areaId: string, synthetic: boolean): Promise<Area
   const bin = async (id: string) => {
     const e = manifest.layers.find((l) => l.id === id);
     if (!e) return null;
-    const r = await fetch(`${base}/${e.file}`);
-    if (!r.ok) return null;
-    const buf = await r.arrayBuffer();
+    let buf: ArrayBuffer;
+    try {
+      buf = await fetchLayerBytes(e, binaryFrom(base));
+    } catch {
+      return null;
+    }
     const arr = e.dtype === "float32" ? new Float32Array(buf) : new Uint8Array(buf);
     if (arr.length !== n) return null;
     if (arr instanceof Float32Array && e.nodata != null && Number.isFinite(e.nodata)) {
@@ -191,8 +201,11 @@ export async function loadFloatLayer(area: AreaData, id: string): Promise<Float3
   const e = area.manifest.layers.find((l) => l.id === id);
   const g = area.manifest.grid;
   if (!e || e.dtype !== "float32") return null;
-  const r = await fetch(`${area.base}/${e.file}`);
-  if (!r.ok) return null;
-  const arr = new Float32Array(await r.arrayBuffer());
+  let arr: Float32Array;
+  try {
+    arr = new Float32Array(await fetchLayerBytes(e, binaryFrom(area.base)));
+  } catch {
+    return null;
+  }
   return arr.length === g.width * g.height ? arr : null;
 }

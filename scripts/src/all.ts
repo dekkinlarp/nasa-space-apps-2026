@@ -7,6 +7,7 @@ import { downloadedBytes } from "./lib/net";
 import { runElevation } from "./elevation";
 import { runImagery } from "./imagery";
 import { runDerive } from "./derive";
+import { runMinerals } from "./minerals";
 import { runRover } from "./rover";
 import { runPhotos } from "./photos";
 import { runConditions } from "./conditions";
@@ -28,6 +29,7 @@ const step = async (name: string, fn: () => unknown, optional = false) => {
 await step("elevation", runElevation);
 await step("imagery", runImagery);
 await step("derive", runDerive);
+await step("minerals", runMinerals, true);
 await step("rover", runRover);
 await step("photos", runPhotos, true);
 await step("conditions", runConditions, true);

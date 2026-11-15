@@ -19,11 +19,11 @@ export function cellSizes(g: GridSpec): { dx: number; dy: number } {
 }
 
 export const SURFACE_METHOD = [
-  "Rule-based estimate per 2 m cell from four relative cues, each converted to a percentile rank over the area:",
-  "R = 1 m DEM micro-roughness (RMS of elevation minus its 5x5 m mean, in a 5x5 m window, averaged to 2 m);",
+  "Rule-based estimate per grid cell from four relative cues, each converted to a percentile rank over the area:",
+  "R = 1 m DEM micro-roughness (RMS of elevation minus its 5x5 m mean, in a 5x5 m window, averaged to the grid cell);",
   "T = topographic position index (elevation minus 30 m-window mean; high = ridge, low = hollow);",
   "B = HiRISE brightness (Mars Trek curiosity_hirise_mosaic, grayscale; Gale sand is dark basaltic, bedrock/ridges light-toned);",
-  "X = HiRISE texture (local std of brightness, 7x7 cells).",
+  "X = HiRISE texture (local std of brightness over about 14 m).",
   "Scores: sand = 0.45(1-B)+0.30(1-R)+0.25(1-T), x0.75 if B>0.55, x0.3 if slope>20 deg; bedrock = 0.45T+0.25B+0.30*(1-|R-0.6|/0.6);",
   "rubble = 0.65*max(0,(R-0.85)/0.15)+0.35*max(0,(X-0.7)/0.3) + 0.4 if slope>30 deg; firm soil = constant 0.60.",
   "Class = argmax, then 3x3 majority filter. Confidence = 40 + 160*min(1,(best-second)/0.25) (max 200: never 'certain').",
@@ -69,8 +69,10 @@ export async function runDerive(): Promise<void> {
   const rough = windowToGrid(win, rms1m, g);
   for (let i = 0; i < N; i++) if (Number.isNaN(rough[i]!)) rough[i] = 0;
 
-  // T: topographic position index (30 m window = radius 7 cells at 2 m).
-  const mean30 = boxMean(elev, g.width, g.height, 7);
+  // Window sizes are fixed in metres so the estimate means the same thing at any cell size.
+  const cells = (radiusM: number) => Math.max(1, Math.round(radiusM / g.cellSizeM));
+  // T: topographic position index (about a 30 m window: radius 14 m).
+  const mean30 = boxMean(elev, g.width, g.height, cells(14));
   const tpi = new Float32Array(N);
   for (let i = 0; i < N; i++) tpi[i] = elev[i]! - mean30[i]!;
 
@@ -80,8 +82,8 @@ export async function runDerive(): Promise<void> {
   const grayU8 = readFileSync(grayFile);
   const gray = new Float32Array(N);
   for (let i = 0; i < N; i++) gray[i] = grayU8[i]!;
-  const bright = boxMean(gray, g.width, g.height, 1);
-  const texture = localStd(gray, g.width, g.height, 3);
+  const bright = boxMean(gray, g.width, g.height, cells(2));
+  const texture = localStd(gray, g.width, g.height, cells(6));
 
   const R = percentileRank(rough);
   const T = percentileRank(tpi);
