@@ -8,8 +8,8 @@ import { cn } from "@/lib/utils";
 const panelVariants = cva("pointer-events-auto text-foreground", {
   variants: {
     size: {
-      /** Small chrome: bars, readouts, the map key. */
-      default: "glass rounded-xl shadow-float-sm",
+      /** Small chrome: bars, readouts, the map key. A key that floats on the map. */
+      default: "glass key rounded-md shadow-key",
       /** Cards and panels: bigger corner, deeper shadow. */
       lg: "glass rounded-2xl shadow-float",
       /** The side panel: thicker glass so text stays readable over bright ground. */

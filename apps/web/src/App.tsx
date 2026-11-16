@@ -4,11 +4,10 @@ import { loadArea, pickArea } from "./data";
 import { startEngine } from "./engine";
 import { getMap, MapView, setMapInsets } from "./map/MapView";
 import { pictureGroup } from "./map/imageryTiles";
-import { CircleHelpIcon, SlidersHorizontalIcon } from "lucide-react";
-import { SidebarIcon } from "./components/icons";
+import { ChevronLeftIcon, ChevronRightIcon, CircleHelpIcon, SlidersHorizontalIcon } from "lucide-react";
 import { Button } from "@/components/ui/button";
 import { Badge } from "@/components/ui/badge";
-import { Panel, panelVariants } from "@/components/ui/panel";
+import { panelVariants } from "@/components/ui/panel";
 import { Popover, PopoverContent, PopoverTrigger } from "@/components/ui/popover";
 import { Segmented } from "@/components/ui/segmented";
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "@/components/ui/select";
@@ -17,6 +16,7 @@ import { SlidingThumb } from "@/components/ui/sliding-thumb";
 import { Spinner } from "@/components/ui/spinner";
 import { Tabs, TabsContent, TabsList, TabsTrigger } from "@/components/ui/tabs";
 import { Starfield } from "./map/Starfield";
+import { Graticule } from "./map/Graticule";
 import { cn } from "@/lib/utils";
 import { SiteHeader } from "./components/SiteHeader";
 import { ExploreTab } from "./components/ExploreTab";
@@ -57,7 +57,7 @@ const SHELL_CLOSED = "sheet-closed [--sheet-h:0px] [--stage-left:var(--gap)] she
 /** Pulled all the way up, the sheet leaves a strip of map at the top; the floating controls step aside. */
 const SHELL_FULL = "sheet-full sheet:[--sheet-h:calc(100dvh-64px)]!";
 /** Height of the status bar. On the bottom-sheet layout it is the sheet's last row, so the folded sheet is this much taller. Keep in step with --status-h in index.css. */
-const STATUS_H = 28;
+const STATUS_H = 32;
 /** Height of the folded sheet. Touch screens get taller tabs, so a taller fold. Keep in step with --sheet-peek in index.css. */
 const sheetPeek = () => (typeof matchMedia === "function" && matchMedia("(pointer: coarse)").matches ? 84 : 76);
 
@@ -67,7 +67,7 @@ const sheetPeek = () => (typeof matchMedia === "function" && matchMedia("(pointe
     The sheet keeps the same gap from the left and right edges as the other panels and sits flush on the bottom edge; the status bar is its last row. */
 const SIDE =
   panelVariants({ size: "thick" }) +
-  " glass-host absolute! top-[max(var(--gap),env(safe-area-inset-top))] bottom-(--gap) left-[max(var(--gap),env(safe-area-inset-left))] z-3 min-h-0 w-(--side-w) gap-0 [transition:translate_var(--panel-ms)_var(--spring),visibility_0s] sheet:top-auto sheet:right-[max(var(--gap),env(safe-area-inset-right))] sheet:bottom-0 sheet:h-(--sheet-h) sheet:w-auto sheet:rounded-t-3xl sheet:rounded-b-none sheet:border-b-0 sheet:[transition:height_var(--panel-ms)_var(--spring)]";
+  " shadow-none glass-host absolute! top-[max(var(--gap),env(safe-area-inset-top))] bottom-(--gap) left-[max(var(--gap),env(safe-area-inset-left))] z-3 min-h-0 w-(--side-w) gap-0 [transition:translate_var(--panel-ms)_var(--spring),visibility_0s] sheet:top-auto sheet:right-[max(var(--gap),env(safe-area-inset-right))] sheet:bottom-0 sheet:h-(--sheet-h) sheet:w-auto sheet:rounded-t-3xl sheet:rounded-b-none sheet:border-b-0 sheet:[transition:height_var(--panel-ms)_var(--spring)]";
 const SIDE_CLOSED = "wide:invisible wide:-translate-x-[calc(100%+var(--gap)*2)] wide:[transition:translate_var(--panel-ms)_var(--spring),visibility_0s_linear_var(--panel-ms)]";
 
 /** The Plan tab is a scrolling body over a footer that stays put: the tab itself does not scroll. */
@@ -246,8 +246,8 @@ function ViewControls() {
   return (
     <div className="pointer-events-auto flex flex-none items-center gap-2 sheet:basis-full sheet:justify-end">
       {view3d && <View3dSettings />}
-      {/* The switch floats on the map, so it sits in a panel: a 12px surface with 4px of padding around 8px segments. */}
-      <Panel className="view-ctl flex h-11 flex-none p-1">
+      {/* The switch floats on the map: the same sunk track and raised thumb as the tabs, with a shadow on the ground. */}
+      <div className="view-ctl sunk flex h-11 flex-none rounded-lg p-[3px] shadow-float-sm inset-shadow-sunk">
         <Segmented
           aria-label="Map view"
           value={view3d ? "3d" : "2d"}
@@ -256,10 +256,10 @@ function ViewControls() {
             { value: "2d", label: "2D" },
             { value: "3d", label: "3D", disabled: !hasElev },
           ]}
-          className="h-full rounded-lg border-0 bg-transparent p-0 inset-shadow-none"
-          itemClassName="h-full rounded-lg px-4 text-base coarse:h-full"
+          className="h-full rounded-none border-0 bg-transparent p-0 shadow-none inset-shadow-none"
+          itemClassName="h-full px-4 coarse:h-full"
         />
-      </Panel>
+      </div>
       <GestureHint view3d={view3d} />
     </div>
   );
@@ -397,6 +397,7 @@ export function App() {
         <Starfield />
         <MapView />
         <GoWalker />
+        <Graticule />
       </div>
 
       <Tabs
@@ -406,15 +407,15 @@ export function App() {
         className={cn(SIDE, !sheetOpen && SIDE_CLOSED)}
       >
         {/* The glass, as a layer behind the content (see glass-host in index.css). */}
-        <i className="glass-layer sheet:bottom-0 sheet:border-b-0" aria-hidden />
+        <i className="glass-layer chamfer sheet:bottom-0 sheet:border-b-0" aria-hidden />
         <SheetGrabber open={sheetOpen} full={sheetFull} onGrow={growSheet} onShrink={shrinkSheet} sheet={sideRef} />
-        <SiteHeader onCollapse={() => setSheetOpen(false)} />
+        <SiteHeader />
         <nav
           className="tabs flex flex-none gap-2 border-b px-4 pb-3 sheet:pt-2.5 sheet:pr-[max(var(--gutter),env(safe-area-inset-right))] sheet:pl-[max(var(--gutter),env(safe-area-inset-left))] sheet:in-[.sheet-closed]:border-b-0"
           aria-label="Sections"
         >
-          <TabsList className="relative flex-1 gap-0.5 rounded-lg border border-input bg-black/25 p-0.5 inset-shadow-sunk group-data-horizontal/tabs:h-auto">
-            <SlidingThumb className="bg-white/16" />
+          <TabsList className="sunk relative flex-1 gap-0.5 rounded-lg p-[3px] shadow-lip inset-shadow-sunk group-data-horizontal/tabs:h-auto">
+            <SlidingThumb />
             {TABS.map((t) => (
               <TabsTrigger
                 key={t.id}
@@ -422,11 +423,11 @@ export function App() {
                 // On the bottom sheet, tapping the open tab again folds it; any other tap opens it.
                 onClick={() => (tab === t.id && narrowScreen() && sheetOpen ? foldSheet() : setSheetOpen(true))}
                 // The fill behind the open tab is the sliding thumb.
-                className="h-[30px] rounded-md text-sm text-ink-2 transition-colors coarse:h-[38px] data-active:border-transparent data-active:bg-transparent data-active:text-foreground data-active:shadow-none"
+                className="h-8 rounded-md font-mono text-xs tracking-[0.12em] text-muted-foreground uppercase transition-colors coarse:h-[38px] data-active:border-transparent data-active:bg-transparent data-active:text-signal data-active:shadow-none data-active:hover:text-signal"
               >
                 {t.label}
                 {t.id === "plan" && planCount > 0 && (
-                  <Badge className="ml-1 text-foreground" aria-label={`${planCount} ${planCount === 1 ? "stop" : "stops"}`}>
+                  <Badge className="ml-0.5 border-0 px-0 font-mono text-foreground" aria-label={`${planCount} ${planCount === 1 ? "stop" : "stops"}`}>
                     {planCount}
                   </Badge>
                 )}
@@ -451,16 +452,26 @@ export function App() {
         {narrow && <StatusBar inSheet />}
       </Tabs>
 
+      {/* The side panel's handle: a slim key on its right edge that hides it, and stays at the window's edge to bring it back. */}
+      <button
+        type="button"
+        className={cn(
+          "absolute top-1/2 z-3 -mt-7 grid h-14 w-4 cursor-pointer place-items-center rounded-r-md border border-l-0 border-black bg-hull-2 text-ink-2 shadow-key transition-[left,color] duration-(--panel-ms) ease-spring coarse:w-6 hover:text-foreground sheet:hidden",
+          sheetOpen ? "left-[calc(max(var(--gap),env(safe-area-inset-left))+var(--side-w)+1px)]" : "left-0",
+        )}
+        aria-label={sheetOpen ? "Hide sidebar" : "Show sidebar"}
+        title={sheetOpen ? "Hide sidebar" : "Show sidebar"}
+        aria-expanded={sheetOpen}
+        onClick={() => setSheetOpen(!sheetOpen)}
+      >
+        {sheetOpen ? <ChevronLeftIcon className="size-3" strokeWidth={2.5} aria-hidden /> : <ChevronRightIcon className="size-3" strokeWidth={2.5} aria-hidden />}
+      </button>
+
       {/* The stage is the part of the map the side panel leaves visible. Floating pieces are laid out in it. */}
       <div className="pointer-events-none absolute top-[max(var(--gap),env(safe-area-inset-top))] right-[max(var(--gap),env(safe-area-inset-right))] bottom-[calc(var(--sheet-h)+var(--gap))] left-(--stage-left) z-2 flex min-h-0 flex-col gap-(--gap) transition-[left] duration-(--panel-ms) ease-spring sheet:transition-[bottom] sheet:in-[.sheet-full]:hidden">
         {/* Top-left: the button that brings back a hidden side panel, and the prompt shown while placing the start.
             Cards sit at the right; on the bottom-sheet layout they move left, clear of the zoom buttons. */}
         <div className="flex min-h-0 flex-1 items-start justify-end gap-2 sheet:relative sheet:justify-start">
-          {!sheetOpen && (
-            <Button variant="glass" size="icon-lg" className="pointer-events-auto flex-none rounded-xl coarse:size-11 sheet:hidden" aria-label="Show sidebar" title="Show sidebar" aria-expanded={false} onClick={() => setSheetOpen(true)}>
-              <SidebarIcon on={false} />
-            </Button>
-          )}
           {/* The Go panel: in the side panel while it is open, else top left here, out of the way of the route and the view controls. */}
           {!narrow && !sheetOpen && <GoPanel />}
           <HoverReadout />

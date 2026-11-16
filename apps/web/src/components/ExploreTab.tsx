@@ -38,6 +38,10 @@ export function runDemoWalk(pois: Poi[]) {
   st.setStart({ lonLat: [start.lon, start.lat], name: start.name, poiId: start.id });
   for (const p of stops) st.addStop({ lonLat: [p.lon, p.lat], name: p.name, poiId: p.id });
   st.set({ tab: "plan" });
+  // The boxwork's story is water-formed minerals, so the demo shows where orbit sees clay, faintly, under the route.
+  // Only if the planner has not set that layer themselves: a layer they turned off stays off.
+  const clay = st.area?.minerals?.layers.find((l) => /clay/i.test(l.id));
+  if (clay && st.sci[clay.id] === undefined) st.setSci(clay.id, { on: true, opacity: 0.5 });
   const pts = [start, ...stops];
   const lons = pts.map((p) => p.lon);
   const lats = pts.map((p) => p.lat);
@@ -169,11 +173,11 @@ export function ExploreTab() {
           <DemoSteps />
         </div>
         {demoLoaded ? (
-          <Button className="h-9 w-full gap-2 bg-mars-deep text-white hover:bg-[#d4521a]" onClick={() => set({ tab: "plan" })}>
+          <Button className="h-9 w-full gap-2" onClick={() => set({ tab: "plan" })}>
             View the plan <ArrowRightIcon aria-hidden />
           </Button>
         ) : (
-          <Button className="h-9 w-full gap-2 bg-mars-deep text-white hover:bg-[#d4521a]" onClick={demoReady ? () => (ownPlan ? setConfirming(true) : runDemo()) : undefined} disabled={!demoReady}>
+          <Button className="h-9 w-full gap-2" onClick={demoReady ? () => (ownPlan ? setConfirming(true) : runDemo()) : undefined} disabled={!demoReady}>
             <PlayIcon className="size-3.5 flex-none fill-current" aria-hidden />
             Try the boxwork walk
           </Button>

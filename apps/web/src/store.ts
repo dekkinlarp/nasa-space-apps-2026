@@ -127,7 +127,8 @@ export const useStore = create<State>((set, get) => ({
   baseOpacity: 1,
   marsTint: true,
   overlays: {
-    hillshade: { on: false, opacity: 0.35 },
+    // On by default, and drawn on the flat map only: in 3D the terrain shows its own relief.
+    hillshade: { on: true, opacity: 0.35 },
     contours: { on: false, opacity: 0.7 },
     elevation: { on: false, opacity: 0.55 },
     slope: { on: false, opacity: 0.6 },
@@ -140,7 +141,7 @@ export const useStore = create<State>((set, get) => ({
   },
   sci: {},
   sciData: {},
-  view3d: false,
+  view3d: true,
   exaggeration: 3,
   renderDistanceKm: 8,
 

@@ -33,7 +33,7 @@ interface Budget {
 
 /**
  * One budget as one row of the grid: its name, a plain bar that fills as the budget is used, and used / usable.
- * The bar is green, then yellow past 75% used, then red past 90%; the split between walking and stops is behind the info button.
+ * The bar is plain ink, then orange past 75% used, then red past 90%; the split between walking and stops is behind the info button.
  */
 function BudgetRow({ b, reserveFraction }: { b: Budget; reserveFraction: number }) {
   const { title, parts, limit, fmt } = b;
@@ -41,19 +41,19 @@ function BudgetRow({ b, reserveFraction }: { b: Budget; reserveFraction: number 
   const usable = limit * (1 - reserveFraction);
   const over = used > usable;
   const f = usable > 0 ? used / usable : 0;
-  // The figure takes the bar's colour: green, yellow in the last quarter, red in the last tenth or over.
+  // The figure takes the bar's colour: none while there is room, orange in the last quarter, red in the last tenth or over.
   const state = meterLevel(1 - f);
   const split = [...parts.filter((p) => p.value > 0).map((p) => `${p.label} ${fmt(p.value)}`), over ? `Over by ${fmt(used - usable)}` : `Left ${fmt(usable - used)}`].join(" · ");
   return (
     <>
-      <span className="flex items-center gap-0.5 text-sm font-medium whitespace-nowrap">
+      <span className="caps flex items-center gap-0.5 font-normal tracking-[0.08em] whitespace-nowrap text-ink-2">
         {title}
         <InfoTip label={`About ${title}`}>{`${b.hint}\n${b.limitLabel}.\n\n${split}`}</InfoTip>
       </span>
       {/* How much of the usable budget is used, on the plain meter the walk panel uses. */}
       <PlainMeter used={f} label={`${title}: ${fmt(used)} used of ${fmt(usable)} usable, ${b.limitLabel}. ${split}`} className="min-w-0" />
-      <span className="text-right text-sm whitespace-nowrap">
-        <b className={cn("font-semibold", state === "bad" && "text-bad", state === "warn" && "text-warn")}>{fmt(used)}</b>
+      <span className="text-right font-mono text-xs whitespace-nowrap">
+        <b className={cn("font-medium", state === "bad" && "text-bad", state === "warn" && "text-warn")}>{fmt(used)}</b>
         <span className="text-muted-foreground"> / {fmt(usable)}</span>
       </span>
     </>

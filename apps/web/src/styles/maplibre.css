@@ -7,18 +7,19 @@
 
 /* Zoom and compass: top-right corner. The scale bar is moved into the app's own layout (mountScaleBar). */
 .maplibregl-ctrl-top-right { top: max(var(--gap), env(safe-area-inset-top)) !important; right: max(var(--gap), env(safe-area-inset-right)) !important; }
-.maplibregl-ctrl-group { background: var(--glass) !important; -webkit-backdrop-filter: var(--blur); backdrop-filter: var(--blur); border: 1px solid var(--glass-edge); border-radius: 12px !important; box-shadow: var(--float-sm) !important; overflow: hidden; }
+/* The zoom keys and the compass under them are one stack: the group has the top corners, the compass the bottom ones. */
+.maplibregl-ctrl-group { background: var(--hull-2) !important; border: 1px solid #000; border-bottom: 0; border-radius: 4px 4px 0 0 !important; box-shadow: var(--shadow-key) !important; overflow: hidden; }
 .maplibregl-ctrl-group button { display: grid !important; place-items: center; width: 36px !important; height: 36px !important; color: var(--foreground); cursor: pointer; }
 .maplibregl-ctrl-group button:disabled { opacity: 0.35; cursor: default; }
 .maplibregl-ctrl-group button + button { border-top: 1px solid var(--seam-2) !important; }
 .maplibregl-ctrl-group button:not(:disabled):hover { background-color: rgba(255, 255, 255, 0.1) !important; }
-.maplibregl-ctrl-top-right .maplibregl-ctrl { margin: 0 0 8px 0; }
-.maplibregl-ctrl-scale { margin: 0 !important; background: rgba(15, 17, 20, 0.6) !important; color: var(--ink-2) !important; border: 1px solid var(--ink-3) !important; border-top: 0 !important; font: 11px/14px var(--font) !important; padding: 0 4px !important; }
+.maplibregl-ctrl-top-right .maplibregl-ctrl { margin: 0; }
+.maplibregl-ctrl-scale { margin: 0 !important; background: transparent !important; color: var(--ink-2) !important; border: 1px solid var(--ink) !important; border-top: 0 !important; font: 11px/14px var(--mono) !important; padding: 0 4px !important; }
 
 /* The click menu's popup: the content itself is React (ClickMenu). It sits above every marker, including the
    depth-sorted ones in 3D (z-index = screen y) and a hovered or selected pin (100000). */
 .click-popup { z-index: 100001; }
-.click-popup .maplibregl-popup-content { padding: 10px 12px; color: var(--ink); font: 13.5px/1.45 var(--font); background: var(--glass); -webkit-backdrop-filter: var(--blur); backdrop-filter: var(--blur); border: 1px solid var(--glass-edge); border-radius: 12px; box-shadow: var(--float-sm); }
+.click-popup .maplibregl-popup-content { padding: 10px 12px; color: var(--ink); font: 13.5px/1.45 var(--font); background: var(--glass); -webkit-backdrop-filter: var(--blur); backdrop-filter: var(--blur); border: 1px solid var(--glass-edge); border-radius: 6px; box-shadow: var(--float-sm); }
 /*
  * The tip is the same glass as the box, not a border triangle: a clipped block carrying the box's fill
  * and blur, with the box's outline (hairline edge plus the 0.5px dark ring of --float-sm) drawn along its two outer sides. It overlaps the box by the border's
@@ -39,7 +40,7 @@
 .click-popup.maplibregl-popup-anchor-bottom-right .maplibregl-popup-tip { width: 10px; margin-top: -1px; clip-path: polygon(0 0, 100% 0, 100% 100%); background: linear-gradient(to bottom left, var(--tip-edge)), linear-gradient(to left, var(--tip-side)) right / 2px 100% no-repeat, var(--glass); }
 .click-popup.maplibregl-popup-anchor-top-left .maplibregl-popup-tip { width: 10px; margin-bottom: -1px; clip-path: polygon(0 0, 0 100%, 100% 100%); background: linear-gradient(to top right, var(--tip-edge)), linear-gradient(to right, var(--tip-side)) left / 2px 100% no-repeat, var(--glass); }
 .click-popup.maplibregl-popup-anchor-top-right .maplibregl-popup-tip { width: 10px; margin-bottom: -1px; clip-path: polygon(100% 0, 0 100%, 100% 100%); background: linear-gradient(to top left, var(--tip-edge)), linear-gradient(to left, var(--tip-side)) right / 2px 100% no-repeat, var(--glass); }
-.click-popup .maplibregl-popup-close-button { color: var(--ink-3); font-size: 16px; width: 24px; height: 24px; border-radius: 8px; }
+.click-popup .maplibregl-popup-close-button { color: var(--ink-3); font-size: 16px; width: 24px; height: 24px; border-radius: 4px; }
 .click-popup .maplibregl-popup-close-button:hover { color: var(--ink); background: var(--hull-3); }
 
 @media (pointer: coarse) {

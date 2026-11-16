@@ -532,7 +532,12 @@ export function LayersTab() {
         title="Hillshade"
         thumb={thumb("hillshade", pv.terrain.hillshade)}
         opacityLabel="Strength"
-        info={<p>Shading computed from the elevation data, lit from the north-west, so relief stands out.</p>}
+        info={
+          <>
+            <p>Shading computed from the elevation data, lit from the north-west, so relief stands out.</p>
+            <p>It is drawn on the flat map only. In 3D the ground shows its own relief.</p>
+          </>
+        }
         disabled={L.elevation ? undefined : "Needs the elevation layer"}
       />
 

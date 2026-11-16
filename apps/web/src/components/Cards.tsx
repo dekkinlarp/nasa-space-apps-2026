@@ -22,9 +22,9 @@ export const POI_TYPE_LABEL: Record<string, string> = {
 
 /** The dot colour of each point-of-interest type (the map pins use the same tokens, see MapView). */
 export const POI_DOT: Record<string, string> = {
-  "drill-site": "bg-poi-drill-site",
-  "science-target": "bg-poi-science-target",
-  start: "bg-poi-start",
+  "drill-site": "scale-[0.82] rotate-45 rounded-[1px]! bg-poi-drill-site",
+  "science-target": "bg-well inset-ring-[2.5px] inset-ring-poi-science-target",
+  start: "rounded-[2px]! bg-poi-start",
   viewpoint: "bg-poi-viewpoint",
   rover: "bg-poi-rover",
 };
@@ -47,7 +47,7 @@ function MineralEvidence({ poi }: { poi: Poi }) {
   const samples = m?.poiSamples[poi.id];
   if (!m || !samples) return null;
   return (
-    <Detail label={`From orbit at this spot · CRISM ${m.observation}, ${m.pixelM} m pixels`}>
+    <Detail label={`From orbit at this spot · CRISM, ${m.pixelM} m pixels`}>
       <table className="mt-0.5 mb-1 w-full border-collapse text-sm">
         <tbody>
           {m.layers.map((l) => {
@@ -55,7 +55,7 @@ function MineralEvidence({ poi }: { poi: Poi }) {
             if (!s || s.value == null) return null;
             return (
               <tr key={l.id} className="*:py-0.5 *:pr-2 *:align-top">
-                <td className="font-medium whitespace-nowrap">{l.name.replace(/\s*\(.*$/, "")}</td>
+                <td className="font-medium whitespace-nowrap text-ink-2">{l.name.replace(/\s*\(.*$/, "")}</td>
                 <td className={s.value > 0 ? undefined : "text-muted-foreground"}>{s.value > 0 ? "present" : "not seen"}</td>
                 <td className="text-muted-foreground">{s.percentile != null ? `stronger than ${s.percentile}% of the area` : ""}</td>
               </tr>
@@ -64,6 +64,11 @@ function MineralEvidence({ poi }: { poi: Poi }) {
         </tbody>
       </table>
       <div className="text-sm text-muted-foreground">One pixel covers an {m.pixelM} m patch, and sand or dust hides minerals from orbit, so "not seen" does not mean absent.</div>
+      {/* The scene names are a long list of identifiers: there for whoever wants them, folded for everyone else. */}
+      <details className="mt-1.5 text-xs text-muted-foreground">
+        <summary className="cursor-pointer select-none">CRISM scenes used</summary>
+        <div className="mt-1 font-mono wrap-anywhere">{m.observation}</div>
+      </details>
     </Detail>
   );
 }
@@ -198,7 +203,7 @@ export function PoiCard({ poi }: { poi: Poi }) {
       <div className="flex items-baseline gap-2 pr-[22px]">
         <TypeTag type={poi.type} label={POI_TYPE_LABEL[poi.type] ?? poi.type} />
         {poi.positionSource === "illustrative" && (
-          <span className="cursor-help text-xs text-[#e6b98a] before:text-muted-foreground before:content-['·_']" title="A plausible spot picked from the HiRISE image for the demo, not a surveyed target">
+          <span className="cursor-help text-xs text-ink-2 before:text-muted-foreground before:content-['·_']" title="A plausible spot picked from the HiRISE image for the demo, not a surveyed target">
             Illustrative position
           </span>
         )}

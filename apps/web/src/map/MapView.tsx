@@ -3,7 +3,7 @@ import { ZoomHomeControl } from "./zoomHomeControl";
 import { useEffect, useRef, useState } from "react";
 import { createPortal } from "react-dom";
 import maplibregl, { type GeoJSONSource, type ImageSource, type Map as MLMap } from "maplibre-gl";
-import { MAP_LABEL_BASE, MAP_LABEL_BOX, MAP_LABEL_POST, MAP_LABEL_TONE, mapLabelDot, STOP_BADGE, STOP_BADGE_NUMBER, STOP_BADGE_START } from "./mapLabel";
+import { MAP_LABEL_BASE, MAP_LABEL_BOX, MAP_LABEL_POST, MAP_LABEL_TONE, STOP_BADGE, STOP_BADGE_NUMBER, STOP_BADGE_START } from "./mapLabel";
 import { mapPalette } from "./mapPalette";
 import type { GridSpec, LonLat, ReachRing, RouteResult } from "@marsmap/core";
 import { selectedResult, useStore, type LayerState, type OverlayId } from "../store";
@@ -611,9 +611,9 @@ export function poiShortName(p: Poi): string {
  * Domed shapes with a dark keyline and a light ring, legible on bright and dark ground.
  */
 const POI_FILL: Record<string, string> = {
-  "drill-site": "bg-poi-drill-site",
-  "science-target": "bg-poi-science-target",
-  start: "bg-poi-start",
+  "drill-site": "scale-[0.82] rotate-45 rounded-[1px]! bg-poi-drill-site",
+  "science-target": "bg-well inset-ring-[2.5px] inset-ring-poi-science-target",
+  start: "rounded-[2px]! bg-poi-start",
   viewpoint: "bg-poi-viewpoint",
 };
 /** MapLibre makes markers position: absolute, which also anchors the label. */
@@ -623,7 +623,7 @@ const POI_DOT = "block size-3 rounded-full shadow-dome transition-transform dura
 /** A place name is a plate (MAP_LABEL_BOX). In 2D it sits beside the dot (further out once the pin carries a stop
     number) and flips to the left near an edge. In 3D it stands on a post above the dot, which is the post's foot.
     Either way it hides when it would collide, and shows the full name on hover or when selected. */
-const POI_LABEL = `poi-label ${MAP_LABEL_BOX} ${MAP_LABEL_TONE.strong} pointer-events-none absolute -top-0.5 left-[19px] transition-[top,left,right,translate] duration-200 ease-out-quint group-[.in-plan]/pin:left-[23px] group-[.flip]/pin:right-[19px] group-[.flip]/pin:left-auto group-[.in-plan.flip]/pin:right-[23px] group-[.in-plan.flip]/pin:left-auto group-[.lbl-off:not(:hover,.selected)]/pin:invisible [.lowzoom_&]:hidden [.lowzoom_.poi-pin:hover_&]:inline-flex [.map-3d_&]:-top-[32px] [.map-3d_&]:right-auto! [.map-3d_&]:left-1/2! [.map-3d_&]:-translate-x-1/2 [.map-3d_&]:after:absolute [.map-3d_&]:after:top-full [.map-3d_&]:after:left-1/2 [.map-3d_&]:after:-ml-px [.map-3d_&]:after:map-post [.map-3d_&]:after:content-['']`;
+const POI_LABEL = `poi-label ${MAP_LABEL_BOX} ${MAP_LABEL_TONE.strong} pointer-events-none absolute -top-[5px] left-[19px] tracking-[0.06em] uppercase transition-[top,left,right,translate] duration-200 ease-out-quint group-[.in-plan]/pin:left-[23px] group-[.flip]/pin:right-[19px] group-[.flip]/pin:left-auto group-[.in-plan.flip]/pin:right-[23px] group-[.in-plan.flip]/pin:left-auto group-[.lbl-off:not(:hover,.selected)]/pin:invisible [.lowzoom_&]:hidden [.lowzoom_.poi-pin:hover_&]:inline-flex [.map-3d_&]:-top-[36px] [.map-3d_&]:right-auto! [.map-3d_&]:left-1/2! [.map-3d_&]:-translate-x-1/2 [.map-3d_&]:after:absolute [.map-3d_&]:after:top-full [.map-3d_&]:after:left-1/2 [.map-3d_&]:after:-ml-px [.map-3d_&]:after:map-post [.map-3d_&]:after:content-['']`;
 /** Stop markers carry the same badge as the stop numbers in the Plan tab's list, larger and with a keyline for the ground. */
 const STOP_MARKER = `stop-marker ${STOP_BADGE} size-[22px] cursor-grab text-[11px] coarse:size-[30px] coarse:text-base`;
 const STOP_NUMBER = `${STOP_MARKER} ${STOP_BADGE_NUMBER} shadow-[0_0_0_1px_rgba(0,0,0,0.6)]`;
@@ -705,10 +705,10 @@ const HOME_PADDING = 40;
 const HOME_MS = 900;
 /** The angle the 3D button and the home button put the camera at. */
 /**
- * The heading the map opens at and comes home to: east at the top of the screen, i.e. the map turned
- * a quarter turn anticlockwise from north-up. The compass still turns north up when clicked.
+ * The heading the map opens at and comes home to: south at the top of the screen, i.e. the map turned
+ * half a turn from north-up. The compass still turns north up when clicked.
  */
-const HOME_BEARING = 90;
+const HOME_BEARING = 180;
 const HOME_3D = { pitch: 60, bearing: HOME_BEARING - 20 };
 
 /** Open on the points of interest (the boxwork), not the whole region. */
@@ -813,7 +813,8 @@ export function MapView() {
         const url = imageryTilesUrl(grp.id, useStore.getState().marsTint);
         shownUrl.current.set(grp.id, url);
         map.addSource(`img-${grp.id}`, { type: "raster", tiles: [url], tileSize: IMAGERY_TILE_SIZE, maxzoom: imageryMaxZoom(grp), bounds: grp.bounds });
-        map.addLayer({ id: `img-${grp.id}`, type: "raster", source: `img-${grp.id}`, layout: { visibility: "none" }, paint: { "raster-fade-duration": 0, "raster-resampling": "linear" } });
+        // The ground is dimmed a little so the white route and the black chrome both hold against it.
+        map.addLayer({ id: `img-${grp.id}`, type: "raster", source: `img-${grp.id}`, layout: { visibility: "none" }, paint: { "raster-fade-duration": 0, "raster-resampling": "linear", "raster-brightness-max": 0.68, "raster-contrast": 0.12 } });
       }
       // DEM: one source for terrain, one for hillshade (MapLibre recommends separate sources).
       const demMax = demMaxZoom(g);
@@ -903,8 +904,11 @@ export function MapView() {
       s.set({ hover: { lonLat: ll, elevationM: smp?.elevationM ?? null, slopeDeg: smp?.slopeDeg ?? null, surfaceId: smp?.surfaceId ?? null } });
     });
     map.on("mouseleave", () => useStore.getState().set({ hover: null }));
-    const zoomClass = () => containerRef.current?.classList.toggle("lowzoom", map.getZoom() < 15.6);
+    // Place names hide when the map is zoomed far out. A tilted view shows the same ground at a lower zoom
+    // (the 3D opening view sits just under the flat map's cut-off), so it keeps its names a level further out.
+    const zoomClass = () => containerRef.current?.classList.toggle("lowzoom", map.getZoom() < (map.getPitch() > 30 ? 14.6 : 15.6));
     map.on("zoom", zoomClass);
+    map.on("pitch", zoomClass);
     zoomClass();
     map.on("mouseenter", "waypoints", () => (map.getCanvas().style.cursor = "pointer"));
     map.on("mouseleave", "waypoints", () => (map.getCanvas().style.cursor = ""));
@@ -932,13 +936,18 @@ export function MapView() {
     });
     map.on("dblclick", () => clearTimeout(tapTimer));
     // Apple Maps style: tilting the flat map slides into 3D, levelling it out returns to 2D.
+    // The map opens in 3D while still level, before the camera has swung down. Levelling only returns to 2D
+    // once the view has actually been tilted, so the opening moves do not switch 3D off again.
+    let tilted = false;
     map.on("pitch", () => {
+      if (map.getPitch() > TILT_LEAVE_3D) tilted = true;
       if (live.switching || !area.overview.elevation || useStore.getState().view3d || map.getPitch() < TILT_ENTER_3D) return;
       live.tiltDriven = true;
       useStore.getState().set({ view3d: true });
     });
     map.on("moveend", () => {
-      if (live.switching || !useStore.getState().view3d || map.getPitch() > TILT_LEAVE_3D || map.isMoving()) return;
+      if (live.switching || !tilted || !useStore.getState().view3d || map.getPitch() > TILT_LEAVE_3D || map.isMoving()) return;
+      tilted = false;
       live.tiltDriven = true;
       useStore.getState().set({ view3d: false });
     });
@@ -1060,7 +1069,8 @@ export function MapView() {
         (map.getSource(`ovd-${id}`) as ImageSource | undefined)?.updateImage({ url, coordinates: gridCoords(detail.grid) });
       });
     }
-    map.setLayoutProperty("hillshade", "visibility", overlays.hillshade.on ? "visible" : "none");
+    // Hillshade is for the flat map; the 3D effect below switches it with the view.
+    map.setLayoutProperty("hillshade", "visibility", overlays.hillshade.on && !useStore.getState().view3d ? "visible" : "none");
     map.setPaintProperty("hillshade", "hillshade-exaggeration", overlays.hillshade.opacity);
     for (const [l, k] of [["contours-fine", 0.75], ["contours-mid", 1], ["contours-index", 1]] as const) {
       map.setLayoutProperty(l, "visibility", overlays.contours.on ? "visible" : "none");
@@ -1148,7 +1158,7 @@ export function MapView() {
       const plate = document.createElement("div");
       const isLimit = r.kind ? r.kind === "limit" : r.budgetS === Math.max(...rings.map((x) => x.budgetS));
       // The limit is a status, shown once on a dot in the line's own warning colour; the times are plain measures.
-      if (isLimit) plate.innerHTML = mapLabelDot("warn");
+      if (isLimit) plate.innerHTML = "";
       plate.append(isLimit ? `Limit${r.limitedBy ? ` · ${r.limitedBy}` : ""}` : fmtDur(r.budgetS));
       el.title = isLimit
         ? `Walk limit: the farthest you can go, work one stop and still get home with the reserve intact on time, energy and oxygen${r.limitedBy ? `. Here ${r.limitedBy} runs out first` : ""}`
@@ -1346,6 +1356,8 @@ export function MapView() {
     else map.touchPitch.disable();
     // In 3D the label plates stand on posts (see mapLabel.ts); the labels are then placed again for their new shape.
     containerRef.current?.classList.toggle("map-3d", view3d && hasElev);
+    // In 3D the ground has its own relief, so the hillshade is for the flat map only.
+    if (map.getLayer("hillshade")) map.setLayoutProperty("hillshade", "visibility", useStore.getState().overlays.hillshade.on && !view3d ? "visible" : "none");
     if (switched) map.fire(RELAYOUT_LABELS);
     if (view3d && hasElev) {
       // The ground rises out of the flat map while the camera swings down, instead of popping up at full height.

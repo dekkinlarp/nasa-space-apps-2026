@@ -63,7 +63,7 @@ function ElevationToggle() {
   if (!r || !r.reachable) return null;
   return (
     // Phones and short screens give the profile's room to the open sheet, so there is nothing to toggle there.
-    <span className="flex flex-none items-center gap-2.5 phone:in-[.sheet-open]:hidden squat:in-[.sheet-open]:hidden">
+    <span className="flex flex-none items-center gap-3.5 phone:in-[.sheet-open]:hidden squat:in-[.sheet-open]:hidden">
       <StatusRule />
       <button
         type="button"
@@ -77,7 +77,7 @@ function ElevationToggle() {
         }}
       >
         <BottomPaneIcon on={open} />
-        <span className="font-medium text-foreground">Elevation</span>
+        <span className="caps text-foreground">Elevation</span>
         {/* The summary needs the width of a wide window; under that it is on the open profile instead. */}
         <span className="compact:hidden">
           · {fmtDist(r.totals.distanceM)} · {Math.round(reliefM)} m relief
@@ -98,7 +98,7 @@ export function StatusBar({ inSheet = false }: { inSheet?: boolean }) {
   const centre = useMapCentre();
   const credit = area?.manifest.imagery.find((i) => pictureGroup(i) === baseImagery)?.source ?? "";
   const at = hover?.lonLat ?? centre;
-  const row = "status-bar flex min-w-0 flex-none items-center gap-2.5 text-xs text-ink-2";
+  const row = "status-bar flex min-w-0 flex-none items-center gap-3.5 font-mono text-xs text-ink-2";
   // Left to right: the two controls, then the map's own measures (scale, position), then what is under the pointer,
   // and the credit at the far end. Everything of a fixed width comes first, so only the credit gives way as the
   // readings change with the pointer. A rule separates each piece.
@@ -110,7 +110,7 @@ export function StatusBar({ inSheet = false }: { inSheet?: boolean }) {
       {/* MapLibre draws the scale bar; it is moved in here (see mountScaleBar). */}
       <span ref={mountScaleBar} className="flex-none" />
       {at && (
-        <span className="flex flex-none items-center gap-2.5 phone:hidden">
+        <span className="flex flex-none items-center gap-3.5 phone:hidden">
           <StatusRule />
           <span className="font-mono whitespace-pre" title={hover ? "Position under the pointer" : "Centre of the view"}>
             {fmtLonLat(at)}
@@ -136,7 +136,7 @@ export function StatusBar({ inSheet = false }: { inSheet?: boolean }) {
     <div className="relative min-w-0 flex-none">
       <MapLegendPanel className="absolute bottom-full left-0 z-4 mb-2" />
       {/* glass-host: the credit blurs at its cut edge, so the glass is a layer behind the content (see index.css). */}
-      <Panel className={cn(row, "glass-host h-(--status-h) px-2.5")}>
+      <Panel className={cn(row, "glass-host h-(--status-h) px-4")}>
         <i className="glass-layer" aria-hidden />
         {content}
       </Panel>

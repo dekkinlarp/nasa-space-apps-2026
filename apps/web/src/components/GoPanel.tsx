@@ -170,12 +170,12 @@ export function GoPanel({ startFolded = false, onExpand, docked = false }: { sta
       <div className={cn("flex min-w-0 items-center gap-1.5", docked ? "h-10" : "h-9 coarse:h-11")}>
         {collapsed ? (
           <>
-            <span className="flex-none text-sm text-sim tabular-nums">{fmtClock(go.elapsedS)}</span>
+            <span className="flex-none font-mono text-sm text-sim">{fmtClock(go.elapsedS)}</span>
             <span className="mr-auto min-w-0 truncate pl-1 text-xs text-ink-2">{status}</span>
           </>
         ) : (
           // Plain text in the simulated-position colour: the same colour as the walker and its line on the map.
-          <span className="mr-auto min-w-0 truncate text-xs text-sim">{go.mode === "sim" ? "Simulated position" : "Your location, mapped onto Mars"}</span>
+          <span className="caps mr-auto min-w-0 truncate text-sim">{go.mode === "sim" ? "Simulated position" : "Your location, mapped onto Mars"}</span>
         )}
         {go.mode === "sim" && (
           <Button variant="secondary" size="icon-sm" className={HEAD_BTN} onClick={togglePlay} title={playLabel} aria-label={playLabel}>
@@ -205,16 +205,16 @@ export function GoPanel({ startFolded = false, onExpand, docked = false }: { sta
           narrower so the header's last button sits near the edge; pr-1.5 here evens the two sides. */}
       <div className="pr-1.5 pb-4 empty:hidden phone:pb-3">
         {!collapsed && (
-          <>
-            {/* The clock, then one line for what is happening now and, while the crew works at a stop, their task. */}
-            <div className="text-2xl leading-tight font-normal tracking-[-0.02em] tabular-nums">{fmtClock(go.elapsedS)}</div>
-            <div className="truncate text-sm text-ink-2">{status}</div>
+          // The display: the clock, then one line for what is happening now and, while the crew works at a stop, their task.
+          <div className="sunk rounded-lg px-3 pt-2.5 pb-2 shadow-lip inset-shadow-sunk">
+            <div className="text-[40px] leading-none font-medium tracking-[-0.035em] tabular-nums">{fmtClock(go.elapsedS)}</div>
+            <div className="mt-1.5 truncate text-sm text-ink-2">{status}</div>
             {task && !done && (
               <div className="truncate text-xs text-muted-foreground" title={task}>
                 {task}
               </div>
             )}
-          </>
+          </div>
         )}
         {!done && !collapsed && (
           <div className="mt-2.5 text-xs">
@@ -225,10 +225,14 @@ export function GoPanel({ startFolded = false, onExpand, docked = false }: { sta
             {/* Where to head next and how far home is, side by side. */}
             <div className="mt-2 flex items-baseline justify-between gap-3 text-muted-foreground">
               <span className="truncate">
-                Next <span className="text-foreground">{fmtDist(marsDistanceM(here, nextPt))} {COMPASS[Math.round(brg / 45) % 8]}</span>
+                <span className="caps mr-1.5 font-normal tracking-[0.08em]">Next</span>
+                <span className="font-mono text-foreground">
+                  {fmtDist(marsDistanceM(here, nextPt))} {COMPASS[Math.round(brg / 45) % 8]}
+                </span>
               </span>
               <span className="flex-none">
-                Home <span className="text-foreground">{homeS != null && Number.isFinite(homeS) ? fmtDur(homeS) : "—"}</span>
+                <span className="caps mr-1.5 font-normal tracking-[0.08em]">Home</span>
+                <span className="font-mono text-foreground">{homeS != null && Number.isFinite(homeS) ? fmtDur(homeS) : "—"}</span>
               </span>
             </div>
             {go.mode === "gps" && <div className="mt-1 text-muted-foreground">GPS accurate to {go.gpsAccuracyM != null ? `±${Math.round(go.gpsAccuracyM)} m` : "…"}</div>}
@@ -239,7 +243,7 @@ export function GoPanel({ startFolded = false, onExpand, docked = false }: { sta
         {go.gpsError && <Alert variant="destructive">{go.gpsError}</Alert>}
         {go.mode === "sim" && !collapsed && (
           <div className="mt-3 flex items-center justify-between gap-2">
-            <span className="text-xs text-muted-foreground">Speed</span>
+            <span className="caps font-normal tracking-[0.08em] text-muted-foreground">Speed</span>
             <Segmented
               aria-label="Playback speed"
               value={String(go.speed)}

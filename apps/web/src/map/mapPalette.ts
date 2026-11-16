@@ -5,13 +5,13 @@
  * document (the unit tests).
  */
 const TOKENS = {
-  ink: ["--ink", "#e8eaed"],
-  ink2: ["--ink-2", "#a8adb5"],
-  ok: ["--ok", "#4cc38a"],
-  warn: ["--warn", "#e5a93c"],
-  bad: ["--bad", "#f2594b"],
-  sim: ["--sim", "#36d1c4"],
-  rover: ["--poi-rover", "#f2f0ea"],
+  ink: ["--ink", "#f2f2f3"],
+  ink2: ["--ink-2", "#b4b6bb"],
+  ok: ["--ok", "#f2f2f3"],
+  warn: ["--warn", "#ff9f0a"],
+  bad: ["--bad", "#ff453a"],
+  sim: ["--sim", "#ffd60a"],
+  rover: ["--poi-rover", "#c9cbcf"],
 } as const;
 
 export type MapPalette = Record<keyof typeof TOKENS, string> & { casing: string };

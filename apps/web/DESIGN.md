@@ -2,78 +2,71 @@
 name: EVAres
 description: A planning map for an astronaut walk at Gale Crater, with every claim labelled by what it rests on.
 colors:
-  void: "#08090b"
-  hull: "#0f1114"
-  hull-raised: "#15181c"
-  hull-pressed: "#1d2126"
-  well: "#0a0b0d"
-  track: "#262a31"
-  ink: "#e8eaed"
-  ink-2: "#a8adb5"
-  ink-3: "#9aa0aa"
-  ink-4: "#6e747e"
-  seam: "rgba(255, 255, 255, 0.07)"
-  seam-2: "rgba(255, 255, 255, 0.13)"
-  seam-3: "rgba(255, 255, 255, 0.32)"
-  glass: "rgba(15, 17, 20, 0.72)"
-  glass-thick: "rgba(15, 17, 20, 0.92)"
-  ok: "#4cc38a"
-  warn: "#e5a93c"
-  bad: "#f2594b"
-  sim: "#36d1c4"
-  mars: "#ff8a3d"
-  mars-deep: "#c1440e"
-  poi-drill-site: "#ff8a3d"
+  void: "#000000"
+  hull: "#0e0f11"
+  hull-raised: "#17181b"
+  hull-pressed: "#1f2124"
+  poi-drill-site: "#ff7ab6"
   poi-science-target: "#b594ff"
   poi-start: "#5fd08a"
   poi-viewpoint: "#5cc4f5"
-  poi-rover: "#f2f0ea"
+  well: "#040405"
+  track: "#26282c"
+  ink: "#f2f2f3"
+  ink-2: "#b4b6bb"
+  ink-3: "#9a9ca2"
+  ink-4: "#6b6f76"
+  seam: "rgba(255, 255, 255, 0.08)"
+  seam-2: "rgba(255, 255, 255, 0.16)"
+  seam-3: "rgba(255, 255, 255, 0.32)"
+  panel-edge: "#3a3d42"
+  signal: "#ffd60a"
+  warn: "#ff9f0a"
+  bad: "#ff453a"
 typography:
   display:
-    fontFamily: "Helvetica Now Display, Helvetica Neue, Inter Tight Variable, Helvetica, Arial, sans-serif"
-    fontSize: "26px"
-    fontWeight: 700
-    lineHeight: 1.05
-    letterSpacing: "-0.022em"
+    fontFamily: "Inter Tight Variable, Helvetica Neue, Helvetica, Arial, sans-serif"
+    fontSize: "56px"
+    fontWeight: 500
+    lineHeight: 0.8
+    letterSpacing: "-0.035em"
   headline:
-    fontFamily: "Helvetica Now Display, Helvetica Neue, Inter Tight Variable, Helvetica, Arial, sans-serif"
+    fontFamily: "Inter Tight Variable, Helvetica Neue, Helvetica, Arial, sans-serif"
     fontSize: "22px"
     fontWeight: 500
     lineHeight: 1.1
     letterSpacing: "-0.02em"
   title:
-    fontFamily: "Helvetica Now Display, Helvetica Neue, Inter Tight Variable, Helvetica, Arial, sans-serif"
+    fontFamily: "Inter Tight Variable, Helvetica Neue, Helvetica, Arial, sans-serif"
     fontSize: "17px"
     fontWeight: 500
     lineHeight: 1.25
   body:
-    fontFamily: "Helvetica Now Display, Helvetica Neue, Inter Tight Variable, Helvetica, Arial, sans-serif"
+    fontFamily: "Inter Tight Variable, Helvetica Neue, Helvetica, Arial, sans-serif"
     fontSize: "13.5px"
     fontWeight: 400
     lineHeight: 1.42
     letterSpacing: "-0.005em"
   small:
-    fontFamily: "Helvetica Now Display, Helvetica Neue, Inter Tight Variable, Helvetica, Arial, sans-serif"
+    fontFamily: "Inter Tight Variable, Helvetica Neue, Helvetica, Arial, sans-serif"
     fontSize: "12.5px"
     fontWeight: 400
     lineHeight: 1.4
   label:
-    fontFamily: "Helvetica Now Display, Helvetica Neue, Inter Tight Variable, Helvetica, Arial, sans-serif"
+    fontFamily: "Geist Mono Variable, ui-monospace, SF Mono, Menlo, Consolas, monospace"
     fontSize: "11px"
     fontWeight: 500
     lineHeight: 1.25
-    letterSpacing: "0.045em"
+    letterSpacing: "0.1em"
   mono:
     fontFamily: "Geist Mono Variable, ui-monospace, SF Mono, Menlo, Consolas, monospace"
     fontSize: "11px"
     fontWeight: 400
     lineHeight: 1.35
 rounded:
-  sm: "4px"
-  md: "6px"
-  lg: "8px"
-  xl: "12px"
-  2xl: "18px"
+  sm: "3px"
+  md: "4px"
+  lg: "6px"
 spacing:
   gap: "12px"
   panel: "16px"
@@ -83,37 +76,32 @@ components:
   button-primary:
     backgroundColor: "{colors.ink}"
     textColor: "{colors.well}"
-    rounded: "{rounded.lg}"
-    height: "32px"
-    padding: "0 10px"
-  button-secondary:
-    backgroundColor: "rgba(255, 255, 255, 0.08)"
-    textColor: "{colors.ink}"
-    rounded: "{rounded.lg}"
+    rounded: "{rounded.md}"
     height: "32px"
     padding: "0 12px"
-  button-demo:
-    backgroundColor: "{colors.mars-deep}"
-    textColor: "#ffffff"
-    rounded: "{rounded.xl}"
-    padding: "10px 12px"
+  button-secondary:
+    backgroundColor: "#202226"
+    textColor: "{colors.ink}"
+    rounded: "{rounded.md}"
+    height: "32px"
+    padding: "0 12px"
   panel:
-    backgroundColor: "{colors.glass}"
-    textColor: "{colors.ink}"
-    rounded: "{rounded.xl}"
-  panel-large:
-    backgroundColor: "{colors.glass}"
-    textColor: "{colors.ink}"
-    rounded: "{rounded.2xl}"
-  side-panel:
-    backgroundColor: "{colors.glass}"
-    textColor: "{colors.ink}"
-    rounded: "{rounded.2xl}"
-    width: "{spacing.side-width}"
-  input:
-    backgroundColor: "transparent"
+    backgroundColor: "{colors.hull}"
     textColor: "{colors.ink}"
     rounded: "{rounded.lg}"
+  key:
+    backgroundColor: "{colors.hull-raised}"
+    textColor: "{colors.ink}"
+    rounded: "{rounded.md}"
+  side-panel:
+    backgroundColor: "{colors.hull}"
+    textColor: "{colors.ink}"
+    rounded: "{rounded.lg}"
+    width: "{spacing.side-width}"
+  input:
+    backgroundColor: "{colors.well}"
+    textColor: "{colors.ink}"
+    rounded: "{rounded.md}"
     height: "32px"
     padding: "4px 10px"
   badge:
@@ -128,82 +116,87 @@ components:
 
 ## Overview
 
-**Creative North Star: "The Field Notebook"**
+**Creative North Star: "The Field Instrument"**
 
-This is a scientist's working map. A planner lays a walk over real ground and the interface keeps the
-evidence, the caveats and the sources in view beside it. Nothing decorates: each mark either is data
-or says how far the data can be trusted. The language is plain, with the mission's own terms (sol,
-EVA, reserve, turn back) where they are the right words.
+This is a scientist's working map, built like a piece of field hardware: black bodies, raised keys, sunk
+displays, engraved plates, one signal colour. A planner lays a walk over real ground and the interface keeps
+the evidence, the caveats and the sources in view beside it. Nothing decorates: each mark either is data or
+says how far the data can be trusted. The language is plain, with the mission's own terms (sol, EVA, reserve,
+turn back) where they are the right words.
 
-The map is the page. Panels float over it on one dark glass material and stay out of its way; the
-chrome is monochrome on a single cool hue so that colour is free to mean something. Density is that
-of a tool used for a long session at a desk, and it has to hold up on a phone too.
+The map is the page: it opens in 3D, south up, with the Mars colour tint on. Panels float over it as solid black surfaces
+and stay out of its way. Density is that of a tool used for a long session at a desk, and it has to hold up
+on a phone too.
 
 **Key Characteristics:**
 - The verdict ("Fits the limits", or what breaks them) has one home and comes before the detail.
-- Colour is reserved for status, data ramps, point-of-interest types and the one demo action.
+- Signal yellow means on, selected or live, and nothing else. A walk that fits carries no colour.
+- State shows in a control's own form (a raised thumb, a knob's position) or in a word. There are no status dots.
+- Every number is in the mono face; labels are small mono capitals. Units keep their SI case.
 - A dashed outline always means estimated or inferred. Evidence is tagged Rover, Orbit or Our reading.
-- Hatching marks the safety reserve on a budget bar and nothing else.
 - Explanations a reader may need open from an info button; they are never tooltip-only.
 
 ## Colors
 
-A near-black cool neutral in lightness steps, with a small set of saturated colours that each carry
-one meaning.
+Neutral black in lightness steps, one signal colour and two status colours.
 
-### Primary
-- **Mars Rust** (#c1440e, with **Mars Orange** #ff8a3d as its light step): the one coloured action in
-  the panel (the demo walk) and the walking segment of a budget bar. Not used for decoration.
+### Signal
+- **Signal Yellow** (#ffd60a): the open tab, the picked segment, a switch that is on, the walked part of a
+  route, the walker and the live clock. It is never a button's fill and never decoration.
 
 ### Neutral
-- **Void** (#08090b): behind the map.
-- **Hull** (#0f1114), **Hull Raised** (#15181c), **Hull Pressed** (#1d2126): docked, raised and
-  pressed surfaces. Nothing that floats uses them as its fill: popovers and menus are glass.
-- **Well** (#0a0b0d): inset fields and marker fills.
-- **Ink** (#e8eaed), **Ink 2** (#a8adb5), **Ink 3** (#9aa0aa), **Ink 4** (#6e747e): text from primary
-  to faint. Ink 3 is the muted text colour and holds about 5.8:1 on the side panel over the brightest ground
-  (6.7:1 over dark ground); on lighter surfaces such as a selected row, step up to Ink 2. Ink 4 is for marks
-  such as grips and hatching, not text: about 3.3:1.
-- **Seams** (white at 7%, 13% and 32%): hairlines, input borders, and hover or dashed borders.
-- **Glass** (rgba(15,17,20,0.72) over a 40px blur of the map, dimmed to 60%): the floating material, one dark, frosted tone for every surface. The dimming keeps it as dark as a near-solid fill while the ground still shows through. Thick Glass (92%) is for map labels,
-  with a 12% white edge. The edge is always drawn over the glass, never over bare ground, so
-  every panel's edge reads the same; a panel whose glass is an inner layer (`glass-host`) carries its edge on that layer.
+- **Void** (#000000): behind the map.
+- **Hull** (#0e0f11): panel bodies. **Hull Raised** (#17181b): keys that float on the map and map plates.
+  **Hull Pressed** (#1f2124): thumbs and selected rows.
+- **Well** (#040405): anything sunk into a panel: tab tracks, fields, meters, displays.
+- **Ink** (#f2f2f3), **Ink 2** (#b4b6bb), **Ink 3** (#9a9ca2), **Ink 4** (#6b6f76): text from primary to
+  faint. Ink 3 is the muted text colour, about 7:1 on a panel. Ink 4 is for marks such as grips, not text.
+- **Seams** (white at 8%, 16% and 32%): hairlines, dividers, and hover or dashed borders.
+- **Panel edge** (#3a3d42): the 1px edge of a panel. Keys take a black keyline and a lit top edge instead.
 
 ### Status and data
-- **OK** (#4cc38a), **Warn** (#e5a93c), **Bad** (#f2594b): fits, close to or at a limit, over a limit.
-- **Sim** (#36d1c4): the simulated or GPS position during a walk.
-- **POI types**: drill site #ff8a3d, science target #b594ff, start #5fd08a, viewpoint #5cc4f5,
-  rover #f2f0ea. The same colour is used in the list, on the card and on the map pin.
+- **Warn** (#ff9f0a): close to a limit, a caution slope, a turn-back time. **Bad** (#ff453a): over a limit.
+- There is no "ok" colour. A budget with room, a route that fits and the tick beside the verdict are plain ink.
+- Kinds of place differ twice, by shape and by colour: a drill site is a pink diamond (#ff7ab6), a science
+  target a violet ring (#b594ff), a viewpoint a blue disc (#5cc4f5), a start a green square (#5fd08a). The
+  same mark is used in the list, on the card, in the map key and on the map. These colours keep clear of
+  the signal yellow and of the status orange and red.
+- Data ramps (minerals, slope, elevation) keep their own colours; they are data, not chrome.
 
 ### Named Rules
-**The Meaning Rule.** If a colour is on screen it is telling the planner something: a status, a data
-value, a kind of place. Chrome stays neutral.
+**The Signal Rule.** Yellow says on, selected or live. If none of those is true, the thing is not yellow.
+
+**The Quiet Rule.** Nothing is coloured while the walk is fine. Orange and red appear only with a reason.
+
+**The No Dots Rule.** No lamp, dot or square is placed beside a label to mark a state. The control's form,
+the label's colour or a word carries it. A swatch that keys a data ramp is not a status dot.
 
 **The Dashed Rule.** A dashed outline means estimated or inferred, everywhere, and is used for nothing else.
 
 ## Typography
 
-**Display and body font:** Helvetica Now Display where installed, Helvetica Neue on Apple devices,
-Inter Tight elsewhere.
-**Mono font:** Geist Mono, for coordinates and identifiers only.
+**Text font:** Inter Tight, for names and prose.
+**Mono font:** Geist Mono, for every number, coordinate and label.
 
-**Character:** One tight grotesque throughout, with tabular figures so numbers line up. Headings are
-large with negative tracking; everything else is small and even.
+**Character:** A tight grotesque for what is read, a mono face for what is measured. Labels are small mono
+capitals with open tracking, like the engraving on an instrument.
 
 ### Hierarchy
-- **Display** (700, 26px, 1.05): the site name in the panel header.
-- **Headline** (500, 22px, 1.1): a tab's opening line and card titles.
-- **Title** (500, 17px, 1.25): the headline number on a route card.
-- **Body** (400, 13.5px, 1.42): tab content.
-- **Small** (400, 12.5px, 1.4): secondary text, controls, notes.
-- **Label** (500, 11px, 0.045em, uppercase): section headings only.
-- **Mono** (400, 11px): coordinates.
+- **Display** (500, 56px): the one number to glance at, what is left of the tightest budget, in its display.
+  The walk's clock is the same face at 40px.
+- **Headline** (500, 22px, 1.1): card titles and a tab's opening line.
+- **Title** (500, 17px, 1.25): the site name in the panel header.
+- **Body** (400, 13.5px, 1.42): tab content. **Small** (400, 12.5px, 1.4): secondary text and notes.
+- **Label** (mono 500, 11px, 0.1em, uppercase): section headings, tab and button text, the names of readouts.
+- **Readout** (mono 400 to 500, 11px to 12.5px): every figure.
 
 ### Named Rules
 **The Eleven Rule.** Nothing is set under 11px. The miniature markers inside the map key are the one exception.
 
-**The Caps Rule.** Uppercase is for the heading that opens a section of a panel. Value labels, buttons,
-names and badges are sentence case.
+**The Units Rule.** Labels are capitals; units never are. "1h 44m", "569 m" and "1.82 MJ" stay as written,
+because "M" would read as both minutes and metres.
+
+**The Brand Rule.** The name is written EVAres, in the mono face, and is never set in capitals.
 
 ## Layout
 
@@ -212,10 +205,11 @@ side panel leaves visible and only lays things out: it ignores the pointer, and 
 pointer back, so the map stays draggable in every gap.
 
 - **Side panel:** 372px (336px under 1100px), 12px from the window edge, with header, tabs and one
-  scrolling tab body. The header is the app name and the site name only. It collapses off the left edge.
+  scrolling tab body. The header is the app name and the site name only. A slim handle on its right edge
+  hides it, and stays at the window's left edge to bring it back.
 - **Explore tab:** figures and pictures before prose. Top to bottom: the position and extent on one line;
-  the typical sol as three tiles, each an icon and a value (temperature, daylight, radiation), with their
-  source behind an info button; the walk card (a title, one sentence, the demo walk drawn as numbered
+  the typical sol as three readout rows, each an icon, a name and a value (temperature, daylight, radiation),
+  with their source behind an info button; the walk card (a title, one sentence, the demo walk drawn as numbered
   steps, the demo button and "Plan your own", with the longer story folded behind "Why the boxwork?");
   the places as one list with a filter by kind; then Curiosity's counts as three tiles. A place's row is a
   32px picture of its ground with its pin colour on the corner, its name, and its kind and priority. The
@@ -224,11 +218,12 @@ pointer back, so the map stays draggable in every gap.
   list (start, stops, "Return to start" with a switch); the routes as a comparison table; then the Segment
   details and Walk settings disclosures. "Simulate walk" sits in a footer under the scrolling body. With no start and no stops it opens with a card that names the three steps and offers
   the demo walk.
-- **Top right:** zoom buttons and the compass dial stack in the corner. The top left holds only the button that brings back a hidden side panel.
+- **Top right:** one stack of keys in the corner: zoom in, zoom out, home, and the compass as its last cell.
 - **Middle:** the point-of-interest card on the right, 340px (300px under 1100px).
 - **Top left:** empty, except for the prompt shown while the planner is placing the start.
+- **Map edges:** coordinate ticks, like the frame of a chart: longitude along the top and latitude down the left, just clear of the side panel, labelled in mono at round values with plain ticks between. They follow the map, and are hidden in 3D.
 - **Bottom row:** the walk panel while a walk is running (on small screens also a one-line verdict, the Plan tab's stand-in while the sheet hides it), then the 2D/3D switch and gesture help on the right. In 3D a settings button joins the switch and opens a popover with vertical exaggeration and draw distance.
-- **Foot:** a slim status bar: in this order, with a hairline rule between each piece: the map key, the elevation toggle with the route's length and relief, the scale bar, the position, then what is under the pointer (elevation, slope, surface, any science layer's value, distance from the start), and the imagery credit at the far end. This is the one place those readings are shown. Fixed-width pieces come first, so only the credit gives way as the readings change. The credit is said once, as text: when it does not fit, its cut edge fades and blurs out and the line slides to its end and back. The key opens upward as a glass panel of its own beside the bar, not inside it, because a blur nested in a blurred surface cannot see the map. The elevation profile opens above the status bar when asked and takes no room while folded.
+- **Foot:** a status bar, 32px tall with 16px of side padding and mono text: in this order, with a hairline rule between each piece: the map key, the elevation toggle with the route's length and relief, the scale bar, the position, then what is under the pointer (elevation, slope, surface, any science layer's value, distance from the start), and the imagery credit at the far end. This is the one place those readings are shown. Fixed-width pieces come first, so only the credit gives way as the readings change. The credit is said once, as text: when it does not fit, its cut edge fades and blurs out and the line slides to its end and back. The key opens upward as a panel of its own beside the bar. The elevation profile opens above the status bar when asked and takes no room while folded.
 - **Under 1100px** the elevation toggle drops its summary; the relief is written on the open profile instead.
 - **Under 860px** the side panel becomes a bottom sheet (46dvh, 50dvh on phones) that folds to its tab
   bar; cards move to the left; a one-line verdict rides on the map. The status bar is the sheet's last
@@ -246,87 +241,76 @@ and a selected place is never left under its own card.
 
 ## Elevation & Depth
 
-Depth is drawn with hairlines. Only surfaces that float over the imagery get a shadow, and there are
-two of them.
+Relief is drawn with shadows only: a lit top edge, a black keyline, a short drop shadow. No fill is a
+gradient. Three heights are in use.
 
-### Shadow Vocabulary
-- **Float** (`0 0 0 0.5px rgba(0,0,0,0.7), 0 10px 30px rgba(0,0,0,0.45)`): the side panel, cards, the dock.
-- **Float small** (`0 0 0 0.5px rgba(0,0,0,0.7), 0 4px 14px rgba(0,0,0,0.4)`): control bars, the key, readouts.
+- **Raised** (`shadow-raised`, `shadow-thumb`, `shadow-key`): buttons, thumbs and the keys that float on the map.
+- **Flush**: the panel body, with its grey edge.
+- **Sunk** (`sunk`, `inset-shadow-sunk`, `shadow-lip`): tab tracks, segmented controls, fields, meters and
+  displays. A black fill shaded under its top edge, with a faint lit lip below.
 
 The map layer is its own stacking context: a raised marker stacks among the markers and never above a panel.
 
 ## Shapes
 
-Rounded rectangles on a short scale: 4px for badges and map labels, 8px for controls, fields and tiles, 12px for small
-floating panels, 18px for large ones. Nothing is a pill except the switch and the slider thumb. Borders are 1px hairlines. Point-of-interest pins are 12px
-circles with a dark keyline and a light ring; a start is a rounded square. Stop markers are 22px
-rounded squares carrying their number.
+A short scale: 3px for plates and badges, 4px for keys and thumbs, 6px for tracks, displays and panels.
+Nothing is a pill except the switch and the slider thumb. The side panel and the main action each have one
+cut corner (`chamfer`, 16px top right on the panel; `chamfer-br`, 10px bottom right on the button), and
+nothing else does. Stop markers are 22px rounded squares carrying their number.
 
 ## Components
 
 ### Buttons
-Buttons are skeuomorphic: small solid things lit from above, not flat fills.
-- **Shape:** a rounded rectangle, 8px radius (6px for the small sizes), 32px tall, 12.5px medium text. Not a pill.
-- **Raised** (`shadow-raised`): a dark 1px keyline, a bright top lip, a faint inner edge and a short drop
-  shadow. No CSS border: the edge is in the shadow, flush with the fill.
-- **Primary:** Ink fill with Well text, on the strong form (`shadow-raised-strong`), which adds a soft
-  highlight across the top and shade along the bottom. Keep it faint: it should round the fill, not read as a gradient. One per group
-  ("Simulate walk", "Add as stop").
-- **Secondary:** an 8% white fill, raised; the everyday button. Select triggers are the same.
-- **Pressed** (`shadow-pressed`): the drop shadow goes and the top edge darkens, on press and on a
-  toggled-on button ("Pick on map" while picking).
-- **Ghost and link:** icon buttons and inline "show" links. They have no surface, so no relief.
-- **Glass:** a control that floats on the map, with a bright top lip.
-- **Demo:** the one coloured button, Mars Rust, on the strong raised form. Still no glow.
-- **Sunk** (`inset-shadow-sunk`): the opposite of raised, for what a thumb runs in or text is typed into:
-  the tab bar, segmented controls and input fields are shaded under their top edge.
-- The relief is drawn with shadows only, never a gradient fill, so a button's colour stays one token.
+- **Shape:** 4px corner, 32px tall, 11px mono capitals. Not a pill.
+- **Primary:** Ink fill with Well text on `shadow-raised-strong`. One per group. The Plan tab's "Simulate
+  walk" is the main action: 44px tall with the cut corner.
+- **Secondary:** a #202226 fill, raised; the everyday button. Select triggers are the same.
+- **Pressed** (`shadow-pressed`): the drop shadow goes and the fill darkens to Well; a toggled-on button
+  ("Follow") also writes its icon in the signal colour.
+- **Ghost and link:** icon buttons and inline "show" links. Links are sentence case in the text face.
+- **Key:** a control that floats on the map, on Hull Raised with a black keyline and a lit top edge.
 - **Focus:** a 2px Ink outline, 2px offset, on everything.
 
 ### Badges
-- **Style:** 16px tall, 4px radius, 11px text, a hairline border and no fill.
+- **Style:** 16px tall, 3px radius, 11px text, a hairline border and no fill.
 - **Estimate:** dashed border. **Strong:** brighter border for primary objectives and rover evidence.
-  **Warning:** amber border and text, used for "Synthetic test data".
-- No filled pills: a count (the stops on the Plan tab) is a badge like any other.
+  **Warning:** orange border and text, used for "Synthetic test data".
 
 ### Panels and cards
-- **Material:** glass, with a 12% white edge and a float shadow. Every panel uses the same glass, the side
-  panel included, so no surface reads darker or lighter than its neighbours.
-- **One component:** every floating surface is a `Panel` or takes its classes from `panelVariants`. That
-  includes everything that pops up: info notes, popovers and select menus are glass by default, with the
-  12px corner, so a new popover matches without asking for anything. No surface sets its own radius, fill or
-  blur. The one exception is a popup nested inside another glass surface (the map key inside the status
-  bar), which is solid (`surface="solid"`) because a blur inside a blur cannot see the map.
-- **Corner:** 12px for bars, readouts and controls on the map; 18px for cards, the walk panel and the side panel.
+- **Material:** a solid Hull body with a 1px grey edge and a float shadow. There is no blur and no
+  translucency, so the ground never tints the chrome.
+- **One component:** every floating surface is a `Panel` or takes its classes from `panelVariants`. The
+  default size is a key (bars, readouts, the map key); `lg` is a card.
 - **Padding:** 16px. A card's actions sit in a footer that stays put while the body scrolls.
 
+### Displays
+A sunk black window set into a panel, for the figure that matters most there: the verdict and the tightest
+budget on the Plan tab, the clock and the current task in the walk panel. One per panel.
+
 ### Inputs
-- **Style:** transparent with a 13% white border, 8px radius, 32px tall. Number fields for dwell time sit in a Well fill.
+- **Style:** a sunk Well field with a black border, 4px radius, 32px tall, mono text.
 
 ### Switches and sliders
-- **Switch:** a 38 x 22px capsule with a white pill thumb, in the macOS style. Off is a 30% white track,
-  on is OK green. The thumb is white in both states, so the state never rests on colour alone. This is the
-  one place a status colour is used in the chrome: it says the thing is on.
-- **Slider:** a 6px capsule track, filled in Ink up to a white 24 x 16px pill thumb (28 x 20px on touch).
-  A slider shows its value beside it.
+- **Switch:** a 38 x 22px capsule. Off, a black track and a light knob; on, a Signal Yellow track and a
+  dark knob. The state reads from the knob's position as well as the colour.
+- **Slider:** a 6px sunk track, filled in Ink up to a white pill thumb. A slider shows its value beside it.
 
-### Fact tiles
-A small figure in a faint tile (5% white fill, 8px corner): the value in medium weight with its label
-under it, or an icon in place of the label where the unit already says what it is. Used for the typical
-sol and Curiosity's counts on the Explore tab. Never more than three across.
+### Readout rows
+A name in mono capitals on the left, its figure in mono on the right, a hairline under each. Used for the
+typical sol on the Explore tab and for the walk panel's "next" and "home".
 
 ### Layer rows
 One row per layer on the Layers tab: a 32px preview, the name, an info button and a switch. The preview
-is real data: 4 km of ground around the start in the chosen imagery (1 km for the mineral layers, whose 18 m pixels are only speckle from further out), with the layer drawn over it by the
-function that draws it on the map. The opacity slider and the colour key show only while the layer is on.
-What a layer means and where it comes from sit behind its info button. Base imagery is a four-column grid of square picture
-cards showing the same 4 km of ground; the chosen one has an Ink outline and a check.
+is real data, drawn by the function that draws it on the map. The opacity slider and the colour key show
+only while the layer is on. Base imagery is a four-column grid of square picture cards; the chosen one has
+an Ink outline and a check. The Mars colour tint is on by default; turning it off shows the ground in grey, as
+the camera recorded it.
 
 ### Navigation
-- Three tabs (Explore, Plan, Layers) as a segmented control; the active tab is a lighter fill. On the
-  bottom sheet, tapping the active tab folds the sheet.
-- **Segmented controls** and the tab bar are sunk 8px tracks with 2px of padding and a raised 6px thumb, so the corners are concentric. The
-  2D/3D switch floats on the map, so it sits in a 12px panel with 4px of padding and 8px segments.
+- Three tabs (Explore, Plan, Layers) as a segmented control. On the bottom sheet, tapping the active tab
+  folds the sheet.
+- **Segmented controls**, the tab bar and the 2D/3D switch are one control: a sunk 6px track with 3px of
+  padding and a raised 4px thumb. The picked option is written in the signal colour.
 
 - **The thumb slides.** In a tab bar or segmented control the highlight is one element that moves and
   resizes from the old option to the new one (`SlidingThumb`), over 300ms on the panels' no-overshoot curve.
@@ -336,35 +320,21 @@ cards showing the same 4 km of ground; the chosen one has an Ink outline and a c
   scroll edges.
 
 ### Map labels
-Every label on the map is one physical thing: a small black plate with engraved text (`MAP_LABEL_BOX` in
-`map/mapLabel.ts`). The time-ring and walk-limit labels, the turn-back or tightest-point chip, the walker's
-countdown and place names all use it. This is the one place the map is skeuomorphic, and it follows the
-raised controls and the segmented meters: lit from above, drawn with shadows only.
+Every label on the map is a small black plate with engraved text (`MAP_LABEL_BOX` in `map/mapLabel.ts`).
+The time-ring and walk-limit labels, the turn-back or tightest-point chip, the walker's countdown and place
+names all use it.
 
-- **The plate:** 18px tall, 4px corner, 11px medium in the mono face, on the panels' own Glass fill (a faded
-  black the ground shows through a little, not solid black; no blur, since there are many plates). No border: `shadow-plate`
-  gives it a dark keyline, a bright top lip with a soft highlight under it, a dark bottom edge and a short
-  shadow on the ground.
+- **The plate:** 22px tall, 3px corner, 9px of side padding, 11px medium in the mono face, on Hull Raised.
+  `shadow-plate` gives it a black keyline, a lit top edge, a dark bottom edge and a short shadow on the ground.
 - **The text** is cut in: a 1px dark line above the letters. Ink 2 for a plain measure (a ring's time), Ink
-  for a place, an event or a limit. Sentence case.
-- **Status shows once, on a mark** (`MAP_LABEL_MARK`): the label's icon, or a 6px lamp with a highlight, a dark
-  rim and a faint ring of its own colour. The plate and the text never take a status colour. The lamp is the
-  only thing on the map that glows.
-- **Place names are plates too.** There is no bare text on the map. A hovered or selected place shows its
-  full name.
-- **In 2D** a plate lies beside its point. **In 3D** it stands on a 14px post above it (`MAP_LABEL_POST`), with
-  the pin, a foot mark or the turn-back diamond where the post meets the ground. Plates stay flat to the
-  screen. Nearer ones draw over farther ones, and one whose point is behind a hill is dimmed (MapLibre's
-  own covered-marker opacity).
-- The walker's label holds only the work time left at a stop.
+  for a place, an event or a limit. Place names are capitals; measures keep their units' case.
+- **Status shows once, on an icon** (`MAP_LABEL_MARK`) that says what the status is. The plate and the text
+  never take a status colour, and there is no lamp.
+- **In 2D** a plate lies beside its point. **In 3D** it stands on a 14px post above it (`MAP_LABEL_POST`).
 
-### Map dots
-A dot on the map is a small dome lit from above, to match the plates (`shadow-dome`): a dark keyline, a light
-ring so it holds on dark ground, a short shadow on the ground, a highlight under its top edge and shade under
-its lower half. The place pins, the foot of a plate's post and the rover's waypoints all use it; the waypoints
-are an image of the same dome, since they are drawn on the map canvas. The same dots in the map key, the
-Explore list and a place card take the small form (`shadow-dome-sm`). The dome is drawn with shadows only, so
-its colour stays the one token that says what kind of place it is.
+### Map marks
+A place is marked by its shape and colour (see Colors): diamond, ring, disc or square, with a black keyline
+and a short shadow on the ground (`shadow-dome`). The rover's waypoints are small grey discs.
 
 ### Map lines
 Lines are flat, thin and keylined, with no glow. Their colours are the tokens, read once in
@@ -377,9 +347,10 @@ or hypothetical, and nothing else.
 - **Routes not chosen:** 1.5px Ink 2 hairlines on a thin casing. Pointing at or focusing a row of the route
   table brightens that route's line.
 - **Legs past the limit:** dashed Bad on the black casing.
-- **Walked part of a route:** solid Sim, 3px. The walk's position is a Sim dot in a thin Sim ring.
-- **Time rings:** dotted Ink on a dark keyline (they are modelled). **Walk limit:** solid Warn.
-- **Rover track:** solid, 1.25px, in the rover colour, with small waypoint dots (it was measured).
+- **Walked part of a route:** solid Signal Yellow, 3px. The walk's position is in the same colour.
+- **Time rings:** dotted Ink on a dark keyline (they are modelled). **Walk limit:** solid Warn (orange).
+- **Rover track:** solid, 1.25px, in grey, with small waypoint discs (it was measured).
+- **The ground** is dimmed to about two thirds of its brightness, so the white route and the black chrome both hold against it.
 - **Planning window:** four corner brackets, not a dashed square (it is a boundary, not an estimate).
 
 ### Stop numbers
@@ -393,40 +364,35 @@ The start row holds the start select and "Pick on map". Stops reorder by draggin
 on the grip. What the crew does at a stop is on the place's card and, during a walk, in the walk panel.
 
 ### Route table
-One row per route, selectable: its name and right-aligned columns
-for time, distance, energy and hazard metres. The best figure in each column is in Ink and the rest are
-muted; no colour is added. A route that does not fit says so in red under its name.
+One row per route in a sunk track, selectable: its name and right-aligned mono columns for time, distance,
+energy and hazard metres. The chosen route is a raised row, like a tab's thumb. The best figure in each
+column is in Ink and the rest are muted; no colour is added. A route that does not fit says so in red under its name.
 
 ### Walk panel
-The mode as plain text in the Sim colour, a Follow toggle and a close button; the clock; one line for what
-is happening and, while the crew works at a stop, their task under it. Then the distance and bearing to
-the next point, what is left of time, energy and oxygen on segmented meters, and the walk home. Beside the
-clock is the headline: what is left of the tightest budget. It folds to a single row: clock, status, play,
-follow, unfold, stop. On the bottom-sheet layout every walk opens folded, and unfolding it folds the sheet, so
-the full panel and the open sheet are never both over the map.
+The mode in mono capitals in the signal colour, then play, Follow, fold and close. Under it the display: the
+clock, one line for what is happening and, while the crew works at a stop, their task. Then what is left of
+time, energy and oxygen on plain meters, the distance and bearing to the next point, and the walk home. It
+folds to a single row: clock, status, play, follow, unfold, stop. On the bottom-sheet layout every walk opens
+folded, and unfolding it folds the sheet, so the full panel and the open sheet are never both over the map.
 
-### Segmented meter
-What is left of one budget, read like a battery (`SegMeter`, in `MiniBar`): a sunk track of 14 or 20
-segments that light from the left. Each segment is coloured for what being down to it means: red for the
-last tenth, amber for the last quarter, green above. So the last lit segment is the status, and the figure
-beside the meter takes the same colour. Used where one glance has to do: the walk panel. Above the meters, the
-tightest budget is the headline: its percentage left in 26px, with its name (`MeterHeadline`). The Plan tab
-opens its verdict with the same headline but not the meters: its budget bars show the split a meter cannot.
+### Meters
+What is left of one budget (`PlainMeter`, in `MiniBar`): a bar in a sunk track that drains toward the left
+as the budget is spent. It is plain Ink, turns orange once it drains to 25% left and red at 10% left, and the
+figure beside it takes the same colour. Used on the Plan tab and in the walk panel. Above the Plan tab's
+meters, in the display, the tightest budget is the headline (`MeterHeadline`).
 
 ### Slope bars
 In Segment details, each leg carries 18 small bars of its slope from start to end: a bar is the steepest
 ground in its stretch, as tall as that is against the no-go slope and in the colour the route line has
 there on the map.
 
-### Budget bar (signature)
-One row per limit (EVA time, energy, oxygen), directly under the verdict: the name, the bar, and used /
-usable. On the bar: used segments in colour, what is left in a faint green, the safety reserve hatched at
-the end, a marker for the turn-back time, and a red hatched overrun if the plan exceeds the usable budget.
-One legend serves all three bars. Each row has an info button, which also gives the split between walking,
-stops and what is left, and a full text label for screen readers.
+### Budget rows
+One row per limit (EVA time, energy, oxygen), directly under the display: the name in mono capitals, the
+meter, and used / usable in mono. Each row has an info button, which gives the split between walking, stops
+and what is left, and a full text label for screen readers.
 
 ### Info button
-A small "i" that opens a glass popover, the same material as the panels. Use it for any explanation a reader may need; a `title` tooltip is
+A small "i" that opens a popover, the same material as the panels. Use it for any explanation a reader may need; a `title` tooltip is
 only for a hint that repeats what is already visible.
 A note is written for the planner: what the thing shows, the one caveat that matters, and a one-line
 source, in at most three short paragraphs. Formulas, file URLs and scene lists stay in the data manifest;
@@ -438,14 +404,16 @@ a note never prints the manifest's `method` string.
 - **Do** state the verdict once, above the detail, in the same words everywhere ("Fits the limits").
 - **Do** label anything estimated, illustrative or synthetic, with the dashed style or in words.
 - **Do** credit the data source wherever data is shown.
-- **Do** use tokens (`text-muted-foreground`, `bg-well`, `text-warn`) rather than raw hex.
+- **Do** use tokens (`text-muted-foreground`, `bg-well`, `text-signal`) rather than raw hex.
+- **Do** set every figure in the mono face and keep its unit's case.
 - **Do** give every control a name, a keyboard path and a touch size that works on a phone.
-- **Do** round a duration the same way wherever one route's time is shown.
 
 ### Don't:
-- **Don't** add a status dot, pill or badge for a state that is true almost all the time.
-- **Don't** use uppercase outside section headings, or set text under 11px.
+- **Don't** add a status dot, lamp or pill beside a label. Show the state in the control or in a word.
+- **Don't** use yellow for anything that is not on, selected or live.
+- **Don't** fill anything with a gradient, or blur the map behind a panel.
+- **Don't** set text under 11px, or set a unit in capitals.
 - **Don't** use unicode glyphs or emoji as icons; use lucide.
-- **Don't** put a coloured left or right edge on an alert, or a gradient fill or glow on a button.
+- **Don't** cut a corner on anything but the side panel and the main action.
 - **Don't** hide an explanation in a `title` tooltip.
 - **Don't** let a panel cover the place the planner just selected.

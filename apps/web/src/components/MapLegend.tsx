@@ -2,7 +2,8 @@ import { useEffect, type ReactNode } from "react";
 import { create } from "zustand";
 import { selectedResult, useStore } from "../store";
 import { fmtDur } from "../format";
-import { getMap, isTrackFaded, RELAYOUT_LABELS } from "../map/MapView";
+import { getMap, isTrackFaded, RELAYOUT_LABELS, scienceLayers, scienceRamp } from "../map/MapView";
+import { cssGradient } from "../map/rasters";
 import { CONTOUR_COLOR, CONTOUR_FINE_M, CONTOUR_INDEX_M, CONTOUR_MID_M } from "../map/contours";
 import { ROUTE_TICK_M, slopeBands } from "../map/routeSlope";
 import { ChevronDownIcon } from "lucide-react";
@@ -115,13 +116,16 @@ export function MapLegendPanel({ className }: { className?: string }) {
   const start = useStore((s) => s.start);
   const stops = useStore((s) => s.stops);
   const area = useStore((s) => s.area)!;
+  const sci = useStore((s) => s.sci);
+  // The mineral layers that are switched on, each with the colour ramp it is drawn in.
+  const minerals = scienceLayers(area).filter((l) => sci[l.id]?.on);
 
   const sel = selectedResult({ results, selectedProfile });
   // The key changes size with its content: let the ring labels move out from under it.
   useEffect(() => {
     const id = requestAnimationFrame(() => getMap()?.fire(RELAYOUT_LABELS));
     return () => cancelAnimationFrame(id);
-  }, [open, tab, !!sel, !!rings?.length, overlays.rings.on, overlays.contours.on, overlays.track.on, overlays.pois.on, !!start, stops.length > 0]);
+  }, [open, tab, !!sel, !!rings?.length, overlays.rings.on, overlays.contours.on, overlays.track.on, overlays.pois.on, !!start, stops.length > 0, minerals.length]);
   const b = slopeBands(params);
   const alts = (results ?? []).filter((r) => r.profile.id !== sel?.profile.id);
   const showRings = !!rings?.length && overlays.rings.on;
@@ -232,6 +236,20 @@ export function MapLegendPanel({ className }: { className?: string }) {
               >
                 Contours
               </Row>
+            </Section>
+          )}
+
+          {minerals.length > 0 && (
+            <Section>
+              {minerals.map((l) => (
+                <Row
+                  key={l.id}
+                  sw={<span className="block h-2.5 w-[26px] rounded-[1px] shadow-dome-sm" style={{ background: cssGradient(scienceRamp(area, l.id)), opacity: sci[l.id]?.opacity ?? 1 }} />}
+                  tip={`Seen from orbit (CRISM${area.minerals ? `, ${area.minerals.pixelM} m pixels` : ""}), weak on the left to strong on the right. Sand or dust hides minerals from orbit, so bare ground does not mean none.`}
+                >
+                  {(l.name ?? l.id).replace(/\s*\(.*$/, "")}
+                </Row>
+              ))}
             </Section>
           )}
 

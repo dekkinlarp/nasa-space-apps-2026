@@ -121,9 +121,9 @@ function RouteTable({ results, selectedId, onPick }: { results: RouteResult[]; s
   const row = "col-span-full grid grid-cols-subgrid items-center px-2";
   return (
     <>
-      <div className="-mx-2 grid grid-cols-[minmax(0,1fr)_auto_auto_auto_auto] gap-x-3 gap-y-0.5" role="group" aria-label="Route options">
+      <div className="sunk grid grid-cols-[minmax(0,1fr)_auto_auto_auto_auto] gap-x-3 gap-y-0.5 rounded-lg p-[3px] shadow-lip inset-shadow-sunk" role="group" aria-label="Route options">
         {/* Each row names its own figures for a screen reader, so the column headings are for the eye. */}
-        <div className={cn(row, "pb-0.5 text-xs text-muted-foreground")} aria-hidden>
+        <div className={cn(row, "caps pt-1.5 pb-1 font-normal tracking-[0.06em] text-muted-foreground")} aria-hidden>
           <span>Route</span>
           {ROUTE_COLS.map((c) => (
             <span key={c.label} className="text-right">
@@ -146,7 +146,7 @@ function RouteTable({ results, selectedId, onPick }: { results: RouteResult[]; s
                   ? `${r.profile.name}: ${fmtMin(t.totalTimeS)} total, ${fmtDist(t.distanceM)}, ${fmtEnergy(t.energyKJ)}, ${Math.round(t.hazardM)} m on hazard ground. ${status}.`
                   : `${r.profile.name}: unreachable.`
               }
-              className={cn(row, "min-h-8 cursor-pointer rounded-lg py-1 text-left text-sm transition-colors coarse:min-h-10 hover:bg-white/5", selected && "bg-white/11 hover:bg-white/11")}
+              className={cn(row, "min-h-8 cursor-pointer rounded-md py-1 text-left text-sm transition-colors coarse:min-h-10 hover:bg-white/5", selected && "bg-hull-3 shadow-thumb hover:bg-hull-3")}
               onClick={() => onPick(r.profile.id)}
               // The routes not chosen are all one grey on the map: pointing at a row (or focusing it) lights its line.
               onPointerEnter={() => setHover(r.profile.id)}
@@ -164,7 +164,7 @@ function RouteTable({ results, selectedId, onPick }: { results: RouteResult[]; s
                 const text = r.reachable ? c.fmt(c.get(r)) : "—";
                 // On the lighter selected row the muted figures step up a shade to keep their contrast.
                 return (
-                  <span key={c.label} className={cn("text-right whitespace-nowrap", r.reachable && text === best[k] ? "text-foreground" : selected ? "text-ink-2" : "text-muted-foreground")}>
+                  <span key={c.label} className={cn("text-right font-mono text-xs whitespace-nowrap", r.reachable && text === best[k] ? "text-foreground" : selected ? "text-ink-2" : "text-muted-foreground")}>
                     {text}
                   </span>
                 );
@@ -248,26 +248,31 @@ export function PlanTab() {
         <section aria-label="Verdict and budgets">
           {/* The one place that says whether the selected route fits. The figures are on the bars under it. */}
           {/* The suit's headline first: what is left of the tightest budget. */}
-          {sel.reachable && (
-            <MeterHeadline
-              className="mb-2"
-              budgets={[
-                { name: "Time", f: sel.totals.timeUsedFraction ?? sel.totals.totalTimeS / usableTimeS(params) },
-                { name: "Energy", f: sel.totals.energyUsedFraction ?? sel.totals.energyKJ / (params.energyBudgetKJ * (1 - params.reserveFraction)) },
-                ...(sel.totals.o2UsedFraction != null ? [{ name: "Oxygen", f: sel.totals.o2UsedFraction }] : []),
-              ]}
-            />
-          )}
-          {msg ? (
-            <Alert variant="destructive" className="mt-0 mb-1">
+          {msg && (
+            <Alert variant="destructive" className="mt-0 mb-2">
               {msg}
             </Alert>
-          ) : (
-            <p className="m-0 flex flex-wrap items-center gap-x-1.5" role="status">
-              <CheckIcon className="size-4 flex-none text-ok" aria-hidden />
-              <b className="font-semibold">Fits the limits</b>
-              <span className="text-muted-foreground">{Math.round(params.reserveFraction * 100)}% held in reserve</span>
-            </p>
+          )}
+          {/* The display: the verdict in words, then what is left of the tightest budget, set into the panel like an instrument's window. */}
+          {(!msg || sel.reachable) && (
+            <div className="sunk mb-1 grid gap-3 rounded-lg px-3 pt-2.5 pb-3 shadow-lip inset-shadow-sunk">
+              {!msg && (
+                <p className="caps m-0 flex flex-wrap items-center gap-x-2 gap-y-1" role="status">
+                  <CheckIcon className="size-3.5 flex-none" strokeWidth={2.5} aria-hidden />
+                  <b className="font-semibold">Fits the limits</b>
+                  <span className="ml-auto font-normal tracking-[0.06em] text-muted-foreground">{Math.round(params.reserveFraction * 100)}% held in reserve</span>
+                </p>
+              )}
+              {sel.reachable && (
+                <MeterHeadline
+                  budgets={[
+                    { name: "Time", f: sel.totals.timeUsedFraction ?? sel.totals.totalTimeS / usableTimeS(params) },
+                    { name: "Energy", f: sel.totals.energyUsedFraction ?? sel.totals.energyKJ / (params.energyBudgetKJ * (1 - params.reserveFraction)) },
+                    ...(sel.totals.o2UsedFraction != null ? [{ name: "Oxygen", f: sel.totals.o2UsedFraction }] : []),
+                  ]}
+                />
+              )}
+            </div>
           )}
           <SafetyBudget r={sel} params={params} pnr={pnr} names={names} />
         </section>
@@ -502,7 +507,9 @@ export function PlanFooter() {
   const simulate = () => setGo({ mode: "sim", playing: true, elapsedS: 0, alongM: 0, position: start?.lonLat ?? null, gpsError: null });
   return (
     <div className="relative z-2 flex flex-none gap-2 border-t px-4 py-3 sheet:pr-[max(var(--gutter),env(safe-area-inset-right))] sheet:pl-[max(var(--gutter),env(safe-area-inset-left))]">
-      <Button className="flex-1" onClick={simulate}>
+      {/* The one main action: a white key with the cut corner. */}
+      <Button className="chamfer-br h-11 flex-1 gap-2.5 tracking-[0.14em]" onClick={simulate}>
+        <PlayIcon className="size-3 flex-none fill-current" aria-hidden />
         Simulate walk
       </Button>
     </div>

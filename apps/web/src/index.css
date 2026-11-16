@@ -3,16 +3,15 @@
  * -------------
  * Tokens live here and feed both the shadcn components (src/components/ui) and Tailwind utilities.
  *
- * The chrome is monochrome on one cool hue. Colour is kept for things that carry meaning:
- * status (ok / warn / bad), data ramps, point-of-interest types and the three route profiles.
- * Depth is drawn with hairlines; only surfaces that float over the imagery get a shadow.
+ * The chrome is black hardware on grey ground. One colour, signal yellow, means on, selected or live.
+ * Orange is a caution and red is over a limit; a walk that fits carries no colour at all.
+ * Relief is drawn with shadows only (a lit top edge, a short drop shadow), never a gradient fill.
  * A dashed outline always means "estimated or inferred".
  *
- * Layout: the map is the whole window. The side panel and every control float over it on one
- * translucent material (`glass`), so the ground stays visible around and behind the chrome.
- * Type: one tight grotesque throughout. Headings are large with negative tracking. Nothing is set
- * under 11px. Uppercase (`caps`) is kept for the headings that open a section of a panel; every
- * other label is sentence case. Numbers use tabular figures of the same face.
+ * Layout: the map is the whole window. The side panel and every control float over it as solid
+ * black surfaces: no blur, so the ground never tints the chrome.
+ * Type: a tight grotesque for names and prose; the mono face for every number and for labels,
+ * which are small uppercase (`caps`). Units keep their SI case. Nothing is set under 11px.
  *
  * The app is dark only, and :root carries the dark values. There is no .dark class, so the
  * components' dark: variants stay off: one set of classes, and the tokens carry the theme.
@@ -94,6 +93,9 @@
   --color-warn: var(--warn);
   --color-bad: var(--bad);
   --color-sim: var(--sim);
+  --color-signal: var(--signal);
+  --color-hull: var(--hull);
+  --color-hull-2: var(--hull-2);
   --color-mars: var(--mars);
   --color-mars-deep: var(--mars-deep);
   /* Point-of-interest types: the same colours in the list, on the card and on the map */
@@ -103,42 +105,37 @@
   --color-poi-viewpoint: var(--poi-viewpoint);
   --color-poi-rover: var(--poi-rover);
 
-  --radius-sm: 4px;
-  --radius-md: 6px;
+  /* A short scale: 3px for plates and badges, 4px for keys and thumbs, 6px for tracks, displays and panels. */
+  --radius-sm: 3px;
+  --radius-md: 4px;
   --radius-lg: var(--radius);
-  --radius-xl: 12px;
-  --radius-2xl: 18px;
-  --radius-3xl: 22px;
-  --radius-4xl: 26px;
+  --radius-xl: 6px;
+  --radius-2xl: 6px;
+  --radius-3xl: 6px;
+  --radius-4xl: 6px;
 
   --shadow-float: var(--float);
   --shadow-float-sm: var(--float-sm);
-  /* Raised controls. A button is a small solid thing lit from above: a dark keyline, a bright top lip, a
-     faint inner edge and a short drop shadow. The strong form, for a filled (primary or coloured) button,
-     adds a faint highlight across the top and shade along the bottom: enough to round the fill, not a visible gradient. */
-  --shadow-raised: 0 2px 4px rgba(0, 0, 0, 0.32), 0 0 0 1px rgba(0, 0, 0, 0.55), inset 0 1px 0 rgba(255, 255, 255, 0.1), inset 0 0 0 1px rgba(255, 255, 255, 0.07);
-  --shadow-raised-strong:
-    0 2px 4px rgba(0, 0, 0, 0.32), 0 0 0 1px rgba(0, 0, 0, 0.55), inset 0 2px 3px rgba(255, 255, 255, 0.1), inset 0 0 0 1px rgba(255, 255, 255, 0.1),
-    inset 0 -4px 8px rgba(0, 0, 0, 0.07);
+  /* Raised controls. A key is a small solid thing lit from above: a black keyline, a lit top edge and a short
+     drop shadow. The fill stays one flat colour; the relief is in the shadow. */
+  --shadow-raised: 0 1px 2px rgba(0, 0, 0, 0.7), 0 0 0 1px #000, inset 0 1px 0 rgba(255, 255, 255, 0.14);
+  --shadow-raised-strong: 0 1px 2px rgba(0, 0, 0, 0.7), 0 0 0 1px #000, inset 0 1px 0 #fff, inset 0 -3px 0 rgba(0, 0, 0, 0.2);
   /* Pushed in: the drop shadow goes and the top edge darkens. */
-  --shadow-pressed: 0 0 0 1px rgba(0, 0, 0, 0.55), inset 0 2px 4px rgba(0, 0, 0, 0.4);
-  /* The thumb of a switch, slider, tab bar or segmented control: the same raised recipe at a smaller scale. */
-  --shadow-thumb: 0 1px 2px rgba(0, 0, 0, 0.35), 0 0 0 1px rgba(0, 0, 0, 0.4), inset 0 1px 0 rgba(255, 255, 255, 0.1), inset 0 0 0 1px rgba(255, 255, 255, 0.06);
-  /* A label on the map is a small black plate lit from above, like the raised controls: a dark keyline, a
-     bright top lip, a soft highlight under it, a dark bottom edge and a short shadow on the ground. */
-  --shadow-plate:
-    0 2px 3px rgba(0, 0, 0, 0.55), 0 0 0 1px rgba(0, 0, 0, 0.85), inset 0 1px 0 rgba(255, 255, 255, 0.24), inset 0 4px 5px -2px rgba(255, 255, 255, 0.09),
-    inset 0 -1px 0 rgba(0, 0, 0, 0.7);
-  /* A dot on the map (a place pin, a post's foot) is a small dome lit from above, to match the plates: a dark
-     keyline, a light ring so it holds on dark ground, a short shadow on the ground, a highlight under its top
-     edge and shade under its lower half. Drawn with shadows only, so the dome's colour stays one token.
-     The small form is for the same dot at 8 to 10px in a list or the map key. */
-  --shadow-dome:
-    0 0 0 1px rgba(0, 0, 0, 0.85), 0 0 0 2px rgba(255, 255, 255, 0.5), 0 3px 4px 1px rgba(0, 0, 0, 0.5), inset 0 2px 2px -1px rgba(255, 255, 255, 0.7),
-    inset 0 -3px 3px -1px rgba(0, 0, 0, 0.4);
-  --shadow-dome-sm: 0 0 0 1px rgba(0, 0, 0, 0.85), 0 1px 2px 1px rgba(0, 0, 0, 0.4), inset 0 1.5px 1.5px -1px rgba(255, 255, 255, 0.7), inset 0 -2px 2px -1px rgba(0, 0, 0, 0.4);
-  /* The track a thumb runs in, and a field to type in, are sunk: shaded under their top edge. */
-  --inset-shadow-sunk: inset 0 1px 2px rgba(0, 0, 0, 0.45);
+  --shadow-pressed: 0 0 0 1px #000, inset 0 2px 4px rgba(0, 0, 0, 0.6);
+  /* The thumb of a switch, slider, tab bar or segmented control. */
+  --shadow-thumb: 0 2px 4px rgba(0, 0, 0, 0.75), 0 0 0 1px #000, inset 0 1px 0 rgba(255, 255, 255, 0.2);
+  /* A key that floats on the map (zoom, compass, the status bar): the keyline is its border. */
+  --shadow-key: 0 3px 8px rgba(0, 0, 0, 0.6), inset 0 1px 0 rgba(255, 255, 255, 0.18);
+  /* A label on the map is a small black plate lit from above: a black keyline, a lit top edge, a dark bottom
+     edge and a short shadow on the ground. */
+  --shadow-plate: 0 2px 3px rgba(0, 0, 0, 0.6), 0 0 0 1px #000, inset 0 1px 0 rgba(255, 255, 255, 0.24), inset 0 -1px 0 rgba(0, 0, 0, 0.7);
+  /* A mark on the map (a place, a post's foot): a black keyline and a short shadow on the ground. */
+  --shadow-dome: 0 0 0 1.5px #000, 0 2px 3px 1px rgba(0, 0, 0, 0.6);
+  --shadow-dome-sm: 0 0 0 1px #000, 0 1px 2px rgba(0, 0, 0, 0.5);
+  /* The lit lower lip of anything sunk into a panel. */
+  --shadow-lip: 0 1px 0 rgba(255, 255, 255, 0.1);
+  /* The track a thumb runs in, a field to type in and a display are sunk: shaded under their top edge. */
+  --inset-shadow-sunk: inset 0 2px 5px rgba(0, 0, 0, 0.95);
 
   --ease-spring: var(--spring);
   --ease-out-quint: var(--ease);
@@ -153,45 +150,49 @@
 }
 
 :root {
-  /* Surfaces: same hue, lightness steps only */
-  --void: #08090b; /* behind the map */
-  --hull: #0f1114; /* docked panels */
-  --hull-2: #15181c; /* raised: floating cards, popovers, hover */
-  --hull-3: #1d2126; /* pressed and selected */
-  --well: #0a0b0d; /* inset: inputs */
-  --track: #262a31; /* meter and switch tracks */
+  /* Surfaces: neutral black in lightness steps */
+  --void: #000000; /* behind the map */
+  --hull: #0e0f11; /* panel bodies */
+  --hull-2: #17181b; /* keys that float on the map, map plates */
+  --hull-3: #1f2124; /* thumbs, pressed and selected */
+  --well: #040405; /* sunk: tracks, fields, displays */
+  --track: #26282c; /* an unlit meter */
   /* Scrollbar thumbs: light on dark, 3.5:1 against a panel at rest and 6:1 under the pointer */
-  --scroll-thumb: rgba(232, 234, 237, 0.42);
-  --scroll-thumb-hover: rgba(232, 234, 237, 0.62);
+  --scroll-thumb: rgba(242, 242, 243, 0.42);
+  --scroll-thumb-hover: rgba(242, 242, 243, 0.62);
 
   /* Hairlines */
-  --seam: rgba(255, 255, 255, 0.07);
-  --seam-2: rgba(255, 255, 255, 0.13);
+  --seam: rgba(255, 255, 255, 0.08);
+  --seam-2: rgba(255, 255, 255, 0.16);
   --seam-3: rgba(255, 255, 255, 0.32);
 
   /* Text */
-  --ink: #e8eaed;
-  --ink-2: #a8adb5;
-  /* Muted text is at least 5.8:1 on the side panel over the brightest ground; ink-4 is for marks, not text (3.3:1). */
-  --ink-3: #9aa0aa;
-  --ink-4: #6e747e;
+  --ink: #f2f2f3;
+  --ink-2: #b4b6bb;
+  /* Muted text is about 7:1 on a panel; ink-4 is for marks, not text (3.6:1). */
+  --ink-3: #9a9ca2;
+  --ink-4: #6b6f76;
 
-  /* Status, the simulated-position marker and the one coloured action */
-  --ok: #4cc38a;
-  --warn: #e5a93c;
-  --bad: #f2594b;
-  --sim: #36d1c4;
-  --mars: #ff8a3d;
+  /* Signal yellow means on, selected or live, and nothing else. */
+  --signal: #ffd60a;
+  /* Status. A walk that fits carries no colour, so "ok" is plain ink; orange is a caution, red is over a limit. */
+  --ok: var(--ink);
+  --warn: #ff9f0a;
+  --bad: #ff453a;
+  /* The live position during a walk is the signal colour. */
+  --sim: var(--signal);
+  --mars: var(--signal);
   --mars-deep: #c1440e;
-  --poi-drill-site: #ff8a3d;
+  /* Kinds of place are told apart twice: by the shape of their mark and by its colour. The colours keep clear
+     of the signal yellow and of the orange and red that report a status. */
+  --poi-drill-site: #ff7ab6;
   --poi-science-target: #b594ff;
   --poi-start: #5fd08a;
   --poi-viewpoint: #5cc4f5;
-  --poi-rover: #f2f0ea;
+  --poi-rover: #c9cbcf;
 
-  /* Helvetica Now Display where installed, Helvetica Neue on Apple devices, Inter Tight elsewhere.
-     Figures read in the text face with tabular widths; the monospace is kept for coordinates. */
-  --font: "Helvetica Now Display", "Helvetica Neue", "Inter Tight Variable", Helvetica, Arial, sans-serif;
+  /* Inter Tight for names and prose; the mono face for every number and label. */
+  --font: "Inter Tight Variable", "Helvetica Neue", Helvetica, Arial, sans-serif;
   --mono: "Geist Mono Variable", ui-monospace, "SF Mono", Menlo, Consolas, monospace;
 
   /* shadcn roles, mapped onto the palette above */
@@ -203,7 +204,7 @@
   --popover-foreground: var(--ink);
   --primary: var(--ink);
   --primary-foreground: var(--well);
-  --secondary: rgba(255, 255, 255, 0.08);
+  --secondary: #202226;
   --secondary-foreground: var(--ink);
   --muted: rgba(255, 255, 255, 0.06);
   --muted-foreground: var(--ink-3);
@@ -213,19 +214,18 @@
   --border: var(--seam);
   --input: var(--seam-2);
   --ring: var(--ink-3);
-  --radius: 8px;
+  --radius: 6px;
 
-  /* The floating material: dark glass with a bright top edge. */
-  /* One tone for every floating surface, the side panel included: dark enough that small text holds its
-     contrast over bright ground. */
-  --glass: rgba(15, 17, 20, 0.72);
-  --glass-thick: rgba(15, 17, 20, 0.92);
-  --glass-edge: rgba(255, 255, 255, 0.12);
-  /* More of the ground shows through than a near-solid fill would let, as a soft blur. The backdrop is
-     dimmed before the fill goes over it, so the panel stays as dark as before and text keeps its contrast. */
-  --blur: blur(40px) saturate(160%) brightness(0.6);
-  --float: 0 0 0 0.5px rgba(0, 0, 0, 0.7), 0 10px 30px rgba(0, 0, 0, 0.45);
-  --float-sm: 0 0 0 0.5px rgba(0, 0, 0, 0.7), 0 4px 14px rgba(0, 0, 0, 0.4);
+  /* The floating material. It kept the name "glass" from when it was translucent; it is now a solid black
+     body with a grey edge, so the ground never shows through or tints it. */
+  --glass: var(--hull);
+  --glass-thick: var(--hull);
+  --glass-edge: #3a3d42;
+  --blur: none;
+  --float: 0 12px 22px rgba(0, 0, 0, 0.7), 0 2px 3px rgba(0, 0, 0, 0.8);
+  --float-sm: 0 3px 8px rgba(0, 0, 0, 0.6);
+  /* The cut corner of the side panel and the main action. */
+  --chamfer: 16px;
   --ease: cubic-bezier(0.23, 1, 0.32, 1);
 
   /* Layout */
@@ -237,7 +237,7 @@
   --sheet-peek: 76px;
   /* The status bar's height, and its height as the last row of the bottom sheet (bar plus the device's
      bottom inset). Keep --status-h in step with STATUS_H in App.tsx. */
-  --status-h: 28px;
+  --status-h: 32px;
   --foot: calc(var(--status-h) + env(safe-area-inset-bottom, 0px));
   --side-w: 372px;
   /* Panels move like a critically damped spring: quick off the mark, no overshoot. Keep in step with PANEL_MS in App.tsx. */
@@ -260,18 +260,15 @@
 }
 @media (prefers-reduced-transparency: reduce) {
   :root {
-    --glass: #14171b;
-    --glass-thick: #101216;
     --blur: none;
   }
 }
 @media (prefers-contrast: more) {
   :root {
-    --glass: #0c0e11;
-    --glass-thick: #0c0e11;
-    --blur: none;
-    --glass-edge: rgba(255, 255, 255, 0.5);
-    --ink-3: #b4b9c1;
+    --glass-edge: #8e9096;
+    --seam: rgba(255, 255, 255, 0.24);
+    --seam-2: rgba(255, 255, 255, 0.4);
+    --ink-3: #b4b6bb;
     --scroll-thumb: rgba(232, 234, 237, 0.8);
     --scroll-thumb-hover: #e8eaed;
   }
@@ -342,11 +339,36 @@
 }
 /* Section headings: small, uppercase, slightly open. Not for value labels, buttons or names. */
 @utility caps {
+  font-family: var(--mono);
   font-size: var(--text-xs);
   font-weight: 500;
-  letter-spacing: 0.045em;
+  letter-spacing: 0.1em;
   text-transform: uppercase;
   line-height: 1.25;
+}
+/* A key that floats on the map: the zoom stack, the status bar, the 2D/3D housing. A lighter body than the
+   panels, a black keyline and a lit top edge. On a glass-host the fill and keyline move to its glass-layer. */
+@utility key {
+  --glass: var(--hull-2);
+  --glass-edge: #000;
+}
+/* Sunk into a panel: a tab track, a segmented control, a display, a meter. */
+@utility sunk {
+  background-color: var(--well);
+  border: 1px solid #000;
+}
+/* One cut corner, top right, on a surface whose other corners stay rounded. The cut edge is drawn as a line
+   of the surface's own edge colour, since a clip has no border. */
+@utility chamfer {
+  clip-path: polygon(0 0, calc(100% - var(--chamfer)) 0, 100% var(--chamfer), 100% 100%, 0 100%);
+  background-image: linear-gradient(to top right, transparent calc(50% - 0.75px), var(--glass-edge) calc(50% - 0.75px), var(--glass-edge) calc(50% + 0.75px), transparent calc(50% + 0.75px));
+  background-size: var(--chamfer) var(--chamfer);
+  background-position: top right;
+  background-repeat: no-repeat;
+}
+/* The main action's cut corner, bottom right. */
+@utility chamfer-br {
+  clip-path: polygon(0 0, 100% 0, 100% calc(100% - 10px), calc(100% - 10px) 100%, 0 100%);
 }
 /* The thumb is a light overlay on the dark panels, at least 3:1 against them (WCAG 1.4.11), and brightens
    while the pointer is over the scrolling area. It used to be --track, a near-black that vanished. */
@@ -405,7 +427,7 @@
     outline-offset: 2px;
   }
   ::selection {
-    background: color-mix(in srgb, var(--mars) 40%, transparent);
+    background: color-mix(in srgb, var(--signal) 35%, transparent);
     color: var(--ink);
   }
 }

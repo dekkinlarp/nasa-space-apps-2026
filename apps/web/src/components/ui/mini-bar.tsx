@@ -9,9 +9,9 @@ const TEXT = { ok: "", warn: "text-warn", bad: "text-bad" } as const;
 const LIT = { ok: "bg-ok", warn: "bg-warn", bad: "bg-bad" } as const;
 
 /**
- * A segmented meter of what is left, read like a battery: segments light from the left, and each one is
- * coloured for what being down to it means (red, then amber, then green). So the colour of the last lit
- * segment is the status. The track is sunk; lit segments have a lit top edge.
+ * A segmented meter of what is left, read like a battery: segments light from the left in a sunk track.
+ * Every lit segment takes the one colour of the status: plain ink while there is room, orange in the last
+ * quarter, red in the last tenth. Nothing is red while the walk is fine.
  */
 function SegMeter({ left, segments = 14, label, className }: { left: number; segments?: number; label?: string; className?: string }) {
   const k = Math.max(0, Math.min(1, left));
@@ -24,18 +24,18 @@ function SegMeter({ left, segments = 14, label, className }: { left: number; seg
       aria-valuemin={0}
       aria-valuemax={100}
       aria-valuenow={Math.round(k * 100)}
-      className={cn("flex h-3 gap-[2px] rounded-[4px] bg-black/35 p-[2px] inset-shadow-sunk", className)}
+      className={cn("sunk flex h-3.5 gap-[2px] rounded-sm p-[2px] shadow-lip inset-shadow-sunk", className)}
     >
       {Array.from({ length: segments }, (_, i) => (
-        <i key={i} className={cn("block h-full min-w-0 flex-1 rounded-[1.5px]", i < lit ? cn(LIT[meterLevel((i + 1) / segments)], "inset-shadow-[0_1px_0_rgba(255,255,255,0.35)]") : "bg-white/10")} />
+        <i key={i} className={cn("block h-full min-w-0 flex-1 rounded-[1.5px]", i < lit ? LIT[meterLevel(k)] : "bg-white/10")} />
       ))}
     </span>
   );
 }
 
 /**
- * A plain meter of what is left: a full bar that drains toward the left as the budget is spent. It is green,
- * turns yellow once it drains to 25% left and red at 10% left (meterLevel's scale).
+ * A plain meter of what is left: a full bar in a sunk track that drains toward the left as the budget is
+ * spent. It is plain ink, turns orange once it drains to 25% left and red at 10% left (meterLevel's scale).
  */
 function PlainMeter({ used, label, className }: { used: number; label?: string; className?: string }) {
   const k = Math.max(0, Math.min(1, 1 - used));
@@ -46,9 +46,9 @@ function PlainMeter({ used, label, className }: { used: number; label?: string; 
       aria-valuemin={0}
       aria-valuemax={100}
       aria-valuenow={Math.round(k * 100)}
-      className={cn("block h-1.5 overflow-hidden rounded-full bg-white/10", className)}
+      className={cn("sunk block h-2.5 overflow-hidden rounded-sm shadow-lip inset-shadow-sunk", className)}
     >
-      <i className={cn("block h-full rounded-full transition-[width,background-color] duration-300", LIT[meterLevel(k)])} style={{ width: `${k * 100}%` }} />
+      <i className={cn("block h-full transition-[width,background-color] duration-300", LIT[meterLevel(k)])} style={{ width: `${k * 100}%` }} />
     </span>
   );
 }
@@ -61,10 +61,10 @@ function MiniBar({ label, f, text, value, className }: { label: string; f: numbe
   const left = 1 - f;
   const st = meterLevel(left);
   return (
-    <div className={cn("mt-1 grid items-center gap-1.5", value == null ? "grid-cols-[42px_1fr_30px]" : "grid-cols-[44px_1fr_58px]", text && "cursor-help", className)} title={text}>
-      <span className="text-muted-foreground">{label}</span>
+    <div className={cn("mt-1 grid items-center gap-1.5", value == null ? "grid-cols-[56px_1fr_34px]" : "grid-cols-[56px_1fr_64px]", text && "cursor-help", className)} title={text}>
+      <span className="caps font-normal tracking-[0.08em] text-muted-foreground">{label}</span>
       <PlainMeter used={f} label={`${label}: ${Math.round(Math.max(0, left) * 100)}% left`} />
-      <span className={cn("text-right font-semibold whitespace-nowrap", TEXT[st])}>{value ?? `${Math.round(Math.max(0, left) * 100)}%`}</span>
+      <span className={cn("text-right font-mono font-medium whitespace-nowrap", TEXT[st])}>{value ?? `${Math.round(Math.max(0, left) * 100)}%`}</span>
     </div>
   );
 }
@@ -77,9 +77,15 @@ function MeterHeadline({ budgets, className }: { budgets: { name: string; f: num
   const tight = budgets.reduce((a, b) => (b.f > a.f ? b : a));
   const left = Math.max(0, 1 - tight.f);
   return (
-    <div className={cn("flex items-baseline gap-1.5", className)}>
-      <span className={cn("text-2xl leading-none font-medium tracking-[-0.02em]", TEXT[meterLevel(left)])}>{Math.round(left * 100)}%</span>
-      <span className="text-xs text-muted-foreground">{tight.name} left</span>
+    <div className={cn("flex items-end gap-3", className)}>
+      <span className={cn("text-[56px] leading-[0.8] font-medium tracking-[-0.035em]", TEXT[meterLevel(left)])}>
+        {Math.round(left * 100)}
+        <span className="ml-0.5 text-2xl font-normal tracking-normal text-muted-foreground">%</span>
+      </span>
+      <span className="caps grid gap-0.5 font-normal tracking-[0.08em]">
+        <span>{tight.name} left</span>
+        <span className="text-muted-foreground">Tightest budget</span>
+      </span>
     </div>
   );
 }

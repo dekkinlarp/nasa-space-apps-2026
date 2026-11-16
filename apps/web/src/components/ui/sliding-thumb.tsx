@@ -58,7 +58,7 @@ function SlidingThumb({ className }: { className?: string }) {
       aria-hidden
       data-slot="sliding-thumb"
       className={cn(
-        "pointer-events-none absolute top-0 left-0 bg-white/18 shadow-thumb",
+        "pointer-events-none absolute top-0 left-0 bg-hull-3 shadow-thumb",
         placed && "transition-[translate,width,height,opacity] duration-300 ease-spring",
         !box && "opacity-0",
         className,
