@@ -434,6 +434,8 @@ export function App() {
             ))}
           </TabsList>
         </nav>
+        {/* A walk in progress, under the tabs so it stays in view whichever tab is open. */}
+        {!narrow && sheetOpen && <GoPanel docked />}
         <TabsContent value="explore" className={TAB_BODY}>
           <ExploreTab />
         </TabsContent>
@@ -459,8 +461,8 @@ export function App() {
               <SidebarIcon on={false} />
             </Button>
           )}
-          {/* The Go panel: top left here, out of the way of the route and the view controls. */}
-          {!narrow && <GoPanel />}
+          {/* The Go panel: in the side panel while it is open, else top left here, out of the way of the route and the view controls. */}
+          {!narrow && !sheetOpen && <GoPanel />}
           <HoverReadout />
           <span className="flex-1 sheet:hidden" />
           <div className="card-slot relative z-5 flex max-h-[calc(100%-144px)] w-[340px] max-w-full flex-col mr-12 compact:w-[300px] coarse:mr-14 sheet:mr-0 sheet:max-h-full phone:mr-12 phone:max-h-[62%] phone:w-auto phone:flex-1 sheet:in-[.app:has(.go-panel)]:hidden">{poi ? <PoiCard poi={poi} /> : wp ? <WaypointCard /> : null}</div>

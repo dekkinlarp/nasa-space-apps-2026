@@ -1,4 +1,4 @@
-import { useEffect, useMemo, useRef, useState } from "react";
+import { useEffect, useMemo, useRef, useState, type ReactNode } from "react";
 import { oxygenUsedKg, type LonLat } from "@marsmap/core";
 import { selectedResult, usableTimeS, useStore } from "../store";
 import { routePoints } from "../engine";
@@ -8,8 +8,8 @@ import { fmtClock, fmtDist, fmtDur, fmtEnergy, fmtO2 } from "../format";
 import { FollowToggle } from "./GoWalker";
 import { ChevronUpIcon, PauseIcon, PlayIcon, RotateCcwIcon, XIcon } from "lucide-react";
 import { Alert } from "@/components/ui/alert";
+import { MiniBar } from "@/components/ui/mini-bar";
 import { Button } from "@/components/ui/button";
-import { MeterHeadline, MiniBar } from "@/components/ui/mini-bar";
 import { Panel } from "@/components/ui/panel";
 import { Segmented } from "@/components/ui/segmented";
 import { cn } from "@/lib/utils";
@@ -18,6 +18,11 @@ import { cn } from "@/lib/utils";
     layout it takes the row above the sheet instead, and replaces the POI card and the hover readout. */
 // sheet:mt-2: on the bottom-sheet layout the view controls wrap onto a line above, and this is the space between.
 const GO_PANEL = "go-panel w-80 max-w-full flex-none sheet:mt-2 sheet:w-auto sheet:flex-1";
+/** Docked: a section of the side panel, under its tabs, on the side panel's own glass. */
+const GO_DOCKED = "go-panel pointer-events-auto flex-none border-b text-foreground";
+
+/** The header's buttons: raised, like the side panel's other buttons, and the same in both states so they never move. */
+const HEAD_BTN = "size-7 text-ink-2 coarse:size-9 [&_svg:not([class*='size-'])]:size-3.5";
 
 const SPEEDS = [30, 120, 600, 1800];
 const OFF_ROUTE_M = 25;
@@ -26,8 +31,9 @@ const COMPASS = ["N", "NE", "E", "SE", "S", "SW", "W", "NW"];
 /**
  * `startFolded`: each walk opens as the single row (the bottom-sheet layout, where the full panel and the open
  * sheet together leave no map). `onExpand` is told when the planner unfolds it, so the sheet can make room.
+ * `docked`: drawn as a section of the side panel, under its tabs, instead of floating over the map.
  */
-export function GoPanel({ startFolded = false, onExpand }: { startFolded?: boolean; onExpand?: () => void } = {}) {
+export function GoPanel({ startFolded = false, onExpand, docked = false }: { startFolded?: boolean; onExpand?: () => void; docked?: boolean } = {}) {
   const go = useStore((s) => s.go);
   const setGo = useStore((s) => s.setGo);
   const results = useStore((s) => s.results);
@@ -104,12 +110,12 @@ export function GoPanel({ startFolded = false, onExpand }: { startFolded?: boole
   if (go.mode === "off") return null;
   if (!r || !tl || !rp) {
     return (
-      <Panel size="lg" className={cn(GO_PANEL, "grid gap-2 p-4")}>
+      <Shell docked={docked} size="lg" className={cn(docked ? GO_DOCKED : GO_PANEL, "grid gap-2 p-4")}>
         <div className="text-sm">No route to follow.</div>
         <Button variant="secondary" onClick={() => setGo({ mode: "off" })}>
           Close
         </Button>
-      </Panel>
+      </Shell>
     );
   }
 
@@ -155,31 +161,32 @@ export function GoPanel({ startFolded = false, onExpand }: { startFolded?: boole
 
   return (
     // Folded it is a bar the size and material of the sidebar button it sits beside (glass Button, icon-lg).
-    <Panel
+    // The header row is the same row folded and unfolded, so its buttons never move: only what is under it changes.
+    <Shell
+      docked={docked}
       size={collapsed ? "default" : "lg"}
-      className={cn(GO_PANEL, collapsed ? "flex h-9 items-center pr-1.5 pl-3 inset-shadow-[0_1px_0_rgba(255,255,255,0.1)] coarse:h-11" : "p-4 phone:p-3")}
+      className={cn(docked ? GO_DOCKED : GO_PANEL, docked ? "pr-2.5 pl-4" : "pr-1.5 pl-3", !docked && collapsed && "inset-shadow-[0_1px_0_rgba(255,255,255,0.1)]")}
     >
-      {/* Folded it is one row: the clock, what is happening, and the same four controls as plain icon buttons. */}
-      <div className="flex min-h-6 min-w-0 flex-1 items-center gap-1.5">
+      <div className={cn("flex min-w-0 items-center gap-1.5", docked ? "h-10" : "h-9 coarse:h-11")}>
         {collapsed ? (
           <>
             <span className="flex-none text-sm text-sim tabular-nums">{fmtClock(go.elapsedS)}</span>
             <span className="mr-auto min-w-0 truncate pl-1 text-xs text-ink-2">{status}</span>
-            {go.mode === "sim" && (
-              <Button variant="ghost" size="icon-xs" className="text-muted-foreground" onClick={togglePlay} title={playLabel} aria-label={playLabel}>
-                {done ? <RotateCcwIcon /> : go.playing ? <PauseIcon /> : <PlayIcon />}
-              </Button>
-            )}
           </>
         ) : (
           // Plain text in the simulated-position colour: the same colour as the walker and its line on the map.
           <span className="mr-auto min-w-0 truncate text-xs text-sim">{go.mode === "sim" ? "Simulated position" : "Your location, mapped onto Mars"}</span>
         )}
-        <FollowToggle compact={collapsed} />
+        {go.mode === "sim" && (
+          <Button variant="secondary" size="icon-sm" className={HEAD_BTN} onClick={togglePlay} title={playLabel} aria-label={playLabel}>
+            {done ? <RotateCcwIcon /> : go.playing ? <PauseIcon /> : <PlayIcon />}
+          </Button>
+        )}
+        <FollowToggle compact className={HEAD_BTN} />
         <Button
-          variant="ghost"
-          size="icon-xs"
-          className="text-muted-foreground"
+          variant="secondary"
+          size="icon-sm"
+          className={HEAD_BTN}
           onClick={() => {
             if (collapsed) onExpand?.();
             setCollapsed(!collapsed);
@@ -190,65 +197,74 @@ export function GoPanel({ startFolded = false, onExpand }: { startFolded?: boole
         >
           <ChevronUpIcon className={cn("transition-transform", collapsed && "rotate-180")} />
         </Button>
-        <Button variant="ghost" size="icon-xs" className="text-muted-foreground" onClick={() => setGo({ mode: "off", playing: false, position: null })} title="Stop" aria-label="Stop the walk">
+        <Button variant="secondary" size="icon-sm" className={HEAD_BTN} onClick={() => setGo({ mode: "off", playing: false, position: null })} title="Stop" aria-label="Stop the walk">
           <XIcon />
         </Button>
       </div>
-      {!collapsed && (
-        <>
-          {/* The clock, and beside it what is left of the tightest budget. */}
-          <div className="mt-2 flex items-end justify-between gap-3 phone:mt-0.5">
-            <div className="text-3xl font-normal tracking-[-0.03em] phone:text-2xl">{fmtClock(go.elapsedS)}</div>
-            {!done && (
-              <MeterHeadline
-                className="mb-1 flex-col items-end gap-0!"
-                budgets={[{ name: "Time", f: go.elapsedS / (usable || 1) }, { name: "Energy", f: energyUsed / (usableE || 1) }, ...(o2On ? [{ name: "Oxygen", f: 1 - o2Left / (usableO || 1) }] : [])]}
-              />
+      {/* Under the header: the details when unfolded, and the warnings either way. The panel's right padding is
+          narrower so the header's last button sits near the edge; pr-1.5 here evens the two sides. */}
+      <div className="pr-1.5 pb-4 empty:hidden phone:pb-3">
+        {!collapsed && (
+          <>
+            {/* The clock, then one line for what is happening now and, while the crew works at a stop, their task. */}
+            <div className="text-2xl leading-tight font-normal tracking-[-0.02em] tabular-nums">{fmtClock(go.elapsedS)}</div>
+            <div className="truncate text-sm text-ink-2">{status}</div>
+            {task && !done && (
+              <div className="truncate text-xs text-muted-foreground" title={task}>
+                {task}
+              </div>
             )}
+          </>
+        )}
+        {!done && !collapsed && (
+          <div className="mt-2.5 text-xs">
+            {/* What is left of each budget, on the plain meters the Plan tab uses. */}
+            <MiniBar label="Time" f={go.elapsedS / (usable || 1)} value={fmtDur(timeLeft)} />
+            <MiniBar label="Energy" f={energyUsed / (usableE || 1)} value={fmtEnergy(energyLeft)} />
+            {o2On && <MiniBar label="O₂" f={1 - o2Left / (usableO || 1)} value={fmtO2(o2Left)} />}
+            {/* Where to head next and how far home is, side by side. */}
+            <div className="mt-2 flex items-baseline justify-between gap-3 text-muted-foreground">
+              <span className="truncate">
+                Next <span className="text-foreground">{fmtDist(marsDistanceM(here, nextPt))} {COMPASS[Math.round(brg / 45) % 8]}</span>
+              </span>
+              <span className="flex-none">
+                Home <span className="text-foreground">{homeS != null && Number.isFinite(homeS) ? fmtDur(homeS) : "—"}</span>
+              </span>
+            </div>
+            {go.mode === "gps" && <div className="mt-1 text-muted-foreground">GPS accurate to {go.gpsAccuracyM != null ? `±${Math.round(go.gpsAccuracyM)} m` : "…"}</div>}
           </div>
-          {/* One line for what is happening now, and under it the crew task while they work at a stop. */}
-          <div className="text-ink-2">{status}</div>
-          {task && !done && <div className="mt-0.5 line-clamp-2 text-sm text-muted-foreground">{task}</div>}
-        </>
-      )}
-      {!done && !collapsed && (
-        <div className="mt-2 border-t pt-2 text-xs">
-          <div className="flex items-baseline justify-between gap-2">
-            <span className="text-muted-foreground">To the next point</span>
-            <span className="text-sm">
-              {fmtDist(marsDistanceM(here, nextPt))} · {Math.round(brg)}° {COMPASS[Math.round(brg / 45) % 8]}
-            </span>
+        )}
+        {turnBack && !done && <Alert variant="destructive">Turn back: remaining budget is less than the walk home from here.</Alert>}
+        {go.mode === "gps" && go.offRouteM != null && go.offRouteM > OFF_ROUTE_M && <Alert variant="warning">Off route by {Math.round(go.offRouteM)} m</Alert>}
+        {go.gpsError && <Alert variant="destructive">{go.gpsError}</Alert>}
+        {go.mode === "sim" && !collapsed && (
+          <div className="mt-3 flex items-center justify-between gap-2">
+            <span className="text-xs text-muted-foreground">Speed</span>
+            <Segmented
+              aria-label="Playback speed"
+              value={String(go.speed)}
+              onValueChange={(v) => setGo({ speed: Number(v) })}
+              options={SPEEDS.map((s) => ({ value: String(s), label: `${s}×` }))}
+              itemClassName="px-[7px]"
+            />
           </div>
-          {/* What is left of each budget, on the meters the suit panel uses. */}
-          <div className="mt-1.5">
-            <MiniBar label="Time left" f={go.elapsedS / (usable || 1)} value={fmtDur(timeLeft)} />
-            <MiniBar label="Energy left" f={energyUsed / (usableE || 1)} value={fmtEnergy(energyLeft)} />
-            {o2On && <MiniBar label="O₂ left" f={1 - o2Left / (usableO || 1)} value={fmtO2(o2Left)} />}
-          </div>
-          <div className="mt-1.5 flex items-baseline justify-between gap-2 border-t pt-1.5">
-            <span className="text-muted-foreground">Walk home</span>
-            <span className="text-sm">{homeS != null && Number.isFinite(homeS) ? fmtDur(homeS) : "—"}</span>
-          </div>
-          {go.mode === "gps" && <div className="mt-1 text-muted-foreground">GPS accurate to {go.gpsAccuracyM != null ? `±${Math.round(go.gpsAccuracyM)} m` : "…"}</div>}
-        </div>
-      )}
-      {turnBack && !done && <Alert variant="destructive">Turn back: remaining budget is less than the walk home from here.</Alert>}
-      {go.mode === "gps" && go.offRouteM != null && go.offRouteM > OFF_ROUTE_M && <Alert variant="warning">Off route by {Math.round(go.offRouteM)} m</Alert>}
-      {go.gpsError && <Alert variant="destructive">{go.gpsError}</Alert>}
-      {go.mode === "sim" && !collapsed && (
-        <div className="mt-3 flex items-center justify-between gap-2">
-          <Button variant="secondary" onClick={togglePlay}>
-            {playLabel}
-          </Button>
-          <Segmented
-            aria-label="Playback speed"
-            value={String(go.speed)}
-            onValueChange={(v) => setGo({ speed: Number(v) })}
-            options={SPEEDS.map((s) => ({ value: String(s), label: `${s}×` }))}
-            itemClassName="px-[7px]"
-          />
-        </div>
-      )}
+        )}
+      </div>
+    </Shell>
+  );
+}
+
+/** A floating glass Panel, or, docked in the side panel, a plain section on the side panel's glass. */
+function Shell({ docked, size, className, children }: { docked: boolean; size: "default" | "lg"; className: string; children: ReactNode }) {
+  if (docked)
+    return (
+      <section className={className} aria-label="Walk">
+        {children}
+      </section>
+    );
+  return (
+    <Panel size={size} className={className}>
+      {children}
     </Panel>
   );
 }

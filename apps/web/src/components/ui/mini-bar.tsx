@@ -34,6 +34,26 @@ function SegMeter({ left, segments = 14, label, className }: { left: number; seg
 }
 
 /**
+ * A plain meter of what is left: a full bar that drains toward the left as the budget is spent. It is green,
+ * turns yellow once it drains to 25% left and red at 10% left (meterLevel's scale).
+ */
+function PlainMeter({ used, label, className }: { used: number; label?: string; className?: string }) {
+  const k = Math.max(0, Math.min(1, 1 - used));
+  return (
+    <span
+      role="meter"
+      aria-label={label}
+      aria-valuemin={0}
+      aria-valuemax={100}
+      aria-valuenow={Math.round(k * 100)}
+      className={cn("block h-1.5 overflow-hidden rounded-full bg-white/10", className)}
+    >
+      <i className={cn("block h-full rounded-full transition-[width,background-color] duration-300", LIT[meterLevel(k)])} style={{ width: `${k * 100}%` }} />
+    </span>
+  );
+}
+
+/**
  * One budget as a line: label, the meter of what is left, and a figure. `f` is the fraction used. The
  * figure is the percentage left unless `value` gives something else (the amount left, during a walk).
  */
@@ -41,9 +61,9 @@ function MiniBar({ label, f, text, value, className }: { label: string; f: numbe
   const left = 1 - f;
   const st = meterLevel(left);
   return (
-    <div className={cn("mt-1 grid items-center gap-1.5", value == null ? "grid-cols-[42px_1fr_30px]" : "grid-cols-[62px_1fr_62px]", text && "cursor-help", className)} title={text}>
+    <div className={cn("mt-1 grid items-center gap-1.5", value == null ? "grid-cols-[42px_1fr_30px]" : "grid-cols-[44px_1fr_58px]", text && "cursor-help", className)} title={text}>
       <span className="text-muted-foreground">{label}</span>
-      <SegMeter left={left} segments={value == null ? 14 : 20} label={`${label}: ${Math.round(Math.max(0, left) * 100)}% left`} />
+      <PlainMeter used={f} label={`${label}: ${Math.round(Math.max(0, left) * 100)}% left`} />
       <span className={cn("text-right font-semibold whitespace-nowrap", TEXT[st])}>{value ?? `${Math.round(Math.max(0, left) * 100)}%`}</span>
     </div>
   );
@@ -64,4 +84,4 @@ function MeterHeadline({ budgets, className }: { budgets: { name: string; f: num
   );
 }
 
-export { MiniBar, SegMeter, MeterHeadline };
+export { MiniBar, PlainMeter, SegMeter, MeterHeadline };

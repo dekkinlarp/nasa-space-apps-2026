@@ -1,4 +1,4 @@
-/** Plan-tab safety budget: stacked time, energy and oxygen bars against the EVA limits, plus the turn-back point. */
+/** Plan-tab safety budget: plain time, energy and oxygen bars of how much of the EVA limits is used, plus the turn-back point. */
 import { useState } from "react";
 import { ChevronRightIcon, Undo2Icon } from "lucide-react";
 import type { RouteResult, WalkParams } from "@marsmap/core";
@@ -8,15 +8,8 @@ import { PNR_METHOD_NOTE } from "../usePnr";
 import { Collapsible, CollapsibleContent, CollapsibleTrigger } from "@/components/ui/collapsible";
 import { Button } from "@/components/ui/button";
 import { InfoTip } from "@/components/ui/info-tip";
+import { meterLevel, PlainMeter } from "@/components/ui/mini-bar";
 import { cn } from "@/lib/utils";
-
-/** Fill for each part of a bar and its legend key: walking, work at stops, suit leakage. */
-const PART: Record<string, string> = { walk: "bg-mars", dwell: "bg-poi-science-target", leak: "bg-muted-foreground" };
-/** The held-back reserve and anything over the usable budget are hatched. */
-const RESERVE = "bg-[repeating-linear-gradient(135deg,var(--ink-4)_0_2px,var(--hull)_2px_6px)]";
-const OVER = "bg-[repeating-linear-gradient(135deg,color-mix(in_srgb,var(--bad)_95%,transparent)_0_3px,color-mix(in_srgb,var(--bad)_45%,transparent)_3px_7px)]";
-const LEFT = "bg-ok/16 ring-1 ring-ok/55 ring-inset";
-const key = "mr-1 inline-block size-[9px] rounded-[2px] align-[-1px]";
 
 /** Durations rounded to the minute (4h 59m 59s reads as 5h 00m, not 4h 59m). */
 export const fmtMin = (s: number) => fmtDur(Math.round(s / 60) * 60);
@@ -39,49 +32,26 @@ interface Budget {
 }
 
 /**
- * One budget as one row of the grid: its name, the bar, and used / usable. What each colour means is said
- * once, in the legend under the rows; the split between walking and stops is behind the info button.
+ * One budget as one row of the grid: its name, a plain bar that fills as the budget is used, and used / usable.
+ * The bar is green, then yellow past 75% used, then red past 90%; the split between walking and stops is behind the info button.
  */
 function BudgetRow({ b, reserveFraction }: { b: Budget; reserveFraction: number }) {
   const { title, parts, limit, fmt } = b;
   const used = parts.reduce((a, p) => a + Math.max(0, p.value), 0);
   const usable = limit * (1 - reserveFraction);
-  const reserve = limit - usable;
-  const scale = Math.max(limit, used) || 1;
-  const pct = (v: number) => `${(Math.max(0, v) / scale) * 100}%`;
   const over = used > usable;
   const f = usable > 0 ? used / usable : 0;
-  const state = over ? "bad" : f > 0.85 ? "warn" : "ok";
+  // The figure takes the bar's colour: green, yellow in the last quarter, red in the last tenth or over.
+  const state = meterLevel(1 - f);
   const split = [...parts.filter((p) => p.value > 0).map((p) => `${p.label} ${fmt(p.value)}`), over ? `Over by ${fmt(used - usable)}` : `Left ${fmt(usable - used)}`].join(" · ");
-  let x = 0;
   return (
     <>
       <span className="flex items-center gap-0.5 text-sm font-medium whitespace-nowrap">
         {title}
         <InfoTip label={`About ${title}`}>{`${b.hint}\n${b.limitLabel}.\n\n${split}`}</InfoTip>
       </span>
-      <div
-        className={cn("relative h-3 min-w-0 rounded-sm", state === "bad" ? "bg-well shadow-[inset_0_0_0_1px_var(--seam-2)]" : LEFT)}
-        role="img"
-        aria-label={`${title}: ${fmt(used)} used of ${fmt(usable)} usable, ${b.limitLabel}. ${split}`}
-      >
-        <i className={cn("absolute inset-y-0 block rounded-r-sm shadow-[inset_1px_0_0_var(--ink-4)]", RESERVE)} style={{ left: pct(usable), width: pct(reserve) }} />
-        {parts.map((p, k) => {
-          const el = <i key={p.key} className={cn("absolute inset-y-0 block", PART[p.key], k === 0 && "rounded-l-sm")} style={{ left: pct(x), width: pct(p.value) }} />;
-          x += Math.max(0, p.value);
-          return el;
-        })}
-        {over && <i className={cn("absolute inset-y-0 block rounded-r-sm shadow-[0_0_0_1px_var(--bad)]", OVER)} style={{ left: pct(usable), width: pct(used - usable) }} />}
-        <i className="absolute -inset-y-[3px] -ml-px block w-0.5 rounded-[1px] bg-foreground opacity-85" style={{ left: pct(usable) }} />
-        {used > limit && <i className="absolute -inset-y-[3px] -ml-px block w-0.5 rounded-[1px] bg-bad opacity-85" style={{ left: pct(limit) }} />}
-        {b.marker && b.marker.at >= 0 && (
-          <span
-            className="absolute -top-[7px] -ml-[5px] size-0 border-x-[5px] border-t-[7px] border-x-transparent border-t-warn drop-shadow-[0_1px_1px_#000]"
-            style={{ left: pct(Math.min(b.marker.at, scale)) }}
-            title={b.marker.label}
-          />
-        )}
-      </div>
+      {/* How much of the usable budget is used, on the plain meter the walk panel uses. */}
+      <PlainMeter used={f} label={`${title}: ${fmt(used)} used of ${fmt(usable)} usable, ${b.limitLabel}. ${split}`} className="min-w-0" />
       <span className="text-right text-sm whitespace-nowrap">
         <b className={cn("font-semibold", state === "bad" && "text-bad", state === "warn" && "text-warn")}>{fmt(used)}</b>
         <span className="text-muted-foreground"> / {fmt(usable)}</span>
@@ -188,7 +158,6 @@ export function SafetyBudget({ r, params, pnr, names }: { r: RouteResult; params
         ]
       : []),
   ];
-  const anyOver = budgets.some((b) => b.parts.reduce((a, p) => a + Math.max(0, p.value), 0) > b.limit * (1 - rf));
   return (
     <div>
       <div className="grid grid-cols-[auto_minmax(0,1fr)_auto] items-center gap-x-2.5 gap-y-2.5 pt-2">
@@ -196,36 +165,7 @@ export function SafetyBudget({ r, params, pnr, names }: { r: RouteResult; params
           <BudgetRow key={b.id} b={b} reserveFraction={rf} />
         ))}
       </div>
-      {/* One legend for all the bars. */}
-      <div className="mt-2 flex flex-wrap gap-x-[9px] gap-y-[3px] text-xs text-muted-foreground *:whitespace-nowrap">
-        <span>
-          <i className={cn(key, PART.walk)} />
-          Walk
-        </span>
-        <span>
-          <i className={cn(key, PART.dwell)} />
-          Stops
-        </span>
-        {o2On && leakKg > 0 && (
-          <span>
-            <i className={cn(key, PART.leak)} />
-            Leak
-          </span>
-        )}
-        <span>
-          <i className={cn(key, LEFT)} />
-          Left
-        </span>
-        <span>
-          <i className={cn(key, RESERVE)} />
-          Reserve
-        </span>
-        {anyOver && (
-          <span>
-            <i className={cn(key, OVER)} />
-            Over
-          </span>
-        )}
+      <div className="mt-2 flex text-xs">
         <Button variant="link" size="inline" className="ml-auto text-xs coarse:py-2" aria-expanded={all} onClick={() => setAll(!all)}>
           {all ? "Hide climb and dose" : "Climb and dose"}
         </Button>
