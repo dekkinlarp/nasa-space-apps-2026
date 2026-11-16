@@ -1,32 +1,33 @@
-<p align="center">
-  <a href="https://evares.wtarit.me"><img src="apps/web/brand/icon-app.svg" width="120" alt="EVAres logo"></a>
-</p>
+<div align="center">
 
-<h1 align="center">Plan your walk on Mars.</h1>
+<h1>EVAres: EVA planner for the Gale Crater boxwork, built on NASA and USGS data</h1>
 
-<p align="center">
-  <a href="https://marsmap.wtarit.workers.dev"><img src="https://img.shields.io/badge/live_demo-marsmap.wtarit.workers.dev-c1440e?style=flat" alt="Live demo"></a>
-  <a href="https://www.spaceappschallenge.org/"><img src="https://img.shields.io/badge/Space_Apps-2026-0b3d91?style=flat" alt="Space Apps 2026"></a>
-  <a href="https://github.com/dekkinlarp/nasa-space-apps-2026/commits/main"><img src="https://img.shields.io/github/last-commit/dekkinlarp/nasa-space-apps-2026?style=flat" alt="Last commit"></a>
-  <a href="LICENSE"><img src="https://img.shields.io/github/license/dekkinlarp/nasa-space-apps-2026?style=flat" alt="License"></a>
-</p>
+A Google-Maps-style tool for planning an astronaut walk (EVA) on Mars, built entirely on NASA and USGS orbital and rover data. Built for NASA Space Apps Challenge 2026, Vancouver, challenge "Interplanetary Survival Guide: Martian Map".
 
-<p align="center">
-  <a href="https://evares.wtarit.me">Try it</a> - <a href="docs/deployment.md">Deployment docs</a> - <a href="https://github.com/dekkinlarp/nasa-space-apps-2026/issues/new">Report a bug</a>
-</p>
+**Live at [evares.wtarit.me](https://evares.wtarit.me)** · [Deployment docs](docs/deployment.md)
 
-<h2 align="center">EVAres is an EVA planner for the Gale Crater boxwork, built on NASA and USGS data.</h2>
+[![The Plan tab: a three-stop walk at the boxwork, with the verdict, the budgets and three routes](docs/screenshots/plan.jpg)](https://evares.wtarit.me)
 
-<p align="center">
-  <img src="https://img.shields.io/badge/TypeScript-5-3178c6?style=flat&logo=typescript&logoColor=white" alt="TypeScript"> <img src="https://img.shields.io/badge/React-19-20232a?style=flat&logo=react" alt="React"> <img src="https://img.shields.io/badge/MapLibre_GL-5-396cb2?style=flat&logo=maplibre&logoColor=white" alt="MapLibre GL"> <img src="https://img.shields.io/badge/Vite-8-646cff?style=flat&logo=vite&logoColor=white" alt="Vite"> <img src="https://img.shields.io/badge/Tailwind_CSS-4-06b6d4?style=flat&logo=tailwindcss&logoColor=white" alt="Tailwind CSS"> <img src="https://img.shields.io/badge/Cloudflare-Workers-f38020?style=flat&logo=cloudflare&logoColor=white" alt="Cloudflare Workers"> <img src="https://img.shields.io/badge/pnpm-workspace-f69220?style=flat&logo=pnpm&logoColor=white" alt="pnpm">
-</p>
+</div>
 
-> [!NOTE]
-> This is our entry for NASA Space Apps Challenge 2026 (Vancouver), challenge "Interplanetary Survival Guide: Martian Map". It is a hackathon prototype, not flight software. See [Honest limits](#honest-limits).
+**Tech Stack:**
 
-<p align="center">
-  <img src="docs/screenshots/plan.jpg" alt="The Plan tab: a three-stop walk at the boxwork, with the verdict, the budgets and three routes">
-</p>
+![TypeScript](https://img.shields.io/badge/TypeScript_5-3178C6?style=for-the-badge&logo=typescript&logoColor=white)
+![React](https://img.shields.io/badge/React_19-149ECA?style=for-the-badge&logo=react&logoColor=white)
+![MapLibre GL](https://img.shields.io/badge/MapLibre_GL_5-396CB2?style=for-the-badge&logo=maplibre&logoColor=white)
+![Vite](https://img.shields.io/badge/Vite_8-646CFF?style=for-the-badge&logo=vite&logoColor=white)
+![Tailwind CSS](https://img.shields.io/badge/Tailwind_CSS_4-06B6D4?style=for-the-badge&logo=tailwindcss&logoColor=white)
+![Hono](https://img.shields.io/badge/Hono-E36002?style=for-the-badge&logo=hono&logoColor=white)
+![Cloudflare Workers](https://img.shields.io/badge/Cloudflare_Workers-F38020?style=for-the-badge&logo=cloudflare&logoColor=white)
+![pnpm](https://img.shields.io/badge/pnpm_workspace-F69220?style=for-the-badge&logo=pnpm&logoColor=white)
+
+**CI Status:**
+
+[![Last commit](https://img.shields.io/github/last-commit/dekkinlarp/nasa-space-apps-2026?style=for-the-badge)](https://github.com/dekkinlarp/nasa-space-apps-2026/commits/main)
+[![License](https://img.shields.io/github/license/dekkinlarp/nasa-space-apps-2026?style=for-the-badge)](LICENSE)
+[![Website](https://img.shields.io/website?url=https%3A%2F%2Fevares.wtarit.me&style=for-the-badge&label=evares.wtarit.me)](https://evares.wtarit.me)
+
+Walking on Mars means budgeting time, energy, oxygen and radiation before you step outside. EVAres compares three routes, shows how far a crew can go and still get home, and points out where the science is. It is a hackathon prototype, not flight software; see [Honest limits](#honest-limits).
 
 ## Table of contents
 
@@ -228,6 +229,7 @@ Issues and pull requests are welcome.
 
 Built by our UBC team at the NASA Space Apps Challenge 2026, Vancouver Local Event.
 
+* [cyanghxst](https://github.com/cyanghxst)
 * [All contributors](https://github.com/dekkinlarp/nasa-space-apps-2026/graphs/contributors)
 
 ## AI use
