@@ -5,7 +5,7 @@
 ![TypeScript](https://img.shields.io/badge/TypeScript-5-3178c6?style=flat-square&logo=typescript&logoColor=white) ![React](https://img.shields.io/badge/React-19-20232a?style=flat-square&logo=react) ![MapLibre GL](https://img.shields.io/badge/MapLibre_GL-5-396cb2?style=flat-square&logo=maplibre&logoColor=white) ![Vite](https://img.shields.io/badge/Vite-8-646cff?style=flat-square&logo=vite&logoColor=white) ![Tailwind CSS](https://img.shields.io/badge/Tailwind_CSS-4-06b6d4?style=flat-square&logo=tailwindcss&logoColor=white) ![Cloudflare Workers](https://img.shields.io/badge/Cloudflare-Workers-f38020?style=flat-square&logo=cloudflare&logoColor=white) ![pnpm](https://img.shields.io/badge/pnpm-workspace-f69220?style=flat-square&logo=pnpm&logoColor=white) ![Data: NASA and USGS](https://img.shields.io/badge/data-NASA_%2F_USGS-555555?style=flat-square)
 
 NASA Space Apps 2026, challenge "Interplanetary Survival Guide: Martian Map".
-Try it: **https://marsmap.wtarit.workers.dev**
+Try it: **https://evares.wtarit.me**
 
 ![The Plan tab: a three-stop walk at the boxwork, with the verdict, the budgets and three routes](docs/screenshots/plan.jpg)
 
