@@ -228,7 +228,6 @@ Issues and pull requests are welcome.
 
 Built by our UBC team at the NASA Space Apps Challenge 2026, Vancouver Local Event.
 
-* [cyanghxst](https://github.com/cyanghxst)
 * [All contributors](https://github.com/dekkinlarp/nasa-space-apps-2026/graphs/contributors)
 
 ## AI use
