@@ -1,5 +1,5 @@
 import { Fragment, useMemo, useState } from "react";
-import { ArrowRightIcon, ChevronRightIcon, PlayIcon } from "lucide-react";
+import { ArrowRightIcon, ChevronRightIcon, PlayIcon, RotateCcwIcon } from "lucide-react";
 import { useStore } from "../store";
 import { getMap, showOnMap } from "../map/MapView";
 import { tintable } from "../map/imageryTiles";
@@ -130,6 +130,8 @@ export function ExploreTab() {
   // The demo replaces the plan. With stops of your own in it, the button asks first.
   const planned = useStore((s) => s.stops);
   const ownPlan = hasOwnPlan(planned);
+  // With the demo already in the plan, the card leads back to it instead of offering it again.
+  const demoLoaded = planned.length > 0 && !ownPlan;
   const [confirming, setConfirming] = useState(false);
   const demoReady = demoAvailable(area.config.pois);
   const runDemo = () => runDemoWalk(area.config.pois);
@@ -166,10 +168,16 @@ export function ExploreTab() {
         <div className="mt-3 mb-3">
           <DemoSteps />
         </div>
-        <Button className="h-9 w-full gap-2 bg-mars-deep text-white hover:bg-[#d4521a]" onClick={demoReady ? () => (ownPlan ? setConfirming(true) : runDemo()) : undefined} disabled={!demoReady}>
-          <PlayIcon className="size-3.5 flex-none fill-current" aria-hidden />
-          Try the boxwork walk
-        </Button>
+        {demoLoaded ? (
+          <Button className="h-9 w-full gap-2 bg-mars-deep text-white hover:bg-[#d4521a]" onClick={() => set({ tab: "plan" })}>
+            View the plan <ArrowRightIcon aria-hidden />
+          </Button>
+        ) : (
+          <Button className="h-9 w-full gap-2 bg-mars-deep text-white hover:bg-[#d4521a]" onClick={demoReady ? () => (ownPlan ? setConfirming(true) : runDemo()) : undefined} disabled={!demoReady}>
+            <PlayIcon className="size-3.5 flex-none fill-current" aria-hidden />
+            Try the boxwork walk
+          </Button>
+        )}
         {confirming && ownPlan && (
           <div className="mt-2 flex flex-wrap items-center gap-2 text-sm" role="group" aria-label="Replace your plan?">
             <span className="mr-auto text-ink-2">
@@ -189,9 +197,16 @@ export function ExploreTab() {
             </Button>
           </div>
         )}
-        <Button variant="secondary" className="mt-2 h-9 w-full" onClick={() => set({ tab: "plan" })}>
-          Plan your own <ArrowRightIcon aria-hidden />
-        </Button>
+        {demoLoaded ? (
+          <Button variant="secondary" className="mt-2 h-9 w-full gap-2" onClick={runDemo}>
+            <RotateCcwIcon className="size-3.5 flex-none" aria-hidden />
+            Restart the walk
+          </Button>
+        ) : (
+          <Button variant="secondary" className="mt-2 h-9 w-full" onClick={() => set({ tab: "plan" })}>
+            Plan your own <ArrowRightIcon aria-hidden />
+          </Button>
+        )}
       </section>
 
       <section>

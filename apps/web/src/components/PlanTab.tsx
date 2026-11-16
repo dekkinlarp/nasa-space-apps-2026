@@ -11,6 +11,7 @@ import { nearlyIdentical, routeDelta } from "./routeCompare";
 import { STOP_BADGE, STOP_BADGE_NUMBER, STOP_BADGE_START } from "../map/mapLabel";
 import { fmtMin, SafetyBudget } from "./SafetyBudget";
 import { usePnr } from "../usePnr";
+import { MeterHeadline } from "@/components/ui/mini-bar";
 import { Alert } from "@/components/ui/alert";
 import { Button } from "@/components/ui/button";
 import { Switch } from "@/components/ui/switch";
@@ -246,6 +247,17 @@ export function PlanTab() {
       {sel && (
         <section aria-label="Verdict and budgets">
           {/* The one place that says whether the selected route fits. The figures are on the bars under it. */}
+          {/* The suit's headline first: what is left of the tightest budget. */}
+          {sel.reachable && (
+            <MeterHeadline
+              className="mb-2"
+              budgets={[
+                { name: "Time", f: sel.totals.timeUsedFraction ?? sel.totals.totalTimeS / usableTimeS(params) },
+                { name: "Energy", f: sel.totals.energyUsedFraction ?? sel.totals.energyKJ / (params.energyBudgetKJ * (1 - params.reserveFraction)) },
+                ...(sel.totals.o2UsedFraction != null ? [{ name: "Oxygen", f: sel.totals.o2UsedFraction }] : []),
+              ]}
+            />
+          )}
           {msg ? (
             <Alert variant="destructive" className="mt-0 mb-1">
               {msg}

@@ -15,7 +15,7 @@ colors:
   seam: "rgba(255, 255, 255, 0.07)"
   seam-2: "rgba(255, 255, 255, 0.13)"
   seam-3: "rgba(255, 255, 255, 0.32)"
-  glass: "rgba(17, 19, 23, 0.78)"
+  glass: "rgba(15, 17, 20, 0.72)"
   glass-thick: "rgba(15, 17, 20, 0.92)"
   ok: "#4cc38a"
   warn: "#e5a93c"
@@ -106,7 +106,7 @@ components:
     textColor: "{colors.ink}"
     rounded: "{rounded.2xl}"
   side-panel:
-    backgroundColor: "{colors.glass-thick}"
+    backgroundColor: "{colors.glass}"
     textColor: "{colors.ink}"
     rounded: "{rounded.2xl}"
     width: "{spacing.side-width}"
@@ -165,8 +165,8 @@ one meaning.
   (6.7:1 over dark ground); on lighter surfaces such as a selected row, step up to Ink 2. Ink 4 is for marks
   such as grips and hatching, not text: about 3.3:1.
 - **Seams** (white at 7%, 13% and 32%): hairlines, input borders, and hover or dashed borders.
-- **Glass** (rgba(17,19,23,0.78)) and **Thick Glass** (rgba(15,17,20,0.92)): the floating material,
-  with a 12% white edge and a 28px blur. The edge is always drawn over the glass, never over bare ground, so
+- **Glass** (rgba(15,17,20,0.72) over a 40px blur of the map, dimmed to 60%): the floating material, one dark, frosted tone for every surface. The dimming keeps it as dark as a near-solid fill while the ground still shows through. Thick Glass (92%) is for map labels,
+  with a 12% white edge. The edge is always drawn over the glass, never over bare ground, so
   every panel's edge reads the same; a panel whose glass is an inner layer (`glass-host`) carries its edge on that layer.
 
 ### Status and data
@@ -227,7 +227,7 @@ pointer back, so the map stays draggable in every gap.
 - **Top right:** zoom buttons and the compass dial stack in the corner. The top left holds only the button that brings back a hidden side panel.
 - **Middle:** the point-of-interest card on the right, 340px (300px under 1100px).
 - **Top left:** empty, except for the prompt shown while the planner is placing the start.
-- **Bottom row:** the suit meter (the Plan tab's stand-in when that tab is out of sight) or the walk panel, then the 2D/3D switch and gesture help on the right. In 3D a settings button joins the switch and opens a popover with vertical exaggeration and draw distance.
+- **Bottom row:** the walk panel while a walk is running (on small screens also a one-line verdict, the Plan tab's stand-in while the sheet hides it), then the 2D/3D switch and gesture help on the right. In 3D a settings button joins the switch and opens a popover with vertical exaggeration and draw distance.
 - **Foot:** a slim status bar: in this order, with a hairline rule between each piece: the map key, the elevation toggle with the route's length and relief, the scale bar, the position, then what is under the pointer (elevation, slope, surface, any science layer's value, distance from the start), and the imagery credit at the far end. This is the one place those readings are shown. Fixed-width pieces come first, so only the credit gives way as the readings change. The credit is said once, as text: when it does not fit, its cut edge fades and blurs out and the line slides to its end and back. The key opens upward as a glass panel of its own beside the bar, not inside it, because a blur nested in a blurred surface cannot see the map. The elevation profile opens above the status bar when asked and takes no room while folded.
 - **Under 1100px** the elevation toggle drops its summary; the relief is written on the open profile instead.
 - **Under 860px** the side panel becomes a bottom sheet (46dvh, 50dvh on phones) that folds to its tab
@@ -236,7 +236,10 @@ pointer back, so the map stays draggable in every gap.
 - **Under 600px** the card takes the full width and the open sheet takes the elevation profile's room.
 
 Each fact has one home. A second place that needs it is a stand-in, shown only while the home is out of
-sight: the suit meter for the Plan tab's verdict, the walk panel for what the crew is doing.
+sight: the one-line verdict on small screens for the Plan tab's verdict, the walk panel for what the crew is
+doing. On wide screens the suit's figures live only on the Plan tab, with no floating card on the map. A
+stand-in links to its home: tapping the one-line verdict opens the Plan tab, and once the demo walk is in the
+plan the Explore card offers "View the plan" in place of loading it again.
 
 The map is told how much of it is covered, so "centre" means the centre of what the planner can see,
 and a selected place is never left under its own card.
@@ -287,7 +290,8 @@ Buttons are skeuomorphic: small solid things lit from above, not flat fills.
 - No filled pills: a count (the stops on the Plan tab) is a badge like any other.
 
 ### Panels and cards
-- **Material:** glass, with a 12% white edge and a float shadow. The side panel uses thick glass.
+- **Material:** glass, with a 12% white edge and a float shadow. Every panel uses the same glass, the side
+  panel included, so no surface reads darker or lighter than its neighbours.
 - **One component:** every floating surface is a `Panel` or takes its classes from `panelVariants`. That
   includes everything that pops up: info notes, popovers and select menus are glass by default, with the
   12px corner, so a new popover matches without asking for anything. No surface sets its own radius, fill or
@@ -405,9 +409,9 @@ the full panel and the open sheet are never both over the map.
 What is left of one budget, read like a battery (`SegMeter`, in `MiniBar`): a sunk track of 14 or 20
 segments that light from the left. Each segment is coloured for what being down to it means: red for the
 last tenth, amber for the last quarter, green above. So the last lit segment is the status, and the figure
-beside the meter takes the same colour. Used where one glance has to do: the suit panel on the map and the
-walk panel. Above the meters, the tightest budget is the headline: its percentage left in 26px, with its
-name (`MeterHeadline`). Not used on the Plan tab, whose budget bars show the split a meter cannot.
+beside the meter takes the same colour. Used where one glance has to do: the walk panel. Above the meters, the
+tightest budget is the headline: its percentage left in 26px, with its name (`MeterHeadline`). The Plan tab
+opens its verdict with the same headline but not the meters: its budget bars show the split a meter cannot.
 
 ### Slope bars
 In Segment details, each leg carries 18 small bars of its slope from start to end: a bar is the steepest

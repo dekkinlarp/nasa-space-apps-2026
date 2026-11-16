@@ -1,19 +1,17 @@
-/** On-map safety overlay: compact time / energy meter and the point-of-no-return marker. */
+/** On-map safety overlay: the point-of-no-return marker, and on small screens a one-line verdict. */
 import { fmtMin } from "./SafetyBudget";
-import { CheckIcon, TriangleAlertIcon } from "lucide-react";
+import { CheckIcon, ChevronRightIcon, TriangleAlertIcon } from "lucide-react";
 import { useEffect } from "react";
 import maplibregl from "maplibre-gl";
 import { selectedResult, usableTimeS, useStore } from "../store";
-import { fmtEnergy, fmtO2 } from "../format";
 import { fmtMin as fmtDur } from "./SafetyBudget";
 import { getMap, RELAYOUT_LABELS } from "../map/MapView";
 import { PNR_METHOD_NOTE, usePnr } from "../usePnr";
 import { MAP_LABEL_BOX, MAP_LABEL_MARK, MAP_LABEL_TONE } from "../map/mapLabel";
-import { MeterHeadline, MiniBar } from "@/components/ui/mini-bar";
 import { Panel } from "@/components/ui/panel";
 import { cn } from "@/lib/utils";
 
-export function MapSafety({ planVisible }: { planVisible: boolean }) {
+export function MapSafety({ planVisible, onOpenPlan }: { planVisible: boolean; onOpenPlan: () => void }) {
   const results = useStore((s) => s.results);
   const selectedProfile = useStore((s) => s.selectedProfile);
   const params = useStore((s) => s.params);
@@ -53,57 +51,25 @@ export function MapSafety({ planVisible }: { planVisible: boolean }) {
     };
   }, [pnr, area]);
 
-  // The Plan tab already carries the verdict and the budgets; this is their stand-in when it is out of sight.
+  // The Plan tab carries the verdict and the budgets. Only small screens, where the sheet hides it, get a stand-in.
   if (!r || !params || !r.reachable || goMode !== "off") return null;
   const t = r.totals;
   const usableT = usableTimeS(params);
-  const usableE = params.energyBudgetKJ * (1 - params.reserveFraction);
-  const ft = t.timeUsedFraction ?? t.totalTimeS / usableT;
-  const fe = t.energyUsedFraction ?? t.energyKJ / usableE;
   const ok = t.withinLimits;
-  const fo = t.o2UsedFraction;
   const over = t.limitingFactor === "oxygen" ? "Over O₂" : t.limitingFactor === "energy" ? "Over energy" : "Over time";
-  // The full meter: the Plan tab's stand-in on wide screens when that tab is out of sight.
-  const full = (
-    <Panel className={cn("map-safety w-[200px] flex-none px-2.5 pt-1.5 pb-2 text-xs sheet:hidden", !ok && "border-bad/55")}>
-      <div className="mb-1 flex items-center justify-between">
-        <span className="text-sm font-semibold">Suit</span>
-        <span
-          className={cn("cursor-help text-xs font-semibold", ok ? "text-ok" : "text-bad")}
-          title={ok ? "Time, energy and oxygen all inside the usable budget" : `Over the usable ${t.limitingFactor ?? ""} budget`}
-        >
-          {ok ? "Fits the limits" : over}
-        </span>
-      </div>
-      {/* The tightest budget as the one number to glance at, then a meter for each. */}
-      <MeterHeadline className="mt-1.5 mb-1.5" budgets={[{ name: "Time", f: ft }, { name: "Energy", f: fe }, ...(fo != null ? [{ name: "Oxygen", f: fo }] : [])]} />
-      <MiniBar label="Time" f={ft} text={`${fmtDur(t.totalTimeS)} of ${fmtDur(usableT)} usable (limit ${fmtDur(params.evaLimitS)} minus ${Math.round(params.reserveFraction * 100)}% reserve)`} />
-      <MiniBar label="Energy" f={fe} text={`${fmtEnergy(t.energyKJ)} of ${fmtEnergy(usableE)} usable metabolic energy`} />
-      {fo != null && t.o2Kg != null && (
-        <MiniBar label="O₂" f={fo} text={`${fmtO2(t.o2Kg)} of ${fmtO2((params.o2BudgetKg ?? 0) * (1 - params.reserveFraction))} usable oxygen (breathing + leakage, modelled)`} />
-      )}
-      {pnr && (
-        <div
-          className="mt-[5px] flex cursor-help items-baseline justify-between border-t pt-[5px]"
-          title={`${pnr.kind === "pnr" ? "Point of no return (marked on the map): turn back by this elapsed time." : "Spare time if you turn back at the tightest point (marked on the map)."}\n\n${PNR_METHOD_NOTE}`}
-        >
-          <span className="text-muted-foreground">{pnr.kind === "pnr" ? "Turn back" : "Margin"}</span>
-          <b className={cn("font-semibold", pnr.kind === "pnr" ? "text-warn" : "text-ok")}>{pnr.kind === "pnr" ? `by ${fmtDur(pnr.elapsedS)}` : fmtDur(pnr.marginS)}</b>
-        </div>
-      )}
-    </Panel>
-  );
   return (
     <>
       {/* Phones and tablets: one line of the verdict rides on the map while the Plan tab, its home, is folded or on another tab. */}
-      {!planVisible && <Panel className={cn("map-safety mt-2 hidden h-9 min-w-0 flex-none items-center gap-1.5 px-3 text-sm sheet:flex", !ok && "border-bad/55")} role="status">
+      {!planVisible && <Panel className={cn("map-safety mt-2 hidden h-9 min-w-0 flex-none sheet:flex", !ok && "border-bad/55")} role="status">
+        <button type="button" className="flex min-w-0 flex-1 cursor-pointer items-center gap-1.5 rounded-xl px-3 text-sm" onClick={onOpenPlan} title="Open plan">
         {ok ? <CheckIcon className="size-4 flex-none text-ok" aria-hidden /> : <TriangleAlertIcon className="size-4 flex-none text-bad" aria-hidden />}
         <b className="font-semibold whitespace-nowrap">{ok ? "Fits the limits" : over}</b>
         <span className="truncate text-muted-foreground">
           {fmtMin(t.totalTimeS)} of {fmtMin(usableT)}
         </span>
+        <ChevronRightIcon className="size-4 flex-none text-muted-foreground" aria-hidden />
+        </button>
       </Panel>}
-      {!planVisible && full}
     </>
   );
 }

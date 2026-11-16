@@ -406,7 +406,7 @@ export function App() {
         className={cn(SIDE, !sheetOpen && SIDE_CLOSED)}
       >
         {/* The glass, as a layer behind the content (see glass-host in index.css). */}
-        <i className="glass-layer-thick sheet:bottom-0 sheet:border-b-0" aria-hidden />
+        <i className="glass-layer sheet:bottom-0 sheet:border-b-0" aria-hidden />
         <SheetGrabber open={sheetOpen} full={sheetFull} onGrow={growSheet} onShrink={shrinkSheet} sheet={sideRef} />
         <SiteHeader onCollapse={() => setSheetOpen(false)} />
         <nav
@@ -471,7 +471,13 @@ export function App() {
           {/* The verdict or suit meter, with the view controls at the right end; on the bottom-sheet layout the Go panel too. On the bottom-sheet layout the view controls take a line of their own, above. */}
           <div className="flex min-w-0 items-end gap-2 sheet:flex-wrap-reverse sheet:gap-y-0">
             <span className="grow" />
-            <MapSafety planVisible={sheetOpen && tab === "plan"} />
+            <MapSafety
+              planVisible={sheetOpen && tab === "plan"}
+              onOpenPlan={() => {
+                set({ tab: "plan" });
+                setSheetOpen(true);
+              }}
+            />
             {/* On the sheet a walk opens as one row; unfolding it folds the sheet, so the two are never both open. */}
             {narrow && <GoPanel startFolded onExpand={foldSheet} />}
             <ViewControls />

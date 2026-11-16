@@ -216,10 +216,14 @@
   --radius: 8px;
 
   /* The floating material: dark glass with a bright top edge. */
-  --glass: rgba(17, 19, 23, 0.78);
+  /* One tone for every floating surface, the side panel included: dark enough that small text holds its
+     contrast over bright ground. */
+  --glass: rgba(15, 17, 20, 0.72);
   --glass-thick: rgba(15, 17, 20, 0.92);
   --glass-edge: rgba(255, 255, 255, 0.12);
-  --blur: blur(28px) saturate(170%);
+  /* More of the ground shows through than a near-solid fill would let, as a soft blur. The backdrop is
+     dimmed before the fill goes over it, so the panel stays as dark as before and text keeps its contrast. */
+  --blur: blur(40px) saturate(160%) brightness(0.6);
   --float: 0 0 0 0.5px rgba(0, 0, 0, 0.7), 0 10px 30px rgba(0, 0, 0, 0.45);
   --float-sm: 0 0 0 0.5px rgba(0, 0, 0, 0.7), 0 4px 14px rgba(0, 0, 0, 0.4);
   --ease: cubic-bezier(0.23, 1, 0.32, 1);

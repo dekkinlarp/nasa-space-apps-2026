@@ -951,6 +951,8 @@ export function MapView() {
       map.remove();
       live.map = null;
       live.ready = false;
+      // Fast Refresh runs this effect again and keeps the state: the other effects must wait for the new map to load.
+      setReady(false);
     };
   }, [area]);
 
